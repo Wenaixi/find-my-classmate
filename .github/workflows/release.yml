@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: 全量测试
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: 构建发布产物
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 安装前端依赖并构建
+        run: |
+          npm ci
+          npm run build
+
+      - name: 安装 Go 1.26
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: 交叉编译发布二进制
+        working-directory: server
+        run: |
+          mkdir -p ../release
+          # Linux amd64
+          GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../release/findmyclassmate-linux-amd64 .
+          # macOS arm64
+          GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o ../release/findmyclassmate-darwin-arm64 .
+          # Windows amd64
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../release/findmyclassmate-windows-amd64.exe .
+
+      - name: 归档发布包
+        run: |
+          mkdir -p release-package
+          cp -r server/web release-package/web
+          cp -r release/findmyclassmate-* release-package/
+          cp -r data release-package/data-sample
+          rm -f release-package/data-sample/log/server.log
+          cp README.md LICENSE release-package/
+          cd release-package && tar -czf ../findmyclassmate.tar.gz .
+
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: FindMyClassmate ${{ github.ref_name }}
+          body: |
+            构建产物：Linux amd64 / macOS arm64 / Windows amd64 三平台二进制，
+            内嵌前端页面与 API 服务，附带示例数据与说明文档。
+          files: |
+            findmyclassmate.tar.gz
+            release/findmyclassmate-linux-amd64
+            release/findmyclassmate-darwin-arm64
+            release/findmyclassmate-windows-amd64.exe

@@ -1,5 +1,37 @@
+# 依赖
 node_modules/
+
+# 构建产物
 dist/
+server/web/
+*.tsbuildinfo
+
+# 日志与运行数据
 *.log
+data/log/
+
+# 环境与密钥
 .env
+.env.*
+!.env.example
+
+# Go 构建产物
 server/findmyclassmate
+server/findmyclassmate.exe
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+*.code-workspace
+
+# 工具临时目录
+.dsh-vision-toolkit/
+artifacts/
+
+# 测试覆盖率
+coverage/
+*.lcov

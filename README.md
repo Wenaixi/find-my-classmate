@@ -1,67 +1,131 @@
 # FindMyClassmate
 
-FindMyClassmate 是一个面向校园场景的班级查询工具。React + TypeScript 前端构建后嵌入 Go 标准库服务，由后端统一托管页面、接口和年级名单。
+> 福清一中信息社 · 学生档案检索台
+
+FindMyClassmate 是一个面向校园场景的班级查询工具。React + TypeScript 前端构建后嵌入 Go 标准库服务，由后端统一托管页面、接口和年级名单，单二进制即可部署。
+
+## 功能
+
+- 支持福清一中高一、高二名单查询：姓名、班级、年段自由组合
+- 输入框支持空格 / 中文逗号 / 英文逗号 / 顿号分隔多条件
+- 结果按完整、前缀、包含匹配排序，支持分页加载
+- 胶囊搜索框带彩色光束动画，搜索时思维球反馈
+- 隐私设计：不写 localStorage，不把查询词写入 URL，API 只返回姓名 / 年级 / 班级
 
 ## 技术栈
 
-- React 18 + TypeScript + Vite
-- Go 标准库 HTTP 服务
-- border-beam 1.3.0：搜索轨道的 monochrome line beam，请求中增强
-- thinking-orbs 0.3.1：搜索中 searching，完成后 paused solving
-- liquid-gooey 0.2.1：结果列表的 morph shape 液体轮廓与弹性进入
-- Mona Sans：标题和大数字
-- Instrument Sans：正文与中文混排
-- IBM Plex Mono：字段、编号和状态标签
-- Vitest：前端查询契约和搜索时序测试
+| 层 | 技术 |
+| --- | --- |
+| 前端 | React 18 + TypeScript + Vite |
+| 后端 | Go 标准库 HTTP 服务（单二进制） |
+| 动效 | border-beam 1.3.0 / thinking-orbs 0.3.1 / liquid-gooey 0.2.1 |
+| 字体 | Mona Sans / Instrument Sans / IBM Plex Mono |
+| 测试 | Vitest（前端）、Go test（后端） |
 
-## 交互
+## 快速开始
 
-- 输入姓名、班级或年段后按 Enter，或点击开始搜索，立即发起查询。
-- 搜索反馈至少持续 500ms，确保 searching 点状思维球有稳定展示时间。
-- 输入法组合期间不会误提交；Escape 清空输入、结果和当前请求。
-- 首次查询完成后页面平滑定位到查询结果；继续加载只追加结果，不改变当前位置。
-- 触控目标和结果布局适配移动端，长姓名会自动换行。
+前置：Node.js 20+、Go 1.26+。
 
-## 启动
+```bash
+# 1. 安装前端依赖
+npm install
 
-安装前端依赖：
+# 2. 构建前端（产物输出到 server/web/）
+npm run build
 
-    npm install
+# 3. 启动 Go 服务（默认端口 3078）
+go run ./server
 
-启动 Go 服务。服务从 data/高一.json 和 data/高二.json 读取名单，文件变化后会在下一次请求时自动热重载：
+# 4. 浏览器打开 http://localhost:3078
+```
 
-    go run ./server
+Go 服务默认从 `data/高一.json` 和 `data/高二.json` 读取名单，文件变更后下一次请求自动热重载；日志写入 `data/log/server.log`。可用 `FMC_DATA_DIR` 环境变量指向其他数据目录。
 
-浏览器打开 http://localhost:3078。Go 服务直接托管最新前端构建产物和 /api 接口。开发时可使用 npm run build 更新嵌入目录 server/web/。
+## 数据格式
+
+名单 JSON 为数组，每项三个字段：
+
+```json
+[
+  { "name": "张三", "grade": "高一", "class": "18班" }
+]
+```
+
+- `name`：姓名
+- `grade`：年段（高一 / 高二）
+- `class`：班级（如 18班）
+
+数据按年级、班级、姓名去重；API 不会读取或返回任何额外字段。
+
+## 查询契约
+
+- 中文逗号、英文逗号、顿号、连续空白均可分隔查询 token
+- 姓名匹配键删除中英文空格、全角空格与制表符，统一大小写
+- `高一`、`高二` 为年段筛选；`18` 或 `18班` 为班级条件
+- 结果按完整、前缀、包含匹配与自然班级顺序排列
+- API 响应固定为分页结构 `{ items, total, limit, offset, hasMore }`，首屏默认 10 条，单次最多 50 条
 
 ## 验证
 
 前端：
 
-    npm run typecheck
-    npm test
-    npm run build
+```bash
+npm run typecheck
+npm test
+npm run build
+```
 
 后端：
 
-    cd server
-    gofmt -w *.go
-    go test ./...
-    go vet ./...
+```bash
+cd server
+gofmt -l .          # 应无输出
+go test ./...
+go vet ./...
+```
 
-## 查询契约
+CI（GitHub Actions）在每次 push 时自动执行以上全部检查，详见 `.github/workflows/ci.yml`。
 
-- 姓名支持中文或英文逗号、顿号、空格分隔，并按去空格后的键做包含匹配。
-- 高一、高二是年段筛选；18 或 18班可作为班级条件。
-- 服务统一返回分页响应 { items, total, limit, offset, hasMore }；默认每页 10 条，最多 50 条。
-- 结果只返回姓名、年级和班级。
+## 发布
 
-## 目录
+打 tag 触发自动发布：
 
-- src/：React 页面、样式、查询逻辑、搜索时序和测试
-- server/：Go 服务、JSON 归一化、查询测试
-- docs/superpowers/plans/：实施计划
-- DESIGN.md：视觉参考
-- CLAUDE.md：项目长期记忆
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
 
-生产部署仍需在边缘或网关配置 IP 限流、严格 CORS、脱敏日志和监控字段；这些配置不写死在本地原型中。
+`.github/workflows/release.yml` 会执行全量测试，然后交叉编译 Linux amd64 / macOS arm64 / Windows amd64 三平台二进制（内嵌前端页面与 API 服务），连同示例数据与文档打包成 `findmyclassmate.tar.gz` 并创建 GitHub Release。
+
+## 目录结构
+
+```
+├── .github/workflows/   # CI 与发布流水线
+├── data/                # 名单数据（高一.json / 高二.json）
+├── design/              # Logo 设计源文件
+├── docs/                # 实施计划文档
+├── public/              # 静态资源（favicon / logo）
+├── server/              # Go 服务（嵌入 server/web/ 构建产物）
+├── src/                 # React 前端源码与测试
+├── CLAUDE.md            # 项目长期记忆
+├── DESIGN.md            # 视觉设计参考
+└── LICENSE              # MIT License
+```
+
+## 隐私与安全边界
+
+- 页面不写入 localStorage，不把查询词或结果写入 URL
+- API DTO 只返回 name、grade、class
+- 生产部署请在边缘或网关配置 IP 限流、严格 CORS、脱敏日志
+- 名单数据含真实姓名，发布前请确认已获得学校公示许可
+
+## 贡献
+
+1. Fork 本仓库并创建特性分支
+2. 修改后运行全部验证命令（前端 typecheck / test / build，后端 gofmt / go test / go vet）
+3. 提交信息使用中文或英文均可，保持简洁描述
+4. 发起 Pull Request，CI 会自动运行全量检查
+
+## License
+
+[MIT](LICENSE) © FindMyClassmate Contributors（福清一中信息社）

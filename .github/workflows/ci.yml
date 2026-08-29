@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  frontend:
+    name: 前端 · 类型检查 / 测试 / 构建
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 类型检查
+        run: npm run typecheck
+
+      - name: 单元测试
+        run: npm test
+
+      - name: 生产构建
+        run: npm run build
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: server/web
+          if-no-files-found: error
+
+  backend:
+    name: 后端 · 格式化检查 / 测试 / 静态检查
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Go 1.26
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: 格式化检查
+        run: |
+          gofmt -l .
+          test -z "$(gofmt -l .)"
+
+      - name: 单元测试
+        run: go test ./...
+
+      - name: 静态检查
+        run: go vet ./...
+
+  data:
+    name: 数据契约 · 名单 JSON 校验
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 校验名单 JSON 格式
+        run: |
+          node -e "
+            const fs = require('fs');
+            for (const f of ['data/高一.json', 'data/高二.json']) {
+              const rows = JSON.parse(fs.readFileSync(f, 'utf8'));
+              if (!Array.isArray(rows)) throw new Error(f + ' 不是数组');
+              const seen = new Set();
+              for (const r of rows) {
+                if (!r.name || !r.grade || !r.class) throw new Error(f + ' 字段缺失: ' + JSON.stringify(r));
+                const key = r.grade + '|' + r.class + '|' + r.name;
+                if (seen.has(key)) throw new Error(f + ' 重复记录: ' + key);
+                seen.add(key);
+              }
+              console.log(f + ': ' + rows.length + ' 条记录');
+            }
+          "
