@@ -77,17 +77,20 @@ jobs:
           cp -r release/findmyclassmate-* release-package/
           cp -r data release-package/data-sample
           rm -f release-package/data-sample/log/server.log
-          cp README.md LICENSE release-package/
+          cp README.md LICENSE CHANGELOG.md release-package/
           cd release-package && tar -czf ../findmyclassmate.tar.gz .
+
+      - name: 提取更新记录
+        run: |
+          awk '/^## \\[/{if(found)exit; found=1} found{print}' CHANGELOG.md > release-body.md
+          if [ ! -s release-body.md ]; then echo "未找到当前版本的更新记录。" > release-body.md; fi
 
       - name: 创建 GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: FindMyClassmate ${{ github.ref_name }}
-          body: |
-            构建产物：Linux amd64 / macOS arm64 / Windows amd64 三平台二进制，
-            内嵌前端页面与 API 服务，附带示例数据与说明文档。
+          body_path: release-body.md
           files: |
             findmyclassmate.tar.gz
             release/findmyclassmate-linux-amd64
