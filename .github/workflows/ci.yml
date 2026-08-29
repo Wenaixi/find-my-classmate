@@ -38,13 +38,21 @@ jobs:
           if-no-files-found: error
 
   backend:
-    name: 后端 · 格式化检查 / 测试 / 静态检查
+    name: 后端 · 构建前端 + 格式化检查 / 测试 / 静态检查
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: server
     steps:
       - uses: actions/checkout@v4
+
+      - name: 安装 Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 安装前端依赖并构建（web.go 需要 server/web 产物）
+        run: |
+          npm ci
+          npm run build
 
       - name: 安装 Go 1.26
         uses: actions/setup-go@v5
@@ -52,14 +60,17 @@ jobs:
           go-version: "1.26"
 
       - name: 格式化检查
+        working-directory: server
         run: |
           gofmt -l .
           test -z "$(gofmt -l .)"
 
       - name: 单元测试
+        working-directory: server
         run: go test ./...
 
       - name: 静态检查
+        working-directory: server
         run: go vet ./...
 
   data:
@@ -68,20 +79,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 校验名单 JSON 格式
+      - name: 校验名单 JSON 格式与去重
         run: |
           node -e "
             const fs = require('fs');
             for (const f of ['data/高一.json', 'data/高二.json']) {
-              const rows = JSON.parse(fs.readFileSync(f, 'utf8'));
-              if (!Array.isArray(rows)) throw new Error(f + ' 不是数组');
+              const obj = JSON.parse(fs.readFileSync(f, 'utf8'));
+              const roster = obj.名单;
+              if (!roster || typeof roster !== 'object') throw new Error(f + ' 缺少名单对象');
+              const grade = f.includes('高一') ? '高一' : '高二';
               const seen = new Set();
-              for (const r of rows) {
-                if (!r.name || !r.grade || !r.class) throw new Error(f + ' 字段缺失: ' + JSON.stringify(r));
-                const key = r.grade + '|' + r.class + '|' + r.name;
-                if (seen.has(key)) throw new Error(f + ' 重复记录: ' + key);
-                seen.add(key);
+              let count = 0;
+              for (const [cls, names] of Object.entries(roster)) {
+                if (!Array.isArray(names)) throw new Error(f + ' 班级 ' + cls + ' 不是数组');
+                for (const name of names) {
+                  if (typeof name !== 'string' || !name.trim()) throw new Error(f + ' 班级 ' + cls + ' 含非法姓名');
+                  const key = grade + '|' + cls + '|' + name.trim();
+                  if (seen.has(key)) throw new Error(f + ' 重复记录: ' + key);
+                  seen.add(key);
+                  count++;
+                }
               }
-              console.log(f + ': ' + rows.length + ' 条记录');
+              console.log(f + ': ' + count + ' 条记录');
             }
           "
