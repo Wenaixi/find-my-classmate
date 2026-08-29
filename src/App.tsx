@@ -31,7 +31,7 @@ function getState(items: Student[], query: string, total = items.length): Search
 function ResultCard({ student, index }: { student: Student; index: number }) {
   const isLatin = /^[A-Za-z ]+$/.test(student.name);
   return (
-    <div className="result-card" role="listitem" data-od-id={"result-card-" + index}>
+    <div className={"result-card" + (index >= 10 ? " no-anim" : "")} role="listitem" data-od-id={"result-card-" + index}>
       <span className="result-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
       <div className="result-identity">
         <h3 className={"result-name" + (isLatin ? " is-latin" : "")} data-od-id={"result-name-" + index}>{student.name}</h3>
@@ -50,14 +50,14 @@ function ResultCard({ student, index }: { student: Student; index: number }) {
 }
 
 function StatusOrb({ state }: { state: SearchState }) {
-  if (state !== "loading" && state !== "success" && state !== "duplicate") return null;
+  if (state !== "loading") return null;
   return (
     <ThinkingOrb
-      state={state === "loading" ? "searching" : "solving"}
+      state="searching"
       size={64}
       theme="dark"
-      paused={state !== "loading"}
-      aria-label={state === "loading" ? "正在检索名单" : "名单匹配完成"}
+      paused={false}
+      aria-label="正在检索名单"
     />
   );
 }
@@ -183,7 +183,7 @@ export function App() {
               <div className="results-list-head" aria-hidden="true"><span>序号</span><span>姓名</span><span>所属位置</span><span>状态</span></div>
               <Liquid blur={10} contrast={24} fill="rgba(255,255,255,.1)" shadow="0 18px 50px rgba(255,255,255,.06)" className="liquid-result-group">
                 {items.map((student, index) => (
-                  <Liquid.Item key={student.name + student.grade + student.className} className="liquid-result-item" morph={{ shape: true, speed: 0.85, bounce: 0.3, contentBlur: 0 }}>
+                  <Liquid.Item key={student.name + student.grade + student.className} className="liquid-result-item" {...(index < 10 ? { morph: { shape: true, speed: 0.85, bounce: 0.3, contentBlur: 0 } } : {})}>
                     <ResultCard student={student} index={index} />
                   </Liquid.Item>
                 ))}
