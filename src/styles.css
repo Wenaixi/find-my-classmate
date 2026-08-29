@@ -36,8 +36,8 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 1px solid 
 .ambient-line-two { width: 125px; top: 650px; right: max(24px, calc(50% - 580px)); transform: rotate(-18deg); opacity: .32; }
 .topbar { width: min(var(--max), calc(100% - 64px)); margin: auto; padding: 28px 0 20px; display: flex; justify-content: space-between; align-items: center; gap: 28px; border-bottom: 1px solid var(--line); }
 .brand { display: flex; align-items: center; gap: 12px; color: var(--ink); text-decoration: none; font: 700 13px/1 var(--display); letter-spacing: 1.4px; text-transform: uppercase; }
-.brand-mark { display: grid; place-items: center; width: 28px; height: 28px; color: #050505; background: var(--ink); border-radius: 50%; font: 700 12px/1 var(--mono); transition: transform .35s cubic-bezier(.22,1,.36,1), background .25s ease; }
-.brand:hover .brand-mark { transform: rotate(-12deg) scale(1.08); background: #fff; }
+.brand-mark { display: block; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line-strong); object-fit: cover; transition: transform .35s cubic-bezier(.22,1,.36,1), border-color .25s ease; }
+.brand:hover .brand-mark { transform: rotate(-12deg) scale(1.08); border-color: var(--ink); }
 .topbar-meta { display: flex; gap: 24px; align-items: center; color: var(--muted); font: 400 10px/1 var(--mono); letter-spacing: .4px; }
 .topbar-meta a { min-height: 44px; display: inline-flex; align-items: center; color: inherit; text-decoration: none; border-bottom: 1px solid transparent; transition: color .2s ease, border-color .2s ease; }
 .topbar-meta a:hover { color: var(--ink); border-color: var(--ink); }

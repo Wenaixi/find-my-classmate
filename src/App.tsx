@@ -208,7 +208,7 @@ export function App() {
     <div className="app-shell" data-od-id="app-shell">
       <div className="ambient-line ambient-line-one" aria-hidden="true" /><div className="ambient-line ambient-line-two" aria-hidden="true" />
       <header className="topbar" data-od-id="topbar">
-        <a className="brand" data-od-id="brand" href="#top"><span className="brand-mark" aria-hidden="true">F</span><span>FindMyClassmate</span></a>
+        <a className="brand" data-od-id="brand" href="#top"><img className="brand-mark" src="/logo.webp" alt="" width="28" height="28" /><span>FindMyClassmate</span></a>
         <nav className="topbar-meta" data-od-id="top-navigation" aria-label="页面信息"><span>学生档案检索台 / 2025</span><a data-od-id="privacy-link" href="#privacy">隐私说明</a></nav>
       </header>
       <main id="top">
