@@ -29,6 +29,10 @@ Thumbs.db
 *.code-workspace
 
 *.bak.*
+# 项目内部记忆与工具文档（不进仓库）
+CLAUDE.md
+.superpowers/
+
 # 工具临时目录
 .dsh-vision-toolkit/
 artifacts/
