@@ -74,6 +74,7 @@ export function App() {
   const requestRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const resultsRef = useRef<HTMLElement | null>(null);
+  const searchWrapRef = useRef<HTMLFormElement | null>(null);
   const timerRef = useRef<number | undefined>();
   const shouldScrollRef = useRef(false);
 
@@ -216,11 +217,11 @@ export function App() {
           <div className="hero-kicker"><p className="eyebrow" data-od-id="hero-eyebrow">校园名单 / 快速定位</p><span className="hero-stamp">FMC—01</span></div>
           <h1 data-od-id="hero-title">找到同学，<br /><em>从名字开始。</em></h1>
           <p className="hero-intro" data-od-id="hero-intro">支持福清一中高一高二名单，输入姓名、班级或年段，快速回到你要找的那一行。</p>
-          <form className="search-wrap" data-od-id="search-form" onSubmit={submit}>
+          <form className="search-wrap" data-od-id="search-form" ref={searchWrapRef} onSubmit={submit}>
             <label className="field-label" data-od-id="search-label" htmlFor="query">查询条件 <span>NAME / CLASS / GRADE</span></label>
             <BorderBeam size="md" colorVariant="colorful" theme="dark" borderRadius={999} duration={2.2} strength={1} brightness={2} saturation={2.2} hueRange={160}>
               <div className="search-track" data-od-id="search-track">
-                <input className="search-input" id="query" type="text" autoComplete="off" spellCheck={false} value={query} onChange={(event) => setQuery(event.target.value)} onCompositionStart={() => setIsComposing(true)} onCompositionEnd={() => setIsComposing(false)} onKeyDown={(event) => { if (event.key === "Escape") clear(); if (event.key === "Enter" && !event.nativeEvent.isComposing && !isComposing) void submit(event); }} placeholder="输入姓名 / 班级 / 年段" aria-describedby="search-hint status-line" />
+                <input className="search-input" id="query" type="text" autoComplete="off" spellCheck={false} value={query} onChange={(event) => setQuery(event.target.value)} onFocus={() => searchWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })} onCompositionStart={() => setIsComposing(true)} onCompositionEnd={() => setIsComposing(false)} onKeyDown={(event) => { if (event.key === "Escape") clear(); if (event.key === "Enter" && !event.nativeEvent.isComposing && !isComposing) void submit(event); }} placeholder="输入姓名 / 班级 / 年段" aria-describedby="search-hint status-line" />
                 {query.length > 0 && <button className="search-clear" data-od-id="search-clear" type="button" onClick={clear} aria-label="清空输入"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></button>}
                 <button className="search-send" data-od-id="search-cta" type="submit" disabled={state === "loading"} aria-label={state === "loading" ? "正在检索" : "开始搜索"}>
                   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></svg>
@@ -234,7 +235,7 @@ export function App() {
         {hasResultSection && <section className="results-section" ref={resultsRef} data-od-id="results-section" aria-labelledby="results-title"><div className="results-head"><div><p className="section-kicker">SEARCH OUTPUT</p><h2 id="results-title" data-od-id="results-title">查询结果</h2></div><div className="result-count-block"><span className="result-count" data-od-id="result-count">{total || "--"}</span><span className="result-count-label">MATCHES</span></div></div>{renderResultBody()}</section>}
         <section className="privacy-band" id="privacy" data-od-id="privacy-band"><div className="footer-label" data-od-id="privacy-label">隐私边界 / PRIVATE BY DEFAULT</div><p data-od-id="privacy-copy">名单仅用于班级查询。查询内容不写入本地存储，也不会通过页面地址保留。</p></section>
       </main>
-      <footer className="site-footer" data-od-id="site-footer"><div className="footer-stack"><span data-od-id="footer-brand">FINDMYCLASSMATE / ARCHIVE ACCESS</span><span className="footer-fine" data-od-id="footer-source">数据来源：福清一中公示数据提取</span><span className="footer-fine" data-od-id="footer-team">运营团队：福清一中信息社</span></div><span data-od-id="demo-note">高一 / 高二最新数据 · Go 单体服务</span><a className="footer-repo" data-od-id="footer-repo" href="https://github.com/Wenaixi/find-my-classmate" target="_blank" rel="noopener noreferrer">GitHub 仓库 <span aria-hidden="true">↗</span></a></footer>
+      <footer className="site-footer" data-od-id="site-footer"><div className="footer-stack"><span data-od-id="footer-brand">FINDMYCLASSMATE / ARCHIVE ACCESS</span><span className="footer-fine" data-od-id="footer-source">数据来源：福清一中公示数据提取</span><span className="footer-fine" data-od-id="footer-team">运营团队：福清一中信息社</span></div><span data-od-id="demo-note">高一 / 高二最新数据 · Go 单体服务</span><a className="footer-repo" data-od-id="footer-repo" href="https://github.com/Wenaixi/find-my-classmate" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" /></svg>GitHub 仓库 <span aria-hidden="true">↗</span></a></footer>
     </div>
   );
 }
