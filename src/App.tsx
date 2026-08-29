@@ -216,7 +216,6 @@ export function App() {
         <section className="hero" data-od-id="hero">
           <div className="hero-kicker"><p className="eyebrow" data-od-id="hero-eyebrow">校园名单 / 快速定位</p><span className="hero-stamp">FMC—01</span></div>
           <h1 data-od-id="hero-title">找到同学，<br /><em>从名字开始。</em></h1>
-          <p className="hero-intro" data-od-id="hero-intro">支持福清一中高一高二名单，输入姓名、班级或年段，快速回到你要找的那一行。</p>
           <form className="search-wrap" data-od-id="search-form" ref={searchWrapRef} onSubmit={submit}>
             <label className="field-label" data-od-id="search-label" htmlFor="query">查询条件 <span>NAME / CLASS / GRADE</span></label>
             <BorderBeam size="md" colorVariant="colorful" theme="dark" borderRadius={999} duration={2.2} strength={1} brightness={2} saturation={2.2} hueRange={160}>
