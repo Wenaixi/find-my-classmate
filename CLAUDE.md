@@ -41,6 +41,12 @@
 
 Go 服务默认从 data/高一.json 和 data/高二.json 读取；可用 FMC_DATA_DIR 指向其他数据目录，数据文件变更后下一次请求自动热重载，日志写入 data/log/server.log。
 
+## CI/CD 与开源
+- .github/workflows/ci.yml：push 到 main/master 与 PR 触发——前端（typecheck+test+build）、后端（gofmt 检查+go test+go vet）、数据契约（名单 JSON 格式与去重校验）三 job 并行。
+- .github/workflows/release.yml：v* tag 触发——先复用 ci.yml 全量测试，再交叉编译 Linux amd64 / macOS arm64 / Windows amd64 三平台二进制（内嵌 server/web），打包 findmyclassmate.tar.gz（含示例数据与文档）并创建 GitHub Release。
+- server/web 为构建产物，已从 git 索引移除并忽略；CI 中由 npm run build 现场生成。
+- LICENSE：MIT（福清一中信息社）。README 覆盖功能、快速开始、数据格式、查询契约、验证、发布、目录、隐私边界、贡献指南。
+
 ## 验证命令
 
 - npm run typecheck
