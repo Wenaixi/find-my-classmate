@@ -2,6 +2,12 @@
 
 本文件记录 FindMyClassmate 的版本变更。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [v0.3.1] - 2026-08-29
+
+### 变更
+
+- GitHub Actions 升级 Node 24（消除 Node 20 弃用警告，vite 6 引擎要求满足）
+
 ## [v0.3.0] - 2026-08-29
 
 ### 安全加固
