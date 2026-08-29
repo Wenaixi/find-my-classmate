@@ -39,6 +39,31 @@ jobs:
           go test ./...
           go vet ./...
 
+      - name: 数据契约校验
+        run: |
+          node -e "
+            const fs = require('fs');
+            const pick = (entry) => typeof entry === 'string' ? entry.trim() : (entry && typeof entry['姓名'] === 'string' ? entry['姓名'].trim() : null);
+            for (const f of ['data/高一.json', 'data/高二.json']) {
+              const obj = JSON.parse(fs.readFileSync(f, 'utf8'));
+              const roster = obj['名单'];
+              const grade = f.includes('高一') ? '高一' : '高二';
+              const seen = new Set();
+              let count = 0;
+              for (const [cls, names] of Object.entries(roster)) {
+                for (const entry of names) {
+                  const name = pick(entry);
+                  if (!name) throw new Error(f + ' 班级 ' + cls + ' 含非法条目');
+                  const key = grade + '|' + cls + '|' + name;
+                  if (seen.has(key)) throw new Error(f + ' 重复: ' + key);
+                  seen.add(key);
+                  count++;
+                }
+              }
+              console.log(f + ': ' + count + ' 条记录 OK');
+            }
+          "
+
   release:
     name: 构建发布产物
     needs: test
