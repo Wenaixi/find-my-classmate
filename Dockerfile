@@ -24,11 +24,12 @@ FROM alpine:3.20
 RUN adduser -D -u 10001 app
 WORKDIR /app
 COPY --from=backend /out/findmyclassmate /app/findmyclassmate
-# 数据目录：默认空，启动时挂载；保留目录供匿名卷
-RUN mkdir -p /app/data && chown -R app:app /app
+# 数据与日志目录：启动自举（服务也会幂等创建），此处显式建好并授权
+RUN mkdir -p /app/data /tmp/fmc && chown -R app:app /app /tmp/fmc
 USER app
 ENV PORT=3078
 ENV FMC_DATA_DIR=/app/data
+ENV FMC_LOG_DIR=/tmp/fmc
 EXPOSE 3078
 VOLUME ["/app/data"]
 ENTRYPOINT ["/app/findmyclassmate"]

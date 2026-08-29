@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"log"
+	"time"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -38,6 +40,38 @@ func resolveDataDir() string {
 	return filepath.Join(current, "data")
 }
 
+var logLevel = parseLogLevel(os.Getenv("FMC_LOG_LEVEL"))
+
+type level int
+
+const (
+	levelError level = iota
+	levelWarn
+	levelInfo
+)
+
+func parseLogLevel(value string) level {
+	switch value {
+	case "error":
+		return levelError
+	case "warn":
+		return levelWarn
+	default:
+		return levelInfo
+	}
+}
+
+func logf(min level, format string, args ...any) {
+	if logLevel < min {
+		return
+	}
+	log.Printf(format, args...)
+}
+
+func logInfof(format string, args ...any) { logf(levelInfo, format, args...) }
+func logWarnf(format string, args ...any) { logf(levelWarn, format, args...) }
+func logErrorf(format string, args ...any) { logf(levelError, format, args...) }
+
 // resolveLogDir 优先使用 FMC_LOG_DIR 环境变量；未设置时沿用数据目录下的 log 子目录。
 // 容器场景数据目录通常只读挂载，日志必须写到独立可写位置。
 func resolveLogDir(dataDir string) string {
@@ -47,28 +81,38 @@ func resolveLogDir(dataDir string) string {
 	return filepath.Join(dataDir, "log")
 }
 
-func openLogFile(dataDir string) (*os.File, error) {
+func openLog(dataDir string) (io.Writer, *os.File, error) {
 	logDir := resolveLogDir(dataDir)
 	if err := os.MkdirAll(logDir, 0o755); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return os.OpenFile(filepath.Join(logDir, "server.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	file, err := os.OpenFile(filepath.Join(logDir, "server.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return nil, nil, err
+	}
+	// 文件与 stdout 双写：容器场景由 docker 收集 stdout，本地场景保留文件
+	return io.MultiWriter(file, os.Stderr), file, nil
 }
 
 func main() {
 	dataDir := resolveDataDir()
-	logFile, err := openLogFile(dataDir)
+	// 启动自举：幂等创建数据目录，缺失数据文件时给出清晰指引而非静默空跑
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		log.Fatalf("创建数据目录失败 %s: %v", dataDir, err)
+	}
+	output, logFile, err := openLog(dataDir)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("初始化日志失败: %v", err)
 	}
 	defer logFile.Close()
-	log.SetOutput(logFile)
+	log.SetOutput(output)
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 
 	store, err := newStudentStore(dataDir)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("loaded %d students", len(store.items))
+	logInfof("loaded %d students", len(store.items))
 
 	mux := http.NewServeMux()
 	mux.Handle("/", frontendHandler())
@@ -105,7 +149,7 @@ func main() {
 		}
 		students, loadErr := store.snapshot()
 		if loadErr != nil {
-			log.Printf("data reload failed: %v", loadErr)
+			logErrorf("data reload failed: %v", loadErr)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "data_unavailable"})
 			return
 		}
@@ -116,8 +160,42 @@ func main() {
 	if port == "" {
 		port = "3078"
 	}
-	log.Printf("FindMyClassmate API listening on :%s", port)
-	log.Fatal(http.ListenAndServe(":"+port, securityHeaders(mux)))
+	logInfof("FindMyClassmate API listening on :%s", port)
+	log.Fatal(http.ListenAndServe(":"+port, accessLog(securityHeaders(mux))))
+}
+
+// accessLog 记录请求访问日志：方法、路径、状态、耗时、脱敏客户端 IP。
+// 隐私红线：不记录查询参数与响应内容，IP 只保留前两段。
+func accessLog(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started := time.Now()
+		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(recorder, r)
+		logInfof("access %s %s %d %s %s",
+			r.Method, r.URL.Path, recorder.status, time.Since(started).Round(time.Millisecond), maskedIP(r.RemoteAddr))
+	})
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(status int) {
+	r.status = status
+	r.ResponseWriter.WriteHeader(status)
+}
+
+func maskedIP(remote string) string {
+	host := remote
+	if idx := strings.LastIndex(remote, ":"); idx >= 0 && strings.Count(remote, ":") == 1 {
+		host = remote[:idx]
+	}
+	parts := strings.Split(host, ".")
+	if len(parts) == 4 {
+		return parts[0] + "." + parts[1] + ".*.*"
+	}
+	return "unknown"
 }
 
 func securityHeaders(next http.Handler) http.Handler {

@@ -116,7 +116,22 @@
 - CI：push/PR 跑全量测试（前端 typecheck+test+build、后端 gofmt+go test+go vet、数据契约校验）；tag 触发交叉编译三平台二进制并打 Release
 - 构建产物 `server/web/` 与本地记忆文件（CLAUDE.md、.superpowers/）不入库
 
-## 9. 测试策略
+## 9. 启动自举与日志
+
+启动流程（main.go）保证"开箱即起"：
+
+- 幂等创建数据目录（os.MkdirAll），随后创建日志目录
+- 数据文件缺失时给出明确指引并退出（"请将 高一.json 放入数据目录"），不静默空跑
+- Docker 场景：数据目录挂载、日志目录 FMC_LOG_DIR 指向容器可写区
+
+日志约定：
+
+- 双写：文件（server.log）+ stdout，容器由 docker 收集 stdout
+- 分级：FMC_LOG_LEVEL=error|warn|info（默认 info），代码内用 logInfof/logWarnf/logErrorf
+- 访问日志：每个请求记录"方法 路径 状态 耗时 脱敏IP"；**查询参数永不入日志**（隐私红线）
+- 不内置轮转：交由部署层（logrotate / docker json-file）
+
+## 10. 测试策略
 
 - 前端：Vitest——查询契约（query.test.ts）、最短时长（searchTiming.test.ts）
 - 后端：go test——查询与数据加载的镜像测试（search_test.go）

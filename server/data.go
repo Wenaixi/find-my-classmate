@@ -130,7 +130,7 @@ func dataStamps(dir string) (map[string]fileStamp, error) {
 		path := filepath.Join(dir, string(grade)+".json")
 		info, err := os.Stat(path)
 		if err != nil {
-			return nil, fmt.Errorf("读取数据文件状态失败: %w", err)
+			return nil, fmt.Errorf("数据文件缺失，请将 %s 放入数据目录: %w", string(grade)+".json", err)
 		}
 		stamps[path] = fileStamp{size: info.Size(), modTime: info.ModTime()}
 	}
