@@ -96,7 +96,11 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-`.github/workflows/release.yml` 会执行全量测试，然后交叉编译 Linux amd64 / macOS arm64 / Windows amd64 三平台二进制（内嵌前端页面与 API 服务），连同示例数据与文档打包成 `findmyclassmate.tar.gz` 并创建 GitHub Release。
+`.github/workflows/release.yml` 会执行全量测试，然后：
+1. 交叉编译 Linux amd64 / macOS arm64 / Windows amd64 三平台二进制（内嵌前端页面与 API 服务），连同示例数据与文档打包成 `findmyclassmate.tar.gz` 并创建 GitHub Release
+2. 构建并推送 Docker 镜像到 Docker Hub（`wenxiloveyou/find-my-classmate`），标签为 `{version}`、`{major}.{minor}`，main 分支额外推送 `latest`
+
+> Docker 推送需要仓库配置 `DOCKER_PAT` Secret（Docker Hub 访问令牌）。
 
 ## 目录结构
 
@@ -117,7 +121,8 @@ git push origin v0.1.0
 
 - 页面不写入 localStorage，不把查询词或结果写入 URL
 - API DTO 只返回 name、grade、class
-- 生产部署请在边缘或网关配置 IP 限流、严格 CORS、脱敏日志
+- 服务端已内置：CSP 与安全响应头（防点击劫持 / 注入）、按 IP 令牌桶限流（60 次/秒/IP，429 + Retry-After）、HTTP 读写超时（防慢速攻击）、访问日志脱敏且不记录查询参数
+- 生产部署建议在边缘或网关补充：严格 CORS、HTTPS（HSTS）、反代层限流
 - 名单数据含真实姓名，发布前请确认已获得学校公示许可
 
 ## 贡献
