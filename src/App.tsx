@@ -218,10 +218,12 @@ export function App() {
           <p className="hero-intro" data-od-id="hero-intro">一张名单，两个年段。输入姓名、班级或年段，快速回到你要找的那一行。</p>
           <form className="search-wrap" data-od-id="search-form" onSubmit={submit}>
             <label className="field-label" data-od-id="search-label" htmlFor="query">查询条件 <span>NAME / CLASS / GRADE</span></label>
-            <BorderBeam size="md" colorVariant="mono" theme="dark" staticColors borderRadius={999} duration={3.1} strength={state === "loading" ? 1 : 0.55}>
+            <BorderBeam size="md" colorVariant="colorful" theme="dark" borderRadius={999} duration={3.1} strength={state === "loading" ? 1 : 0.55}>
               <div className="search-track" data-od-id="search-track">
                 <input className="search-input" id="query" type="search" autoComplete="off" spellCheck={false} value={query} onChange={(event) => setQuery(event.target.value)} onCompositionStart={() => setIsComposing(true)} onCompositionEnd={() => setIsComposing(false)} onKeyDown={(event) => { if (event.key === "Escape") clear(); if (event.key === "Enter" && !event.nativeEvent.isComposing && !isComposing) void submit(event); }} placeholder="输入姓名 / 班级 / 年段" aria-describedby="search-hint status-line" />
-                <button className="search-button" data-od-id="search-cta" type="submit" disabled={state === "loading"}><span>{state === "loading" ? "检索中" : "开始搜索"}</span><span aria-hidden="true">↗</span></button>
+                <button className="search-send" data-od-id="search-cta" type="submit" disabled={state === "loading"} aria-label={state === "loading" ? "正在检索" : "开始搜索"}>
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></svg>
+                </button>
               </div>
             </BorderBeam>
             <div className="search-hint" id="search-hint" data-od-id="search-hint"><span>例：示例同学，18班 · 高二 示例</span><span>ENTER 查询 / ESC 清空</span></div>
