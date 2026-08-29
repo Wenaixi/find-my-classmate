@@ -10,3 +10,4 @@ services:
     environment:
       - PORT=3078
       - FMC_DATA_DIR=/app/data
+      - FMC_LOG_DIR=/tmp/fmc   # 数据目录只读挂载，日志写容器可写区

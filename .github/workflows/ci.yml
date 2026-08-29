@@ -79,10 +79,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 校验名单 JSON 格式与去重
+      - name: 校验名单 JSON 格式、姓名与去重
         run: |
           node -e "
             const fs = require('fs');
+            const pick = (entry) => {
+              if (typeof entry === 'string') return entry.trim();
+              if (entry && typeof entry === 'object' && typeof entry.姓名 === 'string') return entry.姓名.trim();
+              return null;
+            };
+            const extra = (entry) => entry && typeof entry === 'object' ? Object.keys(entry).filter(k => k !== '姓名') : [];
             for (const f of ['data/高一.json', 'data/高二.json']) {
               const obj = JSON.parse(fs.readFileSync(f, 'utf8'));
               const roster = obj.名单;
@@ -92,14 +98,17 @@ jobs:
               let count = 0;
               for (const [cls, names] of Object.entries(roster)) {
                 if (!Array.isArray(names)) throw new Error(f + ' 班级 ' + cls + ' 不是数组');
-                for (const name of names) {
-                  if (typeof name !== 'string' || !name.trim()) throw new Error(f + ' 班级 ' + cls + ' 含非法姓名');
-                  const key = grade + '|' + cls + '|' + name.trim();
+                for (const entry of names) {
+                  const name = pick(entry);
+                  if (!name) throw new Error(f + ' 班级 ' + cls + ' 含非法条目: ' + JSON.stringify(entry));
+                  const key = grade + '|' + cls + '|' + name;
                   if (seen.has(key)) throw new Error(f + ' 重复记录: ' + key);
                   seen.add(key);
                   count++;
+                  const keys = extra(entry);
+                  if (keys.length) throw new Error(f + ' 班级 ' + cls + ' 条目含非白名单字段: ' + keys.join(','));
                 }
               }
-              console.log(f + ': ' + count + ' 条记录');
+              console.log(f + ': ' + count + ' 条记录，字段干净');
             }
           "

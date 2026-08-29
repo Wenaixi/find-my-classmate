@@ -38,11 +38,21 @@ func resolveDataDir() string {
 	return filepath.Join(current, "data")
 }
 
+// resolveLogDir 优先使用 FMC_LOG_DIR 环境变量；未设置时沿用数据目录下的 log 子目录。
+// 容器场景数据目录通常只读挂载，日志必须写到独立可写位置。
+func resolveLogDir(dataDir string) string {
+	if value := os.Getenv("FMC_LOG_DIR"); value != "" {
+		return value
+	}
+	return filepath.Join(dataDir, "log")
+}
+
 func openLogFile(dataDir string) (*os.File, error) {
-	if err := os.MkdirAll(filepath.Join(dataDir, "log"), 0o755); err != nil {
+	logDir := resolveLogDir(dataDir)
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		return nil, err
 	}
-	return os.OpenFile(filepath.Join(dataDir, "log", "server.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	return os.OpenFile(filepath.Join(logDir, "server.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 }
 
 func main() {
