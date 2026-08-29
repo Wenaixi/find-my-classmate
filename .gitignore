@@ -41,3 +41,4 @@ artifacts/
 # 测试覆盖率
 coverage/
 *.lcov
+server/server.exe
