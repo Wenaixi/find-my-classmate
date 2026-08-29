@@ -220,6 +220,7 @@ export function App() {
             <label className="field-label" data-od-id="search-label" htmlFor="query">查询条件 <span>NAME / CLASS / GRADE</span></label>
             <BorderBeam size="md" colorVariant="colorful" theme="dark" borderRadius={999} duration={1.96} strength={0.89}>
               <div className="search-track" data-od-id="search-track">
+              <div className="beam-sweep" aria-hidden="true" />
                 <input className="search-input" id="query" type="text" autoComplete="off" spellCheck={false} value={query} onChange={(event) => setQuery(event.target.value)} onCompositionStart={() => setIsComposing(true)} onCompositionEnd={() => setIsComposing(false)} onKeyDown={(event) => { if (event.key === "Escape") clear(); if (event.key === "Enter" && !event.nativeEvent.isComposing && !isComposing) void submit(event); }} placeholder="输入姓名 / 班级 / 年段" aria-describedby="search-hint status-line" />
                 <button className="search-send" data-od-id="search-cta" type="submit" disabled={state === "loading"} aria-label={state === "loading" ? "正在检索" : "开始搜索"}>
                   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></svg>

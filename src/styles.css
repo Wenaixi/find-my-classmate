@@ -1,3 +1,9 @@
+@property --sweep-angle { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
+.search-wrap [data-beam]::before { opacity: 0 !important; }
+.beam-sweep { position: absolute; inset: 0; border-radius: 999px; pointer-events: none; z-index: 1; opacity: .9; }
+.beam-sweep::before { content: ""; position: absolute; inset: 0; border-radius: 999px; padding: 1px; background: conic-gradient(from var(--sweep-angle), transparent 0deg, transparent 300deg, rgba(255,80,120,.95) 330deg, rgba(120,160,255,.95) 348deg, rgba(255,220,120,.95) 360deg); -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); mask-composite: exclude; animation: sweep-spin 1.96s linear infinite; }
+.beam-sweep::after { content: ""; position: absolute; inset: 0; border-radius: 999px; background: conic-gradient(from var(--sweep-angle), transparent 0deg, transparent 315deg, rgba(120,160,255,.34) 340deg, rgba(255,110,200,.28) 360deg); animation: sweep-spin 1.96s linear infinite; }
+@keyframes sweep-spin { to { --sweep-angle: 360deg; } }
 @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wdth,wght@75..100,400..700&family=Mona+Sans:wdth,wght@75..125,400..800&display=swap");
 
 @font-face { font-family: "D-DIN"; src: local("D-DIN"), local("DIN Alternate"); font-display: swap; }
