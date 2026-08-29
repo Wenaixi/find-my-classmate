@@ -42,3 +42,4 @@ artifacts/
 coverage/
 *.lcov
 server/server.exe
+vite.config.js
