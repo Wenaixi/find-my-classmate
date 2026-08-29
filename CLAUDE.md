@@ -23,7 +23,7 @@
 
 ## 动效与字体规范
 
-- border-beam 1.3.0：只包裹 src/App.tsx 的搜索轨道，使用 size="md"、borderRadius=999（胶囊全边框）、colorVariant="colorful"（彩色光束）、theme="dark"、duration=1.96、strength=0.89（对齐官方 Playground 样例）；单亮点转圈效果，不用 brightness/saturation/hueRange 夸张参数，不设常驻 inset 彩影（避免整圈常亮），外部仅紧凑小光晕；光束无条件常转常亮（默认 active=true），strength 恒为 1（拉满）。搜索轨道为胶囊圆角（999px），常驻彩色环境辉光（box-shadow 蓝+粉双层），focus-within 时增强，虚焦后光晕不消失；移动端保持单行布局。
+- border-beam 1.3.0：只包裹 src/App.tsx 的搜索轨道，使用 size="md"、borderRadius=999（胶囊全边框）、colorVariant="colorful"（彩色光束）、theme="dark"、duration=1.96、strength=1、brightness=1.5、saturation=1.8、hueRange=90；单亮点转圈 + 官方内部特效：--beam-inner-opacity=2.5 让 28px 边缘内侧彩晕向内晕染（::before inner 层），外部紧凑小光晕；光束无条件常转常亮（默认 active=true），strength 恒为 1（拉满）。搜索轨道为胶囊圆角（999px），常驻彩色环境辉光（box-shadow 蓝+粉双层），focus-within 时增强，虚焦后光晕不消失；移动端保持单行布局。
 - thinking-orbs 0.3.1：src/App.tsx 的状态区和 loading 结果区使用 size=64（库内最大预设）；loading 使用 searching，完成后使用暂停的 solving，并提供 aria-label。
 - liquid-gooey 0.2.1：src/App.tsx 的结果列表使用 Liquid 根节点和 Liquid.Item；结果行采用 morph shape、speed 0.85、bounce 0.3、contentBlur 0，文字保持清晰。
 - 视觉字体：Mona Sans 用于标题，Instrument Sans 用于正文和中文混排，IBM Plex Mono 用于字段、编号、状态和数据标签；均通过 CSS 字体栈引入并保留系统回退。
