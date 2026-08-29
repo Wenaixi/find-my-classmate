@@ -51,6 +51,8 @@ Go 服务默认从 data/高一.json 和 data/高二.json 读取；可用 FMC_DAT
 
 ## 当前文件边界
 
+- design/logo-raw.png：AI 生成的原始 logo 源图（1024px PNG，不入构建）。
+- public/logo.webp（512px，7.7KB）与 public/favicon.png（64px）：顶栏标记与浏览器标签图标，Vite 构建时拷贝到 server/web 根目录。
 - DESIGN.md：既有视觉参考，不改动。
 - src/：React 页面、样式、API 适配和查询测试。
 - server/：Go 服务、数据解析和后端测试。
