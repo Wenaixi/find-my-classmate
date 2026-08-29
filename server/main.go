@@ -161,7 +161,20 @@ func main() {
 		port = "3078"
 	}
 	logInfof("FindMyClassmate API listening on :%s", port)
-	log.Fatal(http.ListenAndServe(":"+port, accessLog(securityHeaders(mux))))
+	server := buildServer(":"+port, rateLimit(accessLog(securityHeaders(mux)), 60, time.Second))
+	log.Fatal(server.ListenAndServe())
+}
+
+// buildServer 组装带超时配置的 http.Server：防止慢速攻击挂起连接。
+func buildServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 }
 
 // accessLog 记录请求访问日志：方法、路径、状态、耗时、脱敏客户端 IP。
@@ -200,6 +213,10 @@ func maskedIP(remote string) string {
 
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "no-store")
 		next.ServeHTTP(w, r)
