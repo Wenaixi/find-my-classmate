@@ -218,7 +218,7 @@ export function App() {
           <p className="hero-intro" data-od-id="hero-intro">支持福清一中高一高二名单，输入姓名、班级或年段，快速回到你要找的那一行。</p>
           <form className="search-wrap" data-od-id="search-form" onSubmit={submit}>
             <label className="field-label" data-od-id="search-label" htmlFor="query">查询条件 <span>NAME / CLASS / GRADE</span></label>
-            <BorderBeam size="md" colorVariant="colorful" theme="dark" borderRadius={999} duration={2.2} strength={1} brightness={1.7} saturation={1.9} hueRange={120}>
+            <BorderBeam size="md" colorVariant="colorful" theme="dark" borderRadius={999} duration={2.2} strength={1} brightness={2} saturation={2.2} hueRange={160}>
               <div className="search-track" data-od-id="search-track">
                 <input className="search-input" id="query" type="text" autoComplete="off" spellCheck={false} value={query} onChange={(event) => setQuery(event.target.value)} onCompositionStart={() => setIsComposing(true)} onCompositionEnd={() => setIsComposing(false)} onKeyDown={(event) => { if (event.key === "Escape") clear(); if (event.key === "Enter" && !event.nativeEvent.isComposing && !isComposing) void submit(event); }} placeholder="输入姓名 / 班级 / 年段" aria-describedby="search-hint status-line" />
                 {query.length > 0 && <button className="search-clear" data-od-id="search-clear" type="button" onClick={clear} aria-label="清空输入"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></button>}
