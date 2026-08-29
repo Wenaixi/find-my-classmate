@@ -17,7 +17,7 @@ jobs:
       - name: 安装 Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: 前端依赖与构建
@@ -74,7 +74,7 @@ jobs:
       - name: 安装 Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: 安装前端依赖并构建
