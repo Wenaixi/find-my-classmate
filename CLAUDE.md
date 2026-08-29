@@ -23,12 +23,12 @@
 
 ## 动效与字体规范
 
-- border-beam 1.3.0：只包裹 src/App.tsx 的搜索轨道，使用 size="md"、borderRadius=999（胶囊全边框）、colorVariant="colorful"（彩色光束）、theme="dark"；光束常亮，loading 时 strength 提升至 1。搜索轨道为胶囊圆角（999px），移动端保持单行布局。
+- border-beam 1.3.0：只包裹 src/App.tsx 的搜索轨道，使用 size="md"、borderRadius=999（胶囊全边框）、colorVariant="colorful"（彩色光束）、theme="dark"；光束无条件常转常亮（默认 active=true），idle strength 0.7，loading 时提升至 1。搜索轨道为胶囊圆角（999px），移动端保持单行布局。
 - thinking-orbs 0.3.1：src/App.tsx 的状态区和 loading 结果区使用 size=20；loading 使用 searching，完成后使用暂停的 solving，并提供 aria-label。
 - liquid-gooey 0.2.1：src/App.tsx 的结果列表使用 Liquid 根节点和 Liquid.Item；结果行采用 morph shape、speed 0.85、bounce 0.3、contentBlur 0，文字保持清晰。
 - 视觉字体：Mona Sans 用于标题，Instrument Sans 用于正文和中文混排，IBM Plex Mono 用于字段、编号、状态和数据标签；均通过 CSS 字体栈引入并保留系统回退。
 - 搜索由回车或按钮立即触发，src/lib/searchTiming.ts 保证 loading 至少 500ms；结果状态更新后平滑滚动到结果区域。
-- 搜索提交按钮为圆形发送图标（.search-send，内嵌 SVG 纸飞机），无文字文本；输入法组合期间 Enter 不提交，Escape 清空；首屏请求取消旧请求，加载更多只追加结果且不改变阅读位置。
+- 搜索提交按钮为圆形发送图标（.search-send，内嵌 SVG 纸飞机），无文字文本；输入框为 type="text"（禁用原生 search 分隔线与清除按钮），与发送键无竖线间隔直接融合；输入法组合期间 Enter 不提交，Escape 清空；首屏请求取消旧请求，加载更多只追加结果且不改变阅读位置。
 - 三个库与 CSS 动效均受 prefers-reduced-motion: reduce 控制。
 
 ## 运行方式
@@ -63,4 +63,4 @@ Go 服务默认从 data/高一.json 和 data/高二.json 读取；可用 FMC_DAT
 - 2026-05-12：建立黑白液体档案检索界面实施计划。
 - 2026-05-12：接入最短 500ms 搜索反馈、输入法兼容、结果自动滚动、Liquid.Item 结果行与 Mona Sans / Instrument Sans / IBM Plex Mono 字体栈。
 - 2026-05-12：从单文件原型升级为完整 React + TypeScript + Go 工程；真实接入 border-beam、thinking-orbs、liquid-gooey。
-- 2026-05-12：搜索框重构为胶囊造型：BorderBeam 改用 size="md" 全边框彩色光束（borderRadius=999），搜索轨道圆角化，文本按钮替换为圆形发送图标，移动端改单行布局。
+- 2026-05-12：搜索框重构为胶囊造型：BorderBeam 改用 size="md" 全边框彩色光束（borderRadius=999）常转常亮，搜索轨道圆角化，文本按钮替换为圆形发送图标，输入框去除原生分隔线与按钮融合，移动端改单行布局。
