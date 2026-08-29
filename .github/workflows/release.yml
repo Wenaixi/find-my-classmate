@@ -10,7 +10,34 @@ permissions:
 jobs:
   test:
     name: 全量测试
-    uses: ./.github/workflows/ci.yml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 前端依赖与构建
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
+
+      - name: 安装 Go 1.26
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: 后端测试与静态检查
+        working-directory: server
+        run: |
+          test -z "$(gofmt -l .)"
+          go test ./...
+          go vet ./...
 
   release:
     name: 构建发布产物
@@ -39,11 +66,8 @@ jobs:
         working-directory: server
         run: |
           mkdir -p ../release
-          # Linux amd64
           GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../release/findmyclassmate-linux-amd64 .
-          # macOS arm64
           GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o ../release/findmyclassmate-darwin-arm64 .
-          # Windows amd64
           GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../release/findmyclassmate-windows-amd64.exe .
 
       - name: 归档发布包
