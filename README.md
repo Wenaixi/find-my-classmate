@@ -65,6 +65,7 @@ Go 服务默认从 `data/高一.json` 和 `data/高二.json` 读取名单，文�
 - 结果按完整、前缀、包含匹配与自然班级顺序排列
 - API 响应固定为分页结构 `{ items, total, limit, offset, hasMore }`，首屏默认 10 条，单次最多 50 条
 
+
 ## 验证
 
 前端：

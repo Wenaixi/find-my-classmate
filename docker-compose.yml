@@ -1,0 +1,12 @@
+services:
+  findmyclassmate:
+    build: .
+    container_name: findmyclassmate
+    restart: unless-stopped
+    ports:
+      - "3078:3078"        # 单一端口暴露：页面 + API
+    volumes:
+      - ./data:/app/data:ro   # 名单数据只读挂载，文件变更自动热重载
+    environment:
+      - PORT=3078
+      - FMC_DATA_DIR=/app/data

@@ -1,0 +1,17 @@
+node_modules
+dist
+server/web
+data
+design
+docs
+artifacts
+.dsh-vision-toolkit
+.git
+.gitignore
+CLAUDE.md
+Dockerfile
+docker-compose.yml
+*.log
+*.tsbuildinfo
+.vscode
+.idea
