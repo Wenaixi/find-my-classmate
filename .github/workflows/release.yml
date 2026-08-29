@@ -107,7 +107,7 @@ jobs:
 
       - name: 提取更新记录
         run: |
-          awk '/^## \\[/{if(found)exit; found=1} found{print}' CHANGELOG.md > release-body.md
+          awk 'BEGIN{found=0} /^## /{if(found)exit; found=1} found{print}' CHANGELOG.md > release-body.md
           if [ ! -s release-body.md ]; then echo "未找到当前版本的更新记录。" > release-body.md; fi
 
       - name: 创建 GitHub Release
