@@ -41,6 +41,11 @@
 
 Go 服务默认从 data/高一.json 和 data/高二.json 读取；可用 FMC_DATA_DIR 指向其他数据目录，数据文件变更后下一次请求自动热重载，日志写入 data/log/server.log。
 
+## 部署
+- server/web.go 使用 //go:embed all:web 递归嵌入前端产物（含 assets/ 子目录），单二进制 = 页面 + API，单一端口 3078。
+- Dockerfile 多阶段：Node 构建前端 → Go 交叉编译 → Alpine 运行（非 root uid 10001），数据目录 /app/data 匿名卷，./data 只读挂载热重载。
+- docker-compose.yml：单端口 3078:3078 映射。.dockerignore 排除 node_modules/构建产物/数据/文档。
+
 ## CI/CD 与开源
 - .github/workflows/ci.yml：push 到 main/master 与 PR 触发——前端（typecheck+test+build）、后端（gofmt 检查+go test+go vet）、数据契约（名单 JSON 格式与去重校验）三 job 并行。
 - .github/workflows/release.yml：v* tag 触发——先复用 ci.yml 全量测试，再交叉编译 Linux amd64 / macOS arm64 / Windows amd64 三平台二进制（内嵌 server/web），打包 findmyclassmate.tar.gz（含示例数据与文档）并创建 GitHub Release。
