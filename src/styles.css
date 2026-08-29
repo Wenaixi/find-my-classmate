@@ -1,9 +1,3 @@
-@property --sweep-angle { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
-.search-wrap [data-beam]::before { opacity: 0 !important; }
-.beam-sweep { position: absolute; inset: 0; border-radius: 999px; pointer-events: none; z-index: 1; opacity: .9; }
-.beam-sweep::before { content: ""; position: absolute; inset: 0; border-radius: 999px; padding: 1px; background: conic-gradient(from var(--sweep-angle), transparent 0deg, transparent 300deg, rgba(255,80,120,.98) 322deg, rgba(255,170,60,.98) 334deg, rgba(120,255,200,.98) 345deg, rgba(120,160,255,.98) 354deg, rgba(220,120,255,.98) 360deg); -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); mask-composite: exclude; animation: sweep-spin 1.96s linear infinite; }
-.beam-sweep::after { content: ""; position: absolute; inset: 0; border-radius: 999px; background: conic-gradient(from var(--sweep-angle), transparent 0deg, transparent 300deg, rgba(255,110,200,.38) 328deg, rgba(120,255,200,.3) 344deg, rgba(120,160,255,.34) 360deg); animation: sweep-spin 1.96s linear infinite; }
-@keyframes sweep-spin { to { --sweep-angle: 360deg; } }
 @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wdth,wght@75..100,400..700&family=Mona+Sans:wdth,wght@75..125,400..800&display=swap");
 
 @font-face { font-family: "D-DIN"; src: local("D-DIN"), local("DIN Alternate"); font-display: swap; }
@@ -58,7 +52,6 @@ h1 em { color: #fff; font-style: normal; }
 .search-wrap { width: 100%; }
 .field-label { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 12px; color: var(--ink); font: 600 11px/1.2 var(--mono); letter-spacing: 1.2px; text-transform: uppercase; }
 .field-label span { color: var(--faint); font: 400 10px/1 var(--mono); letter-spacing: .8px; }
-.search-wrap [data-beam] { filter: drop-shadow(0 0 8px rgba(140,120,255,.45)); }
 .search-track { position: relative; z-index: 2; display: flex; min-height: 72px; align-items: stretch; padding: 6px; border: 1px solid var(--line-strong); border-radius: 999px; background: rgba(17,17,17,.92); box-shadow: none; transition: border-color .25s ease, background .25s ease, box-shadow .25s ease; }
 .search-track:focus-within { border-color: rgba(244,244,240,.72); background: var(--surface-raised); box-shadow: none; }
 .search-input { min-width: 0; flex: 1; padding: 0 18px 0 24px; color: var(--ink); border: 0; outline: 0; background: transparent; font: 400 18px/1.3 "Instrument Sans", "Noto Sans SC", sans-serif; }
