@@ -1,4 +1,9 @@
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wdth,wght@75..100,400..700&family=Mona+Sans:wdth,wght@75..125,400..800&display=swap");
+/* 字体自托管：woff2 由 Vite 从 public/fonts 拷贝，无外部请求 */
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/ibm-plex-mono-400.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url("/fonts/ibm-plex-mono-500.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 600; font-display: swap; src: url("/fonts/ibm-plex-mono-600.woff2") format("woff2"); }
+@font-face { font-family: "Instrument Sans"; font-style: normal; font-weight: 400 700; font-display: swap; src: url("/fonts/instrument-sans.woff2") format("woff2"); }
+@font-face { font-family: "Mona Sans"; font-style: normal; font-weight: 400 800; font-display: swap; src: url("/fonts/mona-sans.woff2") format("woff2"); }
 
 @font-face { font-family: "D-DIN"; src: local("D-DIN"), local("DIN Alternate"); font-display: swap; }
 @font-face { font-family: "D-DIN-Bold"; src: local("D-DIN-Bold"), local("DIN Alternate Bold"); font-weight: 700; font-display: swap; }

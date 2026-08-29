@@ -34,11 +34,16 @@ func TestSecurityHeaders(t *testing.T) {
 		"frame-ancestors 'none'",
 		"base-uri 'self'",
 		"form-action 'self'",
-		"font-src 'self' https://fonts.gstatic.com",
-		"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+		"font-src 'self'",
+		"style-src 'self' 'unsafe-inline'",
 	} {
 		if !strings.Contains(csp, directive) {
 			t.Errorf("CSP 缺少指令 %q，实际: %s", directive, csp)
+		}
+	}
+	for _, banned := range []string{"fonts.gstatic.com", "fonts.googleapis.com"} {
+		if strings.Contains(csp, banned) {
+			t.Errorf("CSP 不应再引用 %s（字体已自托管），实际: %s", banned, csp)
 		}
 	}
 
