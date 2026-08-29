@@ -52,9 +52,9 @@ h1 em { color: #fff; font-style: normal; }
 .search-wrap { width: 100%; }
 .field-label { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 12px; color: var(--ink); font: 600 11px/1.2 var(--mono); letter-spacing: 1.2px; text-transform: uppercase; }
 .field-label span { color: var(--faint); font: 400 10px/1 var(--mono); letter-spacing: .8px; }
-.search-wrap [data-beam] { filter: drop-shadow(0 0 8px rgba(140,120,255,.3)); }
-.search-track { position: relative; z-index: 2; display: flex; min-height: 72px; align-items: stretch; padding: 6px; border: 1px solid var(--line-strong); border-radius: 999px; background: rgba(17,17,17,.92); box-shadow: 0 0 20px rgba(120,160,255,.2), 0 0 40px rgba(255,110,200,.12); transition: border-color .25s ease, background .25s ease, box-shadow .25s ease; }
-.search-track:focus-within { border-color: rgba(244,244,240,.72); background: var(--surface-raised); box-shadow: 0 0 24px rgba(120,160,255,.26), 0 0 48px rgba(255,110,200,.16); }
+.search-wrap [data-beam] { filter: drop-shadow(0 0 10px rgba(140,120,255,.38)) drop-shadow(0 0 22px rgba(255,110,190,.18)); }
+.search-track { position: relative; z-index: 2; display: flex; min-height: 72px; align-items: stretch; padding: 6px; border: 1px solid var(--line-strong); border-radius: 999px; background: rgba(17,17,17,.92); box-shadow: 0 0 24px rgba(120,160,255,.26), 0 0 52px rgba(255,110,200,.17); transition: border-color .25s ease, background .25s ease, box-shadow .25s ease; }
+.search-track:focus-within { border-color: rgba(244,244,240,.72); background: var(--surface-raised); box-shadow: 0 0 28px rgba(120,160,255,.32), 0 0 60px rgba(255,110,200,.22); }
 .search-input { min-width: 0; flex: 1; padding: 0 18px 0 24px; color: var(--ink); border: 0; outline: 0; background: transparent; font: 400 18px/1.3 "Instrument Sans", "Noto Sans SC", sans-serif; }
 .search-input::placeholder { color: var(--faint); }
 .search-input:focus-visible { outline: none; }
