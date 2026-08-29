@@ -14,7 +14,7 @@ RUN npm run build
 FROM golang:1.26-alpine AS backend
 WORKDIR /build
 COPY server/ ./server/
-# 将前端产物拷入 Go 构建上下文（web.go 通过 embed 或 fs 读取？先看 web.go 实现）
+# 将前端产物拷入 Go 构建上下文（web.go 通过 //go:embed all:web 读取）
 COPY --from=frontend /build/server/web ./server/web
 WORKDIR /build/server
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-s -w" -o /out/findmyclassmate .

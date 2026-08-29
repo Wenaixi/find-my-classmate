@@ -73,6 +73,24 @@ jobs:
         working-directory: server
         run: go vet ./...
 
+  docker:
+    name: Docker · 镜像构建验证
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 设置 Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 构建镜像（多阶段，前端现场构建后嵌入）
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: findmyclassmate:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   data:
     name: 数据契约 · 名单 JSON 校验
     runs-on: ubuntu-latest
