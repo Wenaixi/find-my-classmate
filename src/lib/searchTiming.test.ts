@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 import { getRemainingSearchDelay } from "./searchTiming";
 
 describe("search timing", () => {
-  it("keeps loading visible until 500ms", () => {
-    expect(getRemainingSearchDelay(1000, 1250)).toBe(250);
-    expect(getRemainingSearchDelay(1000, 1500)).toBe(0);
-    expect(getRemainingSearchDelay(1000, 1800)).toBe(0);
+  it("keeps loading visible until 1000ms", () => {
+    expect(getRemainingSearchDelay(1000, 1250)).toBe(750);
+    expect(getRemainingSearchDelay(1000, 2000)).toBe(0);
+    expect(getRemainingSearchDelay(1000, 2300)).toBe(0);
   });
 
   it("keeps the full window when the clock moves backwards", () => {
-    expect(getRemainingSearchDelay(1000, 900)).toBe(600);
+    expect(getRemainingSearchDelay(1000, 900)).toBe(1100);
   });
 
   it("allows a custom minimum for deterministic callers", () => {

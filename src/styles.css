@@ -120,6 +120,8 @@ h1 em { color: #fff; font-style: normal; }
 .privacy-band { width: min(var(--max), calc(100% - 64px)); margin: auto; display: grid; grid-template-columns: minmax(180px, .55fr) 1fr; gap: 32px; padding: 28px 0 32px; border-top: 1px solid var(--line-strong); }
 .privacy-band p { max-width: 520px; margin: 0; color: var(--muted); font: 400 13px/1.7 "Instrument Sans", "Noto Sans SC", sans-serif; }
 .site-footer { width: min(var(--max), calc(100% - 64px)); margin: auto; padding: 24px 0 30px; display: flex; justify-content: space-between; gap: 20px; color: var(--faint); border-top: 1px solid var(--line); font: 400 10px/1.4 var(--mono); letter-spacing: 1px; text-transform: uppercase; }
+.footer-stack { display: flex; flex-direction: column; gap: 5px; }
+.footer-fine { font: 400 10px/1.5 var(--mono); letter-spacing: .5px; }
 @keyframes reveal { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes row-in { from { opacity: 0; transform: translateY(12px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes settle { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
