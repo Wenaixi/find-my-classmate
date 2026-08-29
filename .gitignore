@@ -28,6 +28,7 @@ Thumbs.db
 .vscode/
 *.code-workspace
 
+*.bak.*
 # 工具临时目录
 .dsh-vision-toolkit/
 artifacts/
