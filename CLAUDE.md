@@ -24,11 +24,12 @@
 ## 动效与字体规范
 
 - border-beam 1.3.0：只包裹 src/App.tsx 的搜索轨道，使用 size="md"、borderRadius=999（胶囊全边框）、colorVariant="colorful"（彩色光束）、theme="dark"、brightness=1.8、saturation=2、hueRange=90（全彩色相流动）、duration=2.2；光束无条件常转常亮（默认 active=true），strength 恒为 1（拉满）。搜索轨道为胶囊圆角（999px），常驻彩色环境辉光（box-shadow 蓝+粉双层），focus-within 时增强，虚焦后光晕不消失；移动端保持单行布局。
-- thinking-orbs 0.3.1：src/App.tsx 的状态区和 loading 结果区使用 size=20；loading 使用 searching，完成后使用暂停的 solving，并提供 aria-label。
+- thinking-orbs 0.3.1：src/App.tsx 的状态区和 loading 结果区使用 size=64（库内最大预设）；loading 使用 searching，完成后使用暂停的 solving，并提供 aria-label。
 - liquid-gooey 0.2.1：src/App.tsx 的结果列表使用 Liquid 根节点和 Liquid.Item；结果行采用 morph shape、speed 0.85、bounce 0.3、contentBlur 0，文字保持清晰。
 - 视觉字体：Mona Sans 用于标题，Instrument Sans 用于正文和中文混排，IBM Plex Mono 用于字段、编号、状态和数据标签；均通过 CSS 字体栈引入并保留系统回退。
-- 搜索由回车或按钮立即触发，src/lib/searchTiming.ts 保证 loading 至少 500ms；结果状态更新后平滑滚动到结果区域。
+- 搜索由回车或按钮立即触发，src/lib/searchTiming.ts 保证 loading 至少 1000ms；结果状态更新后平滑滚动到结果区域。
 - 搜索提交按钮为圆形发送图标（.search-send，内嵌 SVG 纸飞机），无文字文本；输入框为 type="text" 且自身不画焦点 outline（.search-input:focus-visible { outline: none }），焦点指示由 .search-track:focus-within 的整圈胶囊高亮承担，左右两端均为圆角；输入法组合期间 Enter 不提交，Escape 清空；首屏请求取消旧请求，加载更多只追加结果且不改变阅读位置。
+- 页脚小字标注数据来源（福清一中公示数据提取）与运营团队（福清一中信息社），footer-stack 纵向 10px mono 小字。
 - 三个库与 CSS 动效均受 prefers-reduced-motion: reduce 控制。
 
 ## 运行方式
