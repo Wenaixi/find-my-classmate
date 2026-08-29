@@ -1,8 +1,8 @@
 @property --sweep-angle { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
 .search-wrap [data-beam]::before { opacity: 0 !important; }
 .beam-sweep { position: absolute; inset: 0; border-radius: 999px; pointer-events: none; z-index: 1; opacity: .9; }
-.beam-sweep::before { content: ""; position: absolute; inset: 0; border-radius: 999px; padding: 1px; background: conic-gradient(from var(--sweep-angle), transparent 0deg, transparent 300deg, rgba(255,80,120,.95) 330deg, rgba(120,160,255,.95) 348deg, rgba(255,220,120,.95) 360deg); -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); mask-composite: exclude; animation: sweep-spin 1.96s linear infinite; }
-.beam-sweep::after { content: ""; position: absolute; inset: 0; border-radius: 999px; background: conic-gradient(from var(--sweep-angle), transparent 0deg, transparent 315deg, rgba(120,160,255,.34) 340deg, rgba(255,110,200,.28) 360deg); animation: sweep-spin 1.96s linear infinite; }
+.beam-sweep::before { content: ""; position: absolute; inset: 0; border-radius: 999px; padding: 1px; background: conic-gradient(from var(--sweep-angle), transparent 0deg, transparent 300deg, rgba(255,80,120,.98) 322deg, rgba(255,170,60,.98) 334deg, rgba(120,255,200,.98) 345deg, rgba(120,160,255,.98) 354deg, rgba(220,120,255,.98) 360deg); -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); mask-composite: exclude; animation: sweep-spin 1.96s linear infinite; }
+.beam-sweep::after { content: ""; position: absolute; inset: 0; border-radius: 999px; background: conic-gradient(from var(--sweep-angle), transparent 0deg, transparent 300deg, rgba(255,110,200,.38) 328deg, rgba(120,255,200,.3) 344deg, rgba(120,160,255,.34) 360deg); animation: sweep-spin 1.96s linear infinite; }
 @keyframes sweep-spin { to { --sweep-angle: 360deg; } }
 @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wdth,wght@75..100,400..700&family=Mona+Sans:wdth,wght@75..125,400..800&display=swap");
 
@@ -69,6 +69,10 @@ h1 em { color: #fff; font-style: normal; }
 .load-more-button:active:not(:disabled) { transform: translateY(1px) scale(.99); }
 .load-more-button:disabled { cursor: wait; opacity: .42; }
 .button-arrow { font-size: 17px; line-height: 0; }
+.search-clear { display: grid; place-items: center; align-self: center; flex: 0 0 auto; width: 28px; height: 28px; margin: 0 2px; border: 0; border-radius: 50%; color: var(--faint); background: transparent; transition: color .2s ease, background .2s ease, transform .2s ease; }
+.search-clear svg { display: block; }
+.search-clear:hover { color: var(--ink); background: rgba(244,244,240,.1); }
+.search-clear:active { transform: scale(.9); }
 .search-send { display: grid; place-items: center; align-self: center; flex: 0 0 auto; width: 56px; height: 56px; border: 0; border-radius: 50%; color: #050505; background: var(--ink); transition: background .25s ease, transform .25s cubic-bezier(.22,1,.36,1), opacity .2s ease; }
 .search-send svg { display: block; }
 .search-send:hover:not(:disabled) { background: #fff; transform: scale(1.06); }
@@ -144,7 +148,11 @@ h1 em { color: #fff; font-style: normal; }
   .hero-intro { margin-bottom: 40px; font-size: 15px; }
   .field-label { align-items: flex-start; flex-direction: column; gap: 8px; }
   .search-input { min-height: 56px; padding: 0 18px; font-size: 17px; }
-  .search-send { width: 48px; height: 48px; }
+  .search-clear { display: grid; place-items: center; align-self: center; flex: 0 0 auto; width: 28px; height: 28px; margin: 0 2px; border: 0; border-radius: 50%; color: var(--faint); background: transparent; transition: color .2s ease, background .2s ease, transform .2s ease; }
+.search-clear svg { display: block; }
+.search-clear:hover { color: var(--ink); background: rgba(244,244,240,.1); }
+.search-clear:active { transform: scale(.9); }
+.search-send { width: 48px; height: 48px; }
   .search-hint { flex-direction: column; gap: 7px; }
   .search-hint span:last-child { text-align: left; }
   .results-section { padding: 38px 0 72px; }
