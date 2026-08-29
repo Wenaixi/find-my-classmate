@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"io"
 	"log"
-	"time"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func toResponse(response SearchResponse) map[string]any {
@@ -68,8 +68,8 @@ func logf(min level, format string, args ...any) {
 	log.Printf(format, args...)
 }
 
-func logInfof(format string, args ...any) { logf(levelInfo, format, args...) }
-func logWarnf(format string, args ...any) { logf(levelWarn, format, args...) }
+func logInfof(format string, args ...any)  { logf(levelInfo, format, args...) }
+func logWarnf(format string, args ...any)  { logf(levelWarn, format, args...) }
 func logErrorf(format string, args ...any) { logf(levelError, format, args...) }
 
 // resolveLogDir 优先使用 FMC_LOG_DIR 环境变量；未设置时沿用数据目录下的 log 子目录。
