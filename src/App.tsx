@@ -218,7 +218,7 @@ export function App() {
           <p className="hero-intro" data-od-id="hero-intro">一张名单，两个年段。输入姓名、班级或年段，快速回到你要找的那一行。</p>
           <form className="search-wrap" data-od-id="search-form" onSubmit={submit}>
             <label className="field-label" data-od-id="search-label" htmlFor="query">查询条件 <span>NAME / CLASS / GRADE</span></label>
-            <BorderBeam size="md" colorVariant="colorful" theme="dark" borderRadius={999} duration={1.96} brightness={1.5} saturation={1.8} hueRange={90} strength={1}>
+            <BorderBeam size="md" colorVariant="colorful" theme="dark" borderRadius={999} duration={1.96} strength={0.89}>
               <div className="search-track" data-od-id="search-track">
                 <input className="search-input" id="query" type="text" autoComplete="off" spellCheck={false} value={query} onChange={(event) => setQuery(event.target.value)} onCompositionStart={() => setIsComposing(true)} onCompositionEnd={() => setIsComposing(false)} onKeyDown={(event) => { if (event.key === "Escape") clear(); if (event.key === "Enter" && !event.nativeEvent.isComposing && !isComposing) void submit(event); }} placeholder="输入姓名 / 班级 / 年段" aria-describedby="search-hint status-line" />
                 <button className="search-send" data-od-id="search-cta" type="submit" disabled={state === "loading"} aria-label={state === "loading" ? "正在检索" : "开始搜索"}>
