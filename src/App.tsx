@@ -215,7 +215,7 @@ export function App() {
         <section className="hero" data-od-id="hero">
           <div className="hero-kicker"><p className="eyebrow" data-od-id="hero-eyebrow">校园名单 / 快速定位</p><span className="hero-stamp">FMC—01</span></div>
           <h1 data-od-id="hero-title">找到同学，<br /><em>从名字开始。</em></h1>
-          <p className="hero-intro" data-od-id="hero-intro">一张名单，两个年段。输入姓名、班级或年段，快速回到你要找的那一行。</p>
+          <p className="hero-intro" data-od-id="hero-intro">支持福清一中高一高二名单，输入姓名、班级或年段，快速回到你要找的那一行。</p>
           <form className="search-wrap" data-od-id="search-form" onSubmit={submit}>
             <label className="field-label" data-od-id="search-label" htmlFor="query">查询条件 <span>NAME / CLASS / GRADE</span></label>
             <BorderBeam size="md" colorVariant="colorful" theme="dark" borderRadius={999} duration={2.2} strength={1} brightness={1.7} saturation={1.9} hueRange={120}>
@@ -227,7 +227,7 @@ export function App() {
                 </button>
               </div>
             </BorderBeam>
-            <div className="search-hint" id="search-hint" data-od-id="search-hint"><span>例：示例同学，18班 · 高二 示例</span><span>ENTER 查询 / ESC 清空</span></div>
+            <div className="search-hint" id="search-hint" data-od-id="search-hint"><span>例：张三，18班 · 李四 高二（可用空格或逗号隔开）</span><span>ENTER 查询 / ESC 清空</span></div>
             <div className="status-line" id="status-line" data-od-id="status-feedback" data-state={state} aria-live="polite"><StatusOrb state={state} /><span>{state === "duplicate" ? COPY[state] + "，先显示前 " + PAGE_SIZE + " 条" : COPY[state]}</span></div>
           </form>
         </section>
