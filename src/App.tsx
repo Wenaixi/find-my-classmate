@@ -136,7 +136,7 @@ export function App() {
   }
 
   function renderResultBody() {
-    if (state === "loading") return <div className="result-loading" aria-label="正在加载查询结果"><StatusOrb state={state} /><span>扫描名单索引</span><span className="loading-pulse" aria-hidden="true" /></div>;
+    if (state === "loading") return <div className="result-loading" aria-label="正在加载查询结果"><span>扫描名单索引</span><span className="loading-pulse" aria-hidden="true" /></div>;
     if (state === "success" || state === "duplicate") {
       const progress = total ? (items.length / total) * 100 : 0;
       return <ResultList items={items} total={total} hasMore={hasMore} loadingMore={loadingMore} loadMoreError={loadMoreError} onLoadMore={() => void loadMore()} progress={progress} />;
