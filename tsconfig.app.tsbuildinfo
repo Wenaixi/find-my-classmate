@@ -1,1 +1,0 @@
-{"root":["./src/app.tsx","./src/main.tsx","./src/types.ts","./src/vite-env.d.ts","./src/data/demodata.ts","./src/lib/api.ts","./src/lib/query.test.ts","./src/lib/query.ts","./src/lib/searchtiming.test.ts","./src/lib/searchtiming.ts"],"version":"5.9.3"}

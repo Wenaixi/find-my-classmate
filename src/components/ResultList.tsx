@@ -27,7 +27,8 @@ function ResultCard({ student, index }: { student: Student; index: number }) {
         <span className="result-location-label">班级</span>
         <strong>{student.className}</strong>
       </div>
-      <span className="result-check" aria-label="已确认匹配" />
+      {/* F7：result-check 是纯装饰视觉标记，aria-label 在无 role 的 span 上违反 aria-prohibited-attr 并造成读屏冗余播报 */}
+      <span className="result-check" aria-hidden="true" />
     </div>
   );
 }
@@ -53,8 +54,8 @@ export default function ResultList({ items, total, hasMore, loadingMore, loadMor
       </div>
       <div className="load-more-zone" data-od-id="load-more-zone">
         <div className="load-progress" aria-hidden="true"><span style={{ width: progress + "%" }} /></div>
-        <div className="load-more-copy"><span>{items.length} / {total} 条记录</span><span>{hasMore ? "还有 " + (total - items.length) + " 条" : "已全部加载"}</span></div>
-        {hasMore && <button className="load-more-button" data-od-id="load-more-cta" type="button" onClick={onLoadMore} disabled={loadingMore} aria-label={"继续加载，剩余 " + (total - items.length) + " 条结果"}><span>{loadingMore ? "正在加载" : "继续加载"}</span><span className="button-arrow" aria-hidden="true">↗</span></button>}
+        <div className="load-more-copy"><span>{items.length} / {total} 条记录</span><span>{hasMore ? "还有 " + Math.max(0, total - items.length) + " 条" : "已全部加载"}</span></div>
+        {hasMore && <button className="load-more-button" data-od-id="load-more-cta" type="button" onClick={onLoadMore} disabled={loadingMore} aria-label={"继续加载，剩余 " + Math.max(0, total - items.length) + " 条结果"}><span>{loadingMore ? "正在加载" : "继续加载"}</span><span className="button-arrow" aria-hidden="true">↗</span></button>}
         {loadMoreError && <div className="load-more-error" role="alert">加载失败，请再次点击继续加载。</div>}
       </div>
     </>

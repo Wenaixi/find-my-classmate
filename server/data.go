@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -28,10 +27,12 @@ type fileStamp struct {
 }
 
 type studentStore struct {
-	dir    string
-	mu     sync.RWMutex
-	items  []Student
-	stamps map[string]fileStamp
+	dir            string
+	mu             sync.RWMutex
+	items          []Student
+	stamps         map[string]fileStamp
+	lastFailStamps map[string]fileStamp // 失败时的文件指纹：文件未变则冷却，变化则立即重试
+	lastFailAt     time.Time
 }
 
 func loadStudents(dir string) ([]Student, error) {
@@ -110,16 +111,30 @@ func (s *studentStore) reload(force bool) error {
 	if unchanged {
 		return nil
 	}
+	// 失败冷却：数据损坏期间每次请求都重试解析坏文件会放大 IO 与日志。
+	// 仅当文件指纹与失败时相同（坏文件未变）才冷却 2 秒；文件被修复（指纹变化）则立即重试。
+	s.mu.RLock()
+	cooling := !force && sameStamps(s.lastFailStamps, stamps) && time.Since(s.lastFailAt) < 2*time.Second
+	s.mu.RUnlock()
+	if cooling {
+		return errors.New("数据重载失败冷却中（上次尝试 2 秒内）")
+	}
 	items, err := loadStudents(s.dir)
 	if err != nil {
+		s.mu.Lock()
+		s.lastFailStamps = stamps
+		s.lastFailAt = time.Now()
+		s.mu.Unlock()
 		return err
 	}
 	s.mu.Lock()
 	s.items = items
 	s.stamps = stamps
+	s.lastFailStamps = nil
+	s.lastFailAt = time.Time{}
 	s.mu.Unlock()
 	if !force {
-		log.Printf("data reloaded: %d students", len(items))
+		logInfof("data reloaded: %d students", len(items))
 	}
 	return nil
 }

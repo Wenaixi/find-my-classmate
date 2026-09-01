@@ -2,7 +2,7 @@
 # 多阶段构建：前端产物嵌入 Go 二进制，单一端口 3078 暴露
 
 # ---- 阶段 1：构建前端 ----
-FROM node:20-alpine AS frontend
+FROM node:22-alpine AS frontend
 WORKDIR /build
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -20,7 +20,7 @@ WORKDIR /build/server
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-s -w" -o /out/findmyclassmate .
 
 # ---- 阶段 3：运行 ----
-FROM alpine:3.20
+FROM alpine:3.22
 RUN adduser -D -u 10001 app
 WORKDIR /app
 COPY --from=backend /out/findmyclassmate /app/findmyclassmate

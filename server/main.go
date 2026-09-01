@@ -12,19 +12,8 @@ import (
 	"time"
 )
 
-func toResponse(response SearchResponse) map[string]any {
-	items := make([]map[string]any, 0, len(response.Items))
-	for _, item := range response.Items {
-		items = append(items, map[string]any{"name": item.Name, "grade": item.Grade, "class": item.ClassName})
-	}
-	return map[string]any{
-		"items":   items,
-		"total":   response.Total,
-		"limit":   response.Limit,
-		"offset":  response.Offset,
-		"hasMore": response.HasMore,
-	}
-}
+// 响应直接序列化 SearchResponse：Student 的 json tag 保证隐私红线（只输出 name/grade/class）。
+// toResponse 已删除（双实现漂移源），契约由类型声明单点保证。
 
 func resolveDataDir() string {
 	if value := os.Getenv("FMC_DATA_DIR"); value != "" {
@@ -39,6 +28,9 @@ func resolveDataDir() string {
 	}
 	return filepath.Join(current, "data")
 }
+
+// version 由发布流水线 ldflags 注入（-X main.version=<git tag>）；本地构建默认为 dev。
+var version = "dev"
 
 var logLevel = parseLogLevel(os.Getenv("FMC_LOG_LEVEL"))
 
@@ -114,13 +106,31 @@ func main() {
 	}
 	logInfof("loaded %d students", len(store.items))
 
+	mux := buildMux(store)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "3078"
+	}
+	logInfof("FindMyClassmate %s listening on :%s", version, port)
+	server := buildServer(":"+port, rateLimit(accessLog(securityHeaders(mux)), 60, time.Second))
+	log.Fatal(server.ListenAndServe())
+}
+
+// buildMux 组装 API 路由（可注入 store，便于测试）。health 反映数据可用性：
+// 数据损坏/缺失时返回 503 degraded，避免编排层误判健康。
+func buildMux(store *studentStore) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.Handle("/", frontendHandler())
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+		if _, err := store.snapshot(); err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "degraded", "reason": "data", "version": version})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": version})
 	})
 	mux.HandleFunc("/api/search", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
 			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method_not_allowed"})
 			return
 		}
@@ -154,15 +164,13 @@ func main() {
 			return
 		}
 		response, _ := Search(students, queryText, limit, offset)
-		writeJSON(w, http.StatusOK, toResponse(response))
+		writeJSON(w, http.StatusOK, response)
 	})
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "3078"
-	}
-	logInfof("FindMyClassmate API listening on :%s", port)
-	server := buildServer(":"+port, rateLimit(accessLog(securityHeaders(mux)), 60, time.Second))
-	log.Fatal(server.ListenAndServe())
+	// 未知 /api/* 统一返回 JSON 404（not_found），与全站错误格式一致
+	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not_found"})
+	})
+	return mux
 }
 
 // buildServer 组装带超时配置的 http.Server：防止慢速攻击挂起连接。

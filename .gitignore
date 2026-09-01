@@ -43,3 +43,14 @@ coverage/
 *.lcov
 server/server.exe
 vite.config.js
+
+# 配置发射物（tsc -b noEmit 后不应再产生，兜底忽略）
+*.config.js
+*.config.d.ts
+vite.config.d.ts
+vitest.config.d.ts
+
+# 评审工作区与本地脚本
+docs/superpowers/
+.perf-gzip.ps1
+server/undefined/

@@ -105,10 +105,14 @@ jobs:
           cp README.md LICENSE CHANGELOG.md release-package/
           cd release-package && tar -czf ../findmyclassmate.tar.gz .
 
-      - name: 提取更新记录
+      - name: 提取更新记录（按当前 tag 精确匹配，找不到则显式失败）
         run: |
-          awk 'BEGIN{found=0} /^## /{if(found)exit; found=1} found{print}' CHANGELOG.md > release-body.md
-          if [ ! -s release-body.md ]; then echo "未找到当前版本的更新记录。" > release-body.md; fi
+          TAG="${{ github.ref_name }}"
+          awk -v tag="$TAG" 'BEGIN{found=0} /^## /{if(found){exit} if(index($0, tag)>0){found=1}} found{print}' CHANGELOG.md > release-body.md
+          if ! grep -q "$TAG" release-body.md; then
+            echo "未找到 CHANGELOG 中对应 ${TAG} 的更新记录，请先在 CHANGELOG.md 顶部追加。" >&2
+            exit 1
+          fi
 
       - name: 创建 GitHub Release
         uses: softprops/action-gh-release@v2
@@ -159,4 +163,3 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-

@@ -1,3 +1,0 @@
-FindMyClassmate verification fixture
-branch=too-many-bounded
-result=changed

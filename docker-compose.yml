@@ -11,6 +11,11 @@ services:
       - PORT=3078
       - FMC_DATA_DIR=/app/data
       - FMC_LOG_DIR=/tmp/fmc   # 数据目录只读挂载，日志写容器可写区
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3078/api/health"]
       interval: 30s

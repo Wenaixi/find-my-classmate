@@ -5,8 +5,6 @@
 @font-face { font-family: "Instrument Sans"; font-style: normal; font-weight: 400 700; font-display: swap; src: url("/fonts/instrument-sans.woff2") format("woff2"); }
 @font-face { font-family: "Mona Sans"; font-style: normal; font-weight: 400 800; font-display: swap; src: url("/fonts/mona-sans.woff2") format("woff2"); }
 
-@font-face { font-family: "D-DIN"; src: local("D-DIN"), local("DIN Alternate"); font-display: swap; }
-@font-face { font-family: "D-DIN-Bold"; src: local("D-DIN-Bold"), local("DIN Alternate Bold"); font-weight: 700; font-display: swap; }
 
 :root {
   font-family: "Instrument Sans", "Noto Sans SC", "Microsoft YaHei", sans-serif;
@@ -19,7 +17,7 @@
   --surface-soft: #151515;
   --ink: #f4f4f0;
   --muted: #999995;
-  --faint: #5e5e5b;
+  --faint: #8f8f8b;
   --line: #242422;
   --line-strong: #3a3a37;
   --max: 1160px;
@@ -57,13 +55,13 @@ h1 em { color: #fff; font-style: normal; }
 .field-label { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 12px; color: var(--ink); font: 600 11px/1.2 var(--mono); letter-spacing: 1.2px; text-transform: uppercase; }
 .field-label span { color: var(--faint); font: 400 10px/1 var(--mono); letter-spacing: .8px; }
 .search-wrap [data-beam] { --beam-inner-opacity: 3.6; --beam-bloom-opacity: 2.8; --beam-bloom-blur: 56px; --beam-glow-brightness: 2.6; --beam-glow-saturate: 2.4; }
-.search-track { position: relative; z-index: 2; display: flex; min-height: 72px; align-items: stretch; padding: 6px; border: 1px solid var(--line-strong); border-radius: 999px; background: rgba(17,17,17,.92); box-shadow: 0 0 18px rgba(130,150,255,.14), 0 0 36px rgba(255,110,200,.09); transition: border-color .25s ease, background .25s ease, box-shadow .25s ease; }
+.search-track { position: relative; z-index: 2; display: flex; min-height: 72px; align-items: stretch; padding: 6px; border: 1px solid #565654; border-radius: 999px; background: rgba(17,17,17,.92); box-shadow: 0 0 18px rgba(130,150,255,.14), 0 0 36px rgba(255,110,200,.09); transition: border-color .25s ease, background .25s ease, box-shadow .25s ease; }
 .search-track:focus-within { border-color: rgba(244,244,240,.72); background: var(--surface-raised); box-shadow: none; }
 .search-input { min-width: 0; flex: 1; padding: 0 18px 0 24px; color: var(--ink); border: 0; outline: 0; background: transparent; font: 400 18px/1.3 "Instrument Sans", "Noto Sans SC", sans-serif; }
 .search-input::placeholder { color: var(--faint); }
 .search-input:focus-visible { outline: none; }
 .load-more-button { display: inline-flex; align-items: center; justify-content: center; gap: 14px; min-height: 48px; border: 1px solid transparent; color: #050505; background: var(--ink); font: 600 11px/1 var(--mono); letter-spacing: 1px; text-transform: uppercase; transition: background .25s ease, color .25s ease, transform .25s cubic-bezier(.22,1,.36,1), opacity .2s ease; }
-.load-more-button:hover:not(:disabled) { color: #fff; background: #777; transform: translateY(-2px); }
+.load-more-button:hover:not(:disabled) { color: #fff; background: #6c6c68; transform: translateY(-2px); }
 .load-more-button:active:not(:disabled) { transform: translateY(1px) scale(.99); }
 .load-more-button:disabled { cursor: wait; opacity: .42; }
 .button-arrow { font-size: 17px; line-height: 0; }
@@ -121,7 +119,7 @@ h1 em { color: #fff; font-style: normal; }
 .text-action { min-height: 44px; padding: 0 0 5px; border: 0; border-bottom: 1px solid var(--ink); color: var(--ink); background: transparent; font: 600 11px/1 var(--mono); letter-spacing: .7px; }
 .results-toolbar + .results-liquid { animation: settle .7s cubic-bezier(.22,1,.36,1) both; }
 .load-more-zone { margin: 26px 0 0; padding: 22px 0 0; border-top: 1px solid var(--line-strong); }
-.load-progress { height: 3px; overflow: hidden; background: var(--surface-raised); }
+.load-progress { height: 3px; overflow: hidden; background: #333330; }
 .load-progress span { display: block; height: 100%; background: var(--ink); transition: width .55s cubic-bezier(.22,1,.36,1); }
 .load-more-copy { display: flex; justify-content: space-between; gap: 16px; margin: 12px 0 18px; color: var(--muted); font: 400 11px/1.5 var(--mono); }
 .load-more-copy span:last-child { color: var(--ink); }
@@ -132,7 +130,7 @@ h1 em { color: #fff; font-style: normal; }
 .site-footer { width: min(var(--max), calc(100% - 64px)); margin: auto; padding: 24px 0 30px; display: flex; justify-content: space-between; gap: 20px; color: var(--faint); border-top: 1px solid var(--line); font: 400 10px/1.4 var(--mono); letter-spacing: 1px; text-transform: uppercase; }
 .footer-stack { display: flex; flex-direction: column; gap: 5px; }
 .footer-fine { font: 400 10px/1.5 var(--mono); letter-spacing: .5px; }
-.footer-repo { display: inline-flex; align-items: center; gap: 6px; color: var(--faint); text-decoration: none; font: 400 10px/1.4 var(--mono); letter-spacing: .8px; text-transform: uppercase; transition: color .2s ease; }
+.footer-repo { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 4px 2px; color: var(--faint); text-decoration: none; font: 400 10px/1.4 var(--mono); letter-spacing: .8px; text-transform: uppercase; transition: color .2s ease; }
 .footer-repo svg { width: 14px; height: 14px; }
 .footer-repo:hover { color: var(--ink); }
 @keyframes reveal { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
@@ -143,16 +141,11 @@ h1 em { color: #fff; font-style: normal; }
   .topbar, .hero, .results-section, .privacy-band, .site-footer { width: min(100% - 36px, var(--max)); }
   .topbar { padding-top: 20px; }
   .brand { font-size: 12px; }
-  .topbar-meta span { display: none; }
   .topbar-meta { gap: 10px; }
   .hero { padding-top: 40px; padding-bottom: 78px; }
   h1 { font-size: clamp(52px, 16vw, 76px); }
   .field-label { align-items: flex-start; flex-direction: column; gap: 8px; }
   .search-input { min-height: 56px; padding: 0 18px; font-size: 17px; }
-  .search-clear { display: grid; place-items: center; align-self: center; flex: 0 0 auto; width: 28px; height: 28px; margin: 0 2px; border: 0; border-radius: 50%; color: var(--faint); background: transparent; transition: color .2s ease, background .2s ease, transform .2s ease; }
-.search-clear svg { display: block; }
-.search-clear:hover { color: var(--ink); background: rgba(244,244,240,.1); }
-.search-clear:active { transform: scale(.9); }
 .search-send { width: 48px; height: 48px; }
   .search-hint { flex-direction: column; gap: 7px; }
   .search-hint span:last-child { text-align: left; }
@@ -174,4 +167,6 @@ h1 em { color: #fff; font-style: normal; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  /* F8：border-beam 的 @property 驱动动画在 CSS 层照转，此处强制停止 */
+  .search-wrap [data-beam] * { animation: none !important; }
 }

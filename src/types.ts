@@ -14,7 +14,7 @@ export interface SearchResponse {
   hasMore: boolean;
 }
 
-export type SearchState = "idle" | "editing" | "loading" | "success" | "duplicate" | "empty" | "too-many" | "error";
+export type SearchState = "idle" | "editing" | "loading" | "success" | "duplicate" | "empty" | "error";
 
 export interface ParsedQuery {
   tokens: string[];

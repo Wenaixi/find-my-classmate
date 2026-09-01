@@ -1,7 +1,0 @@
---- artifacts/MODIFIED_FILE.txt (baseline)
-+++ artifacts/MODIFIED_FILE.txt (modified)
-@@
--branch=baseline
--result=unchanged
-+branch=too-many-bounded
-+result=changed
