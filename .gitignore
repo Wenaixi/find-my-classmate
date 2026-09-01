@@ -54,3 +54,6 @@ vitest.config.d.ts
 docs/superpowers/
 .perf-gzip.ps1
 server/undefined/
+
+# 壁纸孤儿目录（功能未合入）
+data/wallpaper/
