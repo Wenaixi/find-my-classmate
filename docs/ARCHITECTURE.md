@@ -57,6 +57,8 @@
 
 ## 4. 请求生命周期
 
+中间件链（由外到内）：`rateLimit → accessLog → securityHeaders → mux`；限流被拒（429）在最外层直接返回 JSON，不产生访问日志。
+
 ```
 浏览器输入 → 前端 parseQuery（即时校验/提示）
   → GET /api/search?q=&limit=&offset=
@@ -71,6 +73,22 @@
 - loading 最短展示 1000ms（searchTiming.ts），保证思维球反馈稳定
 - 首屏查询替换结果；加载更多只追加、不改变阅读位置
 - 输入法组合期间 Enter 不提交；Escape 清空
+
+## 4.1 错误契约
+
+| 状态码 | 错误码 | 场景 |
+| --- | --- | --- |
+| 400 | invalid_limit | limit 非数字/越界（1-50） |
+| 400 | invalid_offset | offset 非数字/负数 |
+| 400 | invalid_query | q 超过 80 个字符（rune 计） |
+| 404 | not_found | 未知 /api/* 路径 |
+| 405 | method_not_allowed | 非 GET 访问 /api/search（带 Allow: GET） |
+| 429 | rate_limited | 限流（JSON + Retry-After 整数秒） |
+| 500 | data_unavailable | 数据文件缺失/损坏 |
+| 503 | degraded | /api/health 数据不可用（status=degraded, reason=data, version） |
+
+- 错误响应统一为 `{"error": "<code>"}`（429 除外，为 `{"error":"rate_limited"}`，与全站 JSON 一致）。
+- 空 q 返回 200 + 空分页（`{items:[], limit, offset}`）。
 
 ## 5. 前端状态机
 
@@ -107,7 +125,9 @@
 | search.go | 查询解析/匹配/排序（镜像前端） |
 | web.go | 前端静态资源嵌入与托管 |
 
-数据热重载策略：每次请求检查文件 size+mtime，变化则重载；并发用读写锁保护快照。
+数据热重载策略：每次请求检查文件 size+mtime，变化则重载；并发用读写锁保护快照；重载失败有 2 秒冷却（指纹驱动）且旧快照不对外服务（一致性优先于可用性的设计决策，F59）。
+
+健康检查语义（/api/health）：进程存活 + 数据可用性。数据损坏/缺失时返回 503 {"status":"degraded","reason":"data"}；响应携带 version（ldflags -X main.version，本地构建为 dev）。
 
 ## 8. 部署与发布约定
 
@@ -138,7 +158,7 @@
 - CI 数据契约 job：校验名单 JSON 结构、字段白名单（仅"姓名"）、去重
 - 查询逻辑改动：必须先改测试，再同步改前后端两份实现
 
-## 10. 演进原则
+## 11. 演进原则
 
 - 单一事实来源：数据只有一份（JSON 文件），契约只有一份（查询语义），UI 状态只有一份（SearchState）
 - 双端镜像：查询逻辑改动必须前后端同步，测试兜底

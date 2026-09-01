@@ -12,12 +12,13 @@ RUN npm run build
 
 # ---- 阶段 2：构建后端 ----
 FROM golang:1.26-alpine AS backend
+ARG VERSION=dev
 WORKDIR /build
 COPY server/ ./server/
 # 将前端产物拷入 Go 构建上下文（web.go 通过 //go:embed all:web 读取）
 COPY --from=frontend /build/server/web ./server/web
 WORKDIR /build/server
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-s -w" -o /out/findmyclassmate .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/findmyclassmate .
 
 # ---- 阶段 3：运行 ----
 FROM alpine:3.22

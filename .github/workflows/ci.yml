@@ -127,6 +127,9 @@ jobs:
                   if (keys.length) throw new Error(f + ' 班级 ' + cls + ' 条目含非白名单字段: ' + keys.join(','));
                 }
               }
+              if (names.length < 20 || names.length > 60) {
+                throw new Error(f + ' 班级 ' + cls + ' 人数异常（' + names.length + ' 人，预期 20-60）——请核对源数据');
+              }
               console.log(f + ': ' + count + ' 条记录，字段干净');
             }
           "

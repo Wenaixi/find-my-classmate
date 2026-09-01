@@ -200,11 +200,43 @@ func accessLog(next http.Handler) http.Handler {
 type statusRecorder struct {
 	http.ResponseWriter
 	status int
+	wroteHeader bool
 }
 
+// WriteHeader 只记录第一次显式状态；二次调用与"Write 后调用"不覆盖已记录值，
+// 保证 accessLog 反映实际发出的状态码。
 func (r *statusRecorder) WriteHeader(status int) {
+	if r.wroteHeader {
+		return
+	}
+	r.wroteHeader = true
 	r.status = status
 	r.ResponseWriter.WriteHeader(status)
+}
+
+// Write 在未显式 WriteHeader 时以 200 落账（与 net/http 隐式 200 语义一致）。
+func (r *statusRecorder) Write(p []byte) (int, error) {
+	if !r.wroteHeader {
+		r.WriteHeader(http.StatusOK)
+	}
+	return r.ResponseWriter.Write(p)
+}
+
+// Flush 透传（流式响应/SSE 场景）。
+func (r *statusRecorder) Flush() {
+	r.WriteHeader(http.StatusOK)
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// ReadFrom 透传（FileServer 大文件的 sendfile 优化路径）。
+func (r *statusRecorder) ReadFrom(src io.Reader) (int64, error) {
+	r.WriteHeader(http.StatusOK)
+	if rf, ok := r.ResponseWriter.(io.ReaderFrom); ok {
+		return rf.ReadFrom(src)
+	}
+	return io.Copy(struct{ io.Writer }{r.ResponseWriter}, src)
 }
 
 func maskedIP(remote string) string {
