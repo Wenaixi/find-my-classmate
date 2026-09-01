@@ -107,8 +107,10 @@ export function App() {
       const next = getState(response.items, submitted, response.total);
       setState(next);
       // F36：纯年段/班级查询（无姓名条件）时提示将返回整个年级/班级
+      const hasNameCondition = /[一-龥a-zA-Z]/.test(submitted.replace(/[，,、+\s高一高二高1高2\d班]+/g, ""));
       if (next === "duplicate" && response.total >= PAGE_SIZE) {
-        setStatusText(COPY[state] + "，先显示前 " + PAGE_SIZE + " 条");
+        const prefix = hasNameCondition ? COPY[next] : (response.total >= 100 ? "已匹配整个年段/班级" : COPY[next]);
+        setStatusText(prefix + "，先显示前 " + PAGE_SIZE + " 条");
       } else {
         setStatusText(COPY[next]);
       }

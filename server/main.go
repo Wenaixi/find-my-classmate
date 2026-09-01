@@ -189,6 +189,11 @@ func buildServer(addr string, handler http.Handler) *http.Server {
 // 隐私红线：不记录查询参数与响应内容，IP 只保留前两段。
 func accessLog(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// F45：healthcheck 探针每 30s 一次，不产生访问日志（避免 2880 条/天噪音）
+		if r.URL.Path == "/api/health" {
+			next.ServeHTTP(w, r)
+			return
+		}
 		started := time.Now()
 		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(recorder, r)

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Liquid } from "liquid-gooey";
 import type { Student } from "../types";
 
@@ -34,13 +35,24 @@ function ResultCard({ student, index }: { student: Student; index: number }) {
 }
 
 export default function ResultList({ items, total, hasMore, loadingMore, loadMoreError, onLoadMore, progress }: ResultListProps) {
+  const liquidWrapRef = useRef<HTMLDivElement | null>(null);
+
+  // F7：liquid-gooey 渲染的装饰 SVG（data-gooey-svg）含幽灵 g 节点会被 Chrome 捕获进 Tab 序列，
+  // 落在"搜索"与"继续加载"之间造成键盘焦点陷落。SVG 是纯装饰层（aria-hidden），对其 inert 阻断焦点。
+  useEffect(() => {
+    const svgs = liquidWrapRef.current?.querySelectorAll("[data-gooey-svg]");
+    svgs?.forEach((svg) => {
+      (svg as HTMLElement).setAttribute("inert", "");
+    });
+  }, [items.length]);
+
   return (
     <>
       <div className="results-toolbar">
         <span>显示 {items.length} / {total} 条记录</span>
         <span className="results-toolbar-state">{hasMore ? "下方继续加载" : "已全部加载"}</span>
       </div>
-      <div className="results-liquid">
+      <div className="results-liquid" ref={liquidWrapRef}>
         <div className="results-list" role="list" aria-label="查询匹配记录">
           <div className="results-list-head" aria-hidden="true"><span>序号</span><span>姓名</span><span>所属位置</span><span>状态</span></div>
           <Liquid blur={10} contrast={24} fill="rgba(255,255,255,.1)" shadow="0 18px 50px rgba(255,255,255,.06)" className="liquid-result-group">
