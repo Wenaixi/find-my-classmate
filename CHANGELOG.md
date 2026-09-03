@@ -2,6 +2,31 @@
 
 本文件记录 FindMyClassmate 的版本变更。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [v0.5.0] - 2026-09-02
+
+### 重大变更（隐私与发布策略）
+
+- **发布包零数据**：真实名单（data/*.json）不再随仓库与发布包分发（F42 落实），校内部署时自行放置；CI 增加零数据守卫（仓库中出现名单文件即失败）
+- 真实名单移出 git 跟踪并加入 .gitignore（data/*.json），git 历史将不再包含任何名单数据
+
+### 安全与加固
+
+- 修复 CI 数据契约 job 的变量作用域 bug（A3 班级人数检测移入循环内），班级人数区间调整为 10-60（适配 15-19 人选科小班）
+- 修复 5 个 Go 文件的 gofmt 格式问题（CI gofmt 检查恢复全绿）
+- 新增单实例边界文档（ARCHITECTURE + README）：限流桶与数据快照为进程内状态，不支持多副本
+
+### 修复
+
+- F13：移动端胶囊高度变量化（--control-size/--track-pad），消除 48px 按钮与 72px 轨道的 8px 错位
+- F41：仓库卫生清理（go.work、release-body.md、design 源图、评审文档、%TEMP% 等全部移出仓库）
+- F49：单实例边界文档化
+
+### 变更
+
+- .gitignore 深度完善（16 类规则）、.dockerignore 同步
+- README 更新：发布零数据说明、班级人数区间、数据维护流程
+- 移除评审基线文档（.superpowers/），评审已完成全部落实
+
 ## [v0.4.0] - 2026-08-30
 
 ### 性能优化

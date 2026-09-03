@@ -39,6 +39,7 @@ type cachedAsset struct {
 //   - Cache-Control: public, max-age=31536000, immutable（长缓存）
 //   - ETag + If-None-Match → 304（让 immutable 缓存真正生效）
 //   - Accept-Encoding: gzip → gzip 压缩传输（首屏体积约减 70%）
+//
 // 首页与其他文件保持不设缓存头，由 securityHeaders 的 no-store 兜底。
 func frontendHandlerWithFS(fsys fs.FS) http.Handler {
 	fileServer := http.FileServer(http.FS(fsys))

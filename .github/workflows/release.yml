@@ -39,30 +39,8 @@ jobs:
           go test ./...
           go vet ./...
 
-      - name: 数据契约校验
-        run: |
-          node -e "
-            const fs = require('fs');
-            const pick = (entry) => typeof entry === 'string' ? entry.trim() : (entry && typeof entry['姓名'] === 'string' ? entry['姓名'].trim() : null);
-            for (const f of ['data/高一.json', 'data/高二.json']) {
-              const obj = JSON.parse(fs.readFileSync(f, 'utf8'));
-              const roster = obj['名单'];
-              const grade = f.includes('高一') ? '高一' : '高二';
-              const seen = new Set();
-              let count = 0;
-              for (const [cls, names] of Object.entries(roster)) {
-                for (const entry of names) {
-                  const name = pick(entry);
-                  if (!name) throw new Error(f + ' 班级 ' + cls + ' 含非法条目');
-                  const key = grade + '|' + cls + '|' + name;
-                  if (seen.has(key)) throw new Error(f + ' 重复: ' + key);
-                  seen.add(key);
-                  count++;
-                }
-              }
-              console.log(f + ': ' + count + ' 条记录 OK');
-            }
-          "
+      - name: 数据契约校验（真实数据不随仓库发布，跳过；校内部署请运行 go test）
+        run: echo "数据文件不随仓库分发，数据契约由 server/data_test.go 保证，校内部署时运行 go test ./..."
 
   release:
     name: 构建发布产物
@@ -100,8 +78,9 @@ jobs:
           mkdir -p release-package
           cp -r server/web release-package/web
           cp -r release/findmyclassmate-* release-package/
-          cp -r data release-package/data-sample
-          rm -f release-package/data-sample/log/server.log
+          # 发布包不附带任何名单数据：真实名单仅限校内部署（data/ 不入库），
+          # 使用者按 README 的数据格式章节自行准备 data/高一.json 与 data/高二.json
+          mkdir -p release-package/data
           cp README.md LICENSE CHANGELOG.md release-package/
           cd release-package && tar -czf ../findmyclassmate.tar.gz .
 

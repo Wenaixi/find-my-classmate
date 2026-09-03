@@ -13,7 +13,7 @@ import (
 )
 
 // 响应直接序列化 SearchResponse：Student 的 json tag 保证隐私红线（只输出 name/grade/class）。
-// toResponse 已删除（双实现漂移源），契约由类型声明单点保证。
+// 契约由类型声明单点保证（toResponse 双实现已于 F61 移除）。
 
 func resolveDataDir() string {
 	if value := os.Getenv("FMC_DATA_DIR"); value != "" {
@@ -204,7 +204,7 @@ func accessLog(next http.Handler) http.Handler {
 
 type statusRecorder struct {
 	http.ResponseWriter
-	status int
+	status      int
 	wroteHeader bool
 }
 

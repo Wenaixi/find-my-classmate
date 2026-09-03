@@ -5,13 +5,17 @@ data
 design
 docs
 artifacts
+.superpowers
 .dsh-vision-toolkit
 .git
 .gitignore
 CLAUDE.md
+DESIGN.md
 Dockerfile
 docker-compose.yml
 *.log
 *.tsbuildinfo
+go.work
+release-body.md
 .vscode
 .idea

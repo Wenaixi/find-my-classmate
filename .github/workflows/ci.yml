@@ -97,39 +97,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 校验名单 JSON 格式、姓名与去重
+      - name: 数据边界守卫（真实名单不随仓库分发）
         run: |
-          node -e "
-            const fs = require('fs');
-            const pick = (entry) => {
-              if (typeof entry === 'string') return entry.trim();
-              if (entry && typeof entry === 'object' && typeof entry.姓名 === 'string') return entry.姓名.trim();
-              return null;
-            };
-            const extra = (entry) => entry && typeof entry === 'object' ? Object.keys(entry).filter(k => k !== '姓名') : [];
-            for (const f of ['data/高一.json', 'data/高二.json']) {
-              const obj = JSON.parse(fs.readFileSync(f, 'utf8'));
-              const roster = obj.名单;
-              if (!roster || typeof roster !== 'object') throw new Error(f + ' 缺少名单对象');
-              const grade = f.includes('高一') ? '高一' : '高二';
-              const seen = new Set();
-              let count = 0;
-              for (const [cls, names] of Object.entries(roster)) {
-                if (!Array.isArray(names)) throw new Error(f + ' 班级 ' + cls + ' 不是数组');
-                for (const entry of names) {
-                  const name = pick(entry);
-                  if (!name) throw new Error(f + ' 班级 ' + cls + ' 含非法条目: ' + JSON.stringify(entry));
-                  const key = grade + '|' + cls + '|' + name;
-                  if (seen.has(key)) throw new Error(f + ' 重复记录: ' + key);
-                  seen.add(key);
-                  count++;
-                  const keys = extra(entry);
-                  if (keys.length) throw new Error(f + ' 班级 ' + cls + ' 条目含非白名单字段: ' + keys.join(','));
-                }
-              }
-              if (names.length < 20 || names.length > 60) {
-                throw new Error(f + ' 班级 ' + cls + ' 人数异常（' + names.length + ' 人，预期 20-60）——请核对源数据');
-              }
-              console.log(f + ': ' + count + ' 条记录，字段干净');
-            }
-          "
+          # 真实名单（data/*.json）不进仓库、不进发布包；仓库中不应存在任何名单数据。
+          # 数据契约由 server/data_test.go 保证（校内部署放置数据后运行 go test ./... 校验）。
+          if ls data/*.json >/dev/null 2>&1; then
+            echo "错误：data/ 目录包含名单数据文件，真实名单不得随仓库分发（F42 隐私红线）。" >&2
+            exit 1
+          fi
+          echo "零数据守卫通过：仓库无名单数据文件，数据契约由 server/data_test.go 保证。"

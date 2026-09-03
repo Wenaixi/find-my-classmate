@@ -11,9 +11,9 @@ import (
 
 // rateBucket 单个客户端的令牌桶：容量 rate 个令牌，每 interval 补充 1 个。
 type rateBucket struct {
-	tokens    float64
-	lastFill  time.Time
-	lastSeen  time.Time
+	tokens   float64
+	lastFill time.Time
+	lastSeen time.Time
 }
 
 // rateLimiter 按客户端 IP 限流的令牌桶，容量与补充间隔可配。

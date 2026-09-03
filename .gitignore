@@ -27,12 +27,16 @@ Thumbs.db
 .idea/
 .vscode/
 *.code-workspace
-
 *.bak.*
+
 # 项目内部记忆与工具文档（不进仓库）
 CLAUDE.md
 DESIGN.md
 .superpowers/
+docs/superpowers/
+
+# 设计源文件（public/ 下的产物才是引用处）
+design/
 
 # 工具临时目录
 .dsh-vision-toolkit/
@@ -41,19 +45,23 @@ artifacts/
 # 测试覆盖率
 coverage/
 *.lcov
-server/server.exe
-vite.config.js
 
 # 配置发射物（tsc -b noEmit 后不应再产生，兜底忽略）
 *.config.js
 *.config.d.ts
 vite.config.d.ts
 vitest.config.d.ts
+server/server.exe
 
-# 评审工作区与本地脚本
-docs/superpowers/
+# 本地脚本
 .perf-gzip.ps1
-server/undefined/
+
+# 真实名单不进仓库、不进发布包（校内部署时自行放置）
+data/*.json
 
 # 壁纸孤儿目录（功能未合入）
 data/wallpaper/
+
+# 单模块仓库不需要 go.work；release-body 是 CI 中间产物
+go.work
+release-body.md

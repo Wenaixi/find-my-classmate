@@ -60,7 +60,10 @@ func TestSearchPagination(t *testing.T) {
 
 // F22：汉字多位班级号（十一~九十九）应解析为数值
 func TestClassNumberChineseMultiDigit(t *testing.T) {
-	cases := []struct{ in string; want int }{
+	cases := []struct {
+		in   string
+		want int
+	}{
 		{"11班", 11},
 		{"十一班", 11},
 		{"十二班", 12},
