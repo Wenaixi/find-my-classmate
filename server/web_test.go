@@ -14,6 +14,7 @@ func testFrontendFS() fstest.MapFS {
 	return fstest.MapFS{
 		"index.html":       {Data: []byte("<!doctype html><html></html>")},
 		"assets/app.js":    {Data: []byte("console.log(1)")},
+		"assets/app.css":   {Data: []byte("body { color: red }")},
 		"fonts/mona.woff2": {Data: []byte("font-data")},
 	}
 }
@@ -30,6 +31,28 @@ func TestFrontendIndex(t *testing.T) {
 	}
 	if got := rec.Header().Get("Cache-Control"); got != "" {
 		t.Errorf("GET / 不应设置 Cache-Control，实际 %q", got)
+	}
+}
+
+func TestFrontendAssetsServeExpectedContentTypes(t *testing.T) {
+	for _, test := range []struct {
+		path string
+		want string
+	}{
+		{path: "/assets/app.js", want: "application/javascript"},
+		{path: "/assets/app.css", want: "text/css; charset=utf-8"},
+	} {
+		t.Run(test.path, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			frontendHandlerWithFS(testFrontendFS()).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, test.path, nil))
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("GET %s 状态 = %d，期望 200", test.path, rec.Code)
+			}
+			if got := rec.Header().Get("Content-Type"); got != test.want {
+				t.Errorf("Content-Type = %q，期望 %q", got, test.want)
+			}
+		})
 	}
 }
 
