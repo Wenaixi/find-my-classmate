@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"mime"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -82,6 +84,11 @@ func serveCachedStatic(w http.ResponseWriter, r *http.Request, fsys fs.FS, path 
 		staticCache.Store(path, cached)
 	}
 	asset := cached.(*cachedAsset)
+	contentType := mime.TypeByExtension(filepath.Ext(path))
+	if contentType == "" {
+		contentType = http.DetectContentType(asset.raw)
+	}
+	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("ETag", asset.etag)
 	if r.Header.Get("If-None-Match") == asset.etag {
 		w.WriteHeader(http.StatusNotModified)
