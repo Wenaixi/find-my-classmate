@@ -14,6 +14,7 @@ func testFrontendFS() fstest.MapFS {
 	return fstest.MapFS{
 		"index.html":       {Data: []byte("<!doctype html><html></html>")},
 		"assets/app.js":    {Data: []byte("console.log(1)")},
+		"assets/app.mjs":   {Data: []byte("export default 1")},
 		"assets/app.css":   {Data: []byte("body { color: red }")},
 		"fonts/mona.woff2": {Data: []byte("font-data")},
 	}
@@ -40,6 +41,7 @@ func TestFrontendAssetsServeExpectedContentTypes(t *testing.T) {
 		want string
 	}{
 		{path: "/assets/app.js", want: "application/javascript"},
+		{path: "/assets/app.mjs", want: "application/javascript"},
 		{path: "/assets/app.css", want: "text/css; charset=utf-8"},
 	} {
 		t.Run(test.path, func(t *testing.T) {
