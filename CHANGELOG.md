@@ -2,6 +2,16 @@
 
 本文件记录 FindMyClassmate 的版本变更。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [v0.5.2] - 2026-09-07
+
+### 修复与兼容性加固
+
+- **前端跨端兼容**：为 `src/lib/api.ts` 添加轻量 `combineSignals` 兼容逻辑，彻底解决 Safari < 17.4（iOS 17.3 及以下）与旧版移动端 WebView 缺少 `AbortSignal.any` 导致的 `TypeError` 崩溃问题。
+- **限流器内存防泄漏**：`server/ratelimit.go` 新增自驱动惰性周期清理机制，在请求并发时自动淘汰超过空闲寿命（10分钟）的过期 IP 令牌桶，根除内存单调递增风险。
+- **数据热重载防惊群**：`server/data.go` 引入 `reloadMu` 双重检查互斥锁（Double-Checked Locking），高并发请求下热重载只触发一次磁盘读取与 JSON 反序列化，彻底消除重载击穿与资源峰值。
+- **静态资源 MIME 精确映射**：`server/web.go` 针对自托管 `.woff2` 字体显式返回 `font/woff2`，避免精简容器环境回退到嗅探器将其误识别为 `text/plain` 或 `application/octet-stream`。
+- **样式与 CI 规范对齐**：修复 `src/styles.css` 中 `--ease-move` 变量自我循环引用问题；修复 `.github/workflows/ci.yml` 的 Node.js 24 描述文案，并在后端测试中补齐 `-race` 数据竞争检测。
+
 ## [v0.5.1] - 2026-09-05
 
 ### 修复
