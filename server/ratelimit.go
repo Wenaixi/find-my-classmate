@@ -19,11 +19,12 @@ type rateBucket struct {
 // rateLimiter 按客户端 IP 限流的令牌桶，容量与补充间隔可配。
 // ponytail: 内存 map 实现，单实例够用；多副本部署时需换共享存储（如 Redis）。
 type rateLimiter struct {
-	mu       sync.Mutex
-	buckets  map[string]*rateBucket
-	capacity float64
-	interval time.Duration
-	now      func() time.Time
+	mu        sync.Mutex
+	buckets   map[string]*rateBucket
+	capacity  float64
+	interval  time.Duration
+	lastSweep time.Time
+	now       func() time.Time
 }
 
 func newRateLimiter(capacity float64, interval time.Duration) *rateLimiter {
@@ -40,6 +41,15 @@ func (l *rateLimiter) allow(key string) (allowed bool, wait time.Duration) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	now := l.now()
+
+	// 惰性自驱动淘汰：若超过 1 分钟未清理，顺带淘汰超过 10 分钟无请求的旧桶，防内存单调泄漏
+	if l.lastSweep.IsZero() {
+		l.lastSweep = now
+	} else if now.Sub(l.lastSweep) >= time.Minute {
+		l.sweepLocked(now, 10*time.Minute)
+		l.lastSweep = now
+	}
+
 	bucket, exists := l.buckets[key]
 	if !exists {
 		bucket = &rateBucket{tokens: l.capacity, lastFill: now, lastSeen: now}
@@ -60,15 +70,19 @@ func (l *rateLimiter) allow(key string) (allowed bool, wait time.Duration) {
 	return false, wait
 }
 
-// sweep 清理超过 idleTTL 未访问的空闲桶，防止多源扫描导致内存无限增长。
-func (l *rateLimiter) sweep(now time.Time, idleTTL time.Duration) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+func (l *rateLimiter) sweepLocked(now time.Time, idleTTL time.Duration) {
 	for key, bucket := range l.buckets {
 		if now.Sub(bucket.lastSeen) > idleTTL {
 			delete(l.buckets, key)
 		}
 	}
+}
+
+// sweep 清理超过 idleTTL 未访问的空闲桶，防止多源扫描导致内存无限增长。
+func (l *rateLimiter) sweep(now time.Time, idleTTL time.Duration) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.sweepLocked(now, idleTTL)
 }
 
 // clientIP 提取客户端 IP（IPv6 去掉端口与 zone）。
