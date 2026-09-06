@@ -25,7 +25,7 @@
   --display: "Mona Sans", "Instrument Sans", "Noto Sans SC", sans-serif;
   --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
   --sans: "Instrument Sans", "Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif;
-  --ease-move: var(--ease-move);
+  --ease-move: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-color: ease;
   --gutter: 64px;
   --track-pad: 6px;

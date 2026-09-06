@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 安装 Node.js 20
+      - name: 安装 Node.js 24
         uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -43,7 +43,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 安装 Node.js 20
+      - name: 安装 Node.js 24
         uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -67,7 +67,7 @@ jobs:
 
       - name: 单元测试
         working-directory: server
-        run: go test ./...
+        run: go test -race ./...
 
       - name: 静态检查
         working-directory: server
