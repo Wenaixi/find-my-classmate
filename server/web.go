@@ -85,9 +85,14 @@ func serveCachedStatic(w http.ResponseWriter, r *http.Request, fsys fs.FS, path 
 	}
 	asset := cached.(*cachedAsset)
 	ext := filepath.Ext(path)
-	contentType := mime.TypeByExtension(ext)
-	if ext == ".js" || ext == ".mjs" {
+	var contentType string
+	switch ext {
+	case ".js", ".mjs":
 		contentType = "application/javascript"
+	case ".woff2":
+		contentType = "font/woff2"
+	default:
+		contentType = mime.TypeByExtension(ext)
 	}
 	if contentType == "" {
 		contentType = http.DetectContentType(asset.raw)

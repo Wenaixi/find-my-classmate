@@ -43,6 +43,7 @@ func TestFrontendAssetsServeExpectedContentTypes(t *testing.T) {
 		{path: "/assets/app.js", want: "application/javascript"},
 		{path: "/assets/app.mjs", want: "application/javascript"},
 		{path: "/assets/app.css", want: "text/css; charset=utf-8"},
+		{path: "/fonts/mona.woff2", want: "font/woff2"},
 	} {
 		t.Run(test.path, func(t *testing.T) {
 			rec := httptest.NewRecorder()
