@@ -29,6 +29,7 @@ type fileStamp struct {
 type studentStore struct {
 	dir            string
 	mu             sync.RWMutex
+	reloadMu       sync.Mutex
 	items          []Student
 	stamps         map[string]fileStamp
 	lastFailStamps map[string]fileStamp // 失败时的文件指纹：文件未变则冷却，变化则立即重试
@@ -111,6 +112,19 @@ func (s *studentStore) reload(force bool) error {
 	if unchanged {
 		return nil
 	}
+
+	// 互斥重载：确保高并发下同一时刻仅有一个协程执行磁盘读取与反序列化，防御惊群
+	s.reloadMu.Lock()
+	defer s.reloadMu.Unlock()
+
+	// 双重检查：排队获得重载锁的协程在此检测前一个协程是否已经完成重载
+	s.mu.RLock()
+	unchanged = !force && sameStamps(s.stamps, stamps)
+	s.mu.RUnlock()
+	if unchanged {
+		return nil
+	}
+
 	// 失败冷却：数据损坏期间每次请求都重试解析坏文件会放大 IO 与日志。
 	// 仅当文件指纹与失败时相同（坏文件未变）才冷却 2 秒；文件被修复（指纹变化）则立即重试。
 	s.mu.RLock()

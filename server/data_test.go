@@ -138,6 +138,38 @@ func TestSnapshotConcurrent(t *testing.T) {
 	wg.Wait()
 }
 
+func TestSnapshotConcurrentHotReloadStampede(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFiles(t, dir)
+	store, err := newStudentStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := store.snapshot(); len(got) != 3 {
+		t.Fatalf("初始应 3 条，实际 %d", len(got))
+	}
+
+	// 模拟写入新名单，触发指纹变更
+	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"王皓轩"},{"姓名":"张三"},{"姓名":"新人"}]}}`), 0o644)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			got, err := store.snapshot()
+			if err != nil {
+				t.Errorf("并发热重载失败: %v", err)
+				return
+			}
+			if len(got) != 4 {
+				t.Errorf("并发热重载后应为 4 条，实际 %d", len(got))
+			}
+		}()
+	}
+	wg.Wait()
+}
+
 func TestRateLimitSweep(t *testing.T) {
 	clock := &fakeClock{current: time.Unix(0, 0)}
 	limiter := newRateLimiter(60, time.Second)
