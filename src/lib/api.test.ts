@@ -63,6 +63,31 @@ describe("searchApi error classification", () => {
     const [, opts] = fetchMock.mock.calls[0];
     expect(opts.signal).toBeDefined();
   });
+
+  it("works reliably when AbortSignal.any is undefined (Safari < 17.4 compatibility)", async () => {
+    const originalAny = AbortSignal.any;
+    try {
+      // 模拟不支持 AbortSignal.any 的老旧环境
+      (AbortSignal as any).any = undefined;
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true, status: 200,
+        json: async () => ({ items: [], total: 0, limit: 10, offset: 0, hasMore: false }),
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const controller = new AbortController();
+      await searchApi("张三", 10, 0, controller.signal);
+      const [, opts] = fetchMock.mock.calls[0];
+      expect(opts.signal).toBeDefined();
+      expect(opts.signal.aborted).toBe(false);
+
+      // 触发外部 signal 取消，内部组合 signal 必须跟随取消
+      controller.abort();
+      expect(opts.signal.aborted).toBe(true);
+    } finally {
+      (AbortSignal as any).any = originalAny;
+    }
+  });
 });
 
 describe("searchApi request", () => {

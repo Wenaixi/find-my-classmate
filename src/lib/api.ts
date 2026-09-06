@@ -19,10 +19,27 @@ export class ApiError extends Error {
 
 const REQUEST_TIMEOUT_MS = 10_000;
 
+function combineSignals(a?: AbortSignal, b?: AbortSignal): AbortSignal | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  if (typeof AbortSignal.any === "function") {
+    return AbortSignal.any([a, b]);
+  }
+  const controller = new AbortController();
+  if (a.aborted || b.aborted) {
+    controller.abort();
+    return controller.signal;
+  }
+  const onAbort = () => controller.abort();
+  a.addEventListener("abort", onAbort, { once: true });
+  b.addEventListener("abort", onAbort, { once: true });
+  return controller.signal;
+}
+
 export async function searchApi(query: string, limit = 10, offset = 0, signal?: AbortSignal): Promise<SearchResponse> {
   const params = new URLSearchParams({ q: query, limit: String(limit), offset: String(offset) });
   const timeoutSignal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
-  const combined = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
+  const combined = combineSignals(signal, timeoutSignal);
   let response: Response;
   try {
     response = await fetch("/api/search?" + params, { signal: combined });
