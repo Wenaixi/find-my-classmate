@@ -35,6 +35,10 @@ DESIGN.md
 .superpowers/
 docs/superpowers/
 
+# OMC 运行时状态（跨项目工具产生的操作性工件，不进仓库）
+.omc/
+server/.omc/
+
 # 设计源文件（public/ 下的产物才是引用处）
 design/
 
