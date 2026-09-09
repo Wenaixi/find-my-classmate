@@ -3,7 +3,7 @@ import { normalizeName, parseQuery, searchStudents } from "./query";
 import type { Student } from "../types";
 
 const fixture: Student[] = [
-  { name: "示例同学", grade: "高二", className: "18班" },
+  { name: "示例同学", grade: "高三", className: "18班" },
   { name: "示 例 同 学", grade: "高二", className: "6班" },
   { name: "EXAMPLE STUDENT", grade: "高一", className: "11班" },
   { name: "高一同学", grade: "高一", className: "1班" },
@@ -19,12 +19,18 @@ describe("query contract", () => {
     expect(searchStudents(fixture, "高二，六班").items).toHaveLength(1);
     expect(searchStudents(fixture, "高一，一班").items).toHaveLength(1);
     expect(parseQuery("高1、六班")).toMatchObject({ grade: "高一", classNumber: 6 });
-    expect(searchStudents(fixture, "高二、示例同学、18班").items).toHaveLength(1);
-    expect(searchStudents(fixture, "高二, 示例同学").items).toHaveLength(2);
-    expect(searchStudents(fixture, "高二+示例同学+18班").items).toHaveLength(1);
+    expect(searchStudents(fixture, "高三、示例同学、18班").items).toHaveLength(1);
+    expect(searchStudents(fixture, "高二, 示例同学").items).toHaveLength(1);
+    expect(searchStudents(fixture, "高三+示例同学+18班").items).toHaveLength(1);
     expect(searchStudents(fixture, "示例，18班").items[0].className).toBe("18班");
     expect(searchStudents(fixture, "一班").items).toHaveLength(1);
     expect(searchStudents(fixture, "18").items[0].className).toBe("18班");
+  });
+
+  it("parses grade three (高三 / 高3)", () => {
+    expect(parseQuery("高三")).toMatchObject({ grade: "高三" });
+    expect(parseQuery("高3")).toMatchObject({ grade: "高三" });
+    expect(searchStudents(fixture, "高三").items).toHaveLength(1);
   });
 
   it("treats numeric input as class text", () => {
@@ -76,11 +82,11 @@ describe("query contract", () => {
   // F23：排序含 Grade 二级键（同分跨年级时高一在前）
   it("sorts by grade when scores tie", () => {
     const students: Student[] = [
+      { name: "林宇", grade: "高三", className: "1班" },
       { name: "林宇", grade: "高二", className: "1班" },
       { name: "林宇", grade: "高一", className: "2班" },
     ];
     const result = searchStudents(students, "林宇");
-    expect(result.items[0].grade).toBe("高一");
-    expect(result.items[1].grade).toBe("高二");
+    expect(result.items.map((s) => s.grade)).toEqual(["高一", "高二", "高三"]);
   });
 });

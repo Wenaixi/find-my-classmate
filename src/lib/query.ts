@@ -1,4 +1,4 @@
-import type { ParsedQuery, SearchResponse, Student } from "../types";
+import type { Grade, ParsedQuery, SearchResponse, Student } from "../types";
 
 const separators = /[，,、+]+/g;
 const classDigits: Record<string, string> = { 一: "1", 二: "2", 三: "3", 四: "4", 五: "5", 六: "6", 七: "7", 八: "8", 九: "9", 十: "10" };
@@ -9,9 +9,10 @@ export function normalizeName(value: string): string {
 }
 
 // parseGrade 与 Go 端 search.go 语义一致：子串匹配（口语化输入如"高二三班"按年级处理）。
-function parseGrade(token: string): "高一" | "高二" | undefined {
+function parseGrade(token: string): Grade | undefined {
   if (token.includes("高一") || token.includes("高1")) return "高一";
   if (token.includes("高二") || token.includes("高2")) return "高二";
+  if (token.includes("高三") || token.includes("高3")) return "高三";
   return undefined;
 }
 
@@ -89,9 +90,10 @@ export function searchStudents(students: Student[], raw: string, limit = 10, off
       const scoreA = query.nameTokens.reduce((sum, token) => sum + nameScore(a.nameKey, token), 0);
       const scoreB = query.nameTokens.reduce((sum, token) => sum + nameScore(b.nameKey, token), 0);
       if (scoreA !== scoreB) return scoreA - scoreB;
-      // F23：与 Go 端一致，同分时按年级升序（高一 < 高二）
+      // F23：与 Go 端一致，同分时按年级升序（高一 < 高二 < 高三）
       if (a.student.grade !== b.student.grade) {
-        return a.student.grade === "高一" ? -1 : 1;
+        const order = { 高一: 0, 高二: 1, 高三: 2 } as const;
+        return (order[a.student.grade] ?? 0) - (order[b.student.grade] ?? 0);
       }
       return classNumber(a.student.className) - classNumber(b.student.className);
     })

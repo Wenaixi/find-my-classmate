@@ -1,4 +1,4 @@
-export type Grade = "高一" | "高二";
+export type Grade = "高一" | "高二" | "高三";
 
 export interface Student {
   name: string;
