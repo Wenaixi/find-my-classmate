@@ -79,7 +79,7 @@ jobs:
           cp -r server/web release-package/web
           cp -r release/findmyclassmate-* release-package/
           # 发布包不附带任何名单数据：真实名单仅限校内部署（data/ 不入库），
-          # 使用者按 README 的数据格式章节自行准备 data/高一.json 与 data/高二.json
+          # 使用者按 README 的数据格式章节自行准备 data/ 下的年段名单（高一/高二/高三，可只放存在的年段）
           mkdir -p release-package/data
           cp README.md LICENSE CHANGELOG.md release-package/
           cd release-package && tar -czf ../findmyclassmate.tar.gz .
