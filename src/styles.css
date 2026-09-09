@@ -97,7 +97,7 @@ h1 em { color: #fff; font-style: normal; }
 .results-liquid { min-height: 80px; }
 .results-list { overflow: hidden; border: 1px solid var(--line-strong); background: var(--surface); }
 .liquid-result-group { position: relative; display: block; min-height: 80px; }
-.liquid-result-item { display: block; }
+.liquid-result-item { display: block; width: 100%; }
 .results-list-head, .result-card { display: grid; grid-template-columns: 64px minmax(180px, 1.2fr) minmax(230px, 1fr) 28px; align-items: center; column-gap: 22px; }
 .results-list-head { min-height: 42px; padding: 0 24px; color: var(--faint); background: var(--surface-raised); font: 500 10px/1 var(--mono); letter-spacing: 1.1px; text-transform: uppercase; }
 .results-list-head span:nth-child(3) { grid-column: 3; }
