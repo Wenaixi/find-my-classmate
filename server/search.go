@@ -11,9 +11,14 @@ import (
 type Grade string
 
 const (
-	GradeOne Grade = "高一"
-	GradeTwo Grade = "高二"
+	GradeOne   Grade = "高一"
+	GradeTwo   Grade = "高二"
+	GradeThree Grade = "高三"
 )
+
+// knownGrades 系统支持的年段列表（按自然顺序）。
+// loadStudents 与 dataStamps 按此列表探测数据目录，存在哪个文件就加载哪个。
+var knownGrades = []Grade{GradeOne, GradeTwo, GradeThree}
 
 // Student 对外 JSON 契约：只输出 name/grade/class（隐私红线，NameKey 永不出现在任何序列化中）。
 type Student struct {
@@ -88,6 +93,9 @@ func parseGrade(title string) Grade {
 	if strings.Contains(title, "高二") || strings.Contains(title, "高2") {
 		return GradeTwo
 	}
+	if strings.Contains(title, "高三") || strings.Contains(title, "高3") {
+		return GradeThree
+	}
 	return ""
 }
 
@@ -149,7 +157,7 @@ func Search(students []Student, raw string, limit, offset int) (SearchResponse, 
 			return leftScore < rightScore
 		}
 		if left.Grade != right.Grade {
-			return left.Grade < right.Grade
+			return gradeOrder(left.Grade) < gradeOrder(right.Grade)
 		}
 		return classNumber(left.ClassName) < classNumber(right.ClassName)
 	})
@@ -172,6 +180,17 @@ func nameScore(nameKey, token string) int {
 		return 1
 	}
 	return 2
+}
+
+// gradeOrder 返回年段自然顺序，用于跨年段同分排序。
+// 顺序来源于 knownGrades 声明序，扩展年段时只需在 knownGrades 末尾追加。
+func gradeOrder(grade Grade) int {
+	for i, g := range knownGrades {
+		if g == grade {
+			return i
+		}
+	}
+	return len(knownGrades)
 }
 
 func classNumber(value string) int {

@@ -1,13 +1,15 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func testStudents() []Student {
 	return []Student{
-		{Name: "示例同学", NameKey: "示例同学", Grade: GradeTwo, ClassName: "18班"},
+		{Name: "示例同学", NameKey: "示例同学", Grade: GradeThree, ClassName: "18班"},
 		{Name: "示 例 同 学", NameKey: "示例同学", Grade: GradeOne, ClassName: "6班"},
 		{Name: "EXAMPLE STUDENT", NameKey: "EXAMPLESTUDENT", Grade: GradeOne, ClassName: "11班"},
 	}
@@ -19,13 +21,15 @@ func TestSearchRules(t *testing.T) {
 		want        int
 	}{
 		{"姓名去空格", "示 例", 2},
-		{"组合筛选", "高二, 示例同学", 1},
-		{"加号组合筛选", "高二+示例同学+18班", 1},
+		{"组合筛选", "高三, 示例同学", 1},
+		{"加号组合筛选", "高三+示例同学+18班", 1},
 		{"班级数字", "18", 1},
 		{"中文班级", "六班", 1},
 		{"年级数字别名", "高1", 2},
 		{"混合分隔符", "高一，六班", 1},
 		{"高一筛选", "高一", 2},
+		{"高三筛选", "高三", 1},
+		{"高三数字别名", "高3", 1},
 		{"纯数字按姓名处理", "223", 0},
 		{"空输入", "", 0},
 	}
@@ -124,14 +128,56 @@ func TestNameTokensNotMisparsed(t *testing.T) {
 
 // F16 回归：年级子串输入（口语化）在 Go 端保持年级语义
 func TestGradeSubstringBehavior(t *testing.T) {
-	got, q := Search(testStudents(), "高二三班", 10, 0)
-	if q.Grade != GradeTwo {
-		t.Errorf("高二三班 应解析为年级=高二，实际 %q", q.Grade)
+	got, q := Search(testStudents(), "高三三班", 10, 0)
+	if q.Grade != GradeThree {
+		t.Errorf("高三三班 应解析为年级=高三，实际 %q", q.Grade)
 	}
 	if len(got.Items) != 1 {
-		t.Errorf("高二三班 应命中高二年级 1 条，实际 %d", len(got.Items))
+		t.Errorf("高三三班 应命中高三年级 1 条，实际 %d", len(got.Items))
 	}
-	if strings.Contains("示例同学", "高二三班") {
+	if strings.Contains("示例同学", "高三三班") {
 		t.Fatal("fixture 不应包含该姓名")
+	}
+}
+
+// F70：按数据目录实际文件探测年段，缺失的年级文件跳过不报错
+func TestLoadStudentsSkipMissingGrade(t *testing.T) {
+	dir := t.TempDir()
+	// 只放高三，高一高二不存在
+	_ = os.WriteFile(filepath.Join(dir, "高三.json"), []byte(`{"标题":"福清一中2025级高三编班名单","名单":{"3班":[{"姓名":"高三甲"}]}}`), 0o644)
+	students, err := loadStudents(dir)
+	if err != nil {
+		t.Fatalf("仅高三存在应成功加载: %v", err)
+	}
+	if len(students) != 1 {
+		t.Fatalf("应加载 1 条，实际 %d", len(students))
+	}
+	if students[0].Grade != GradeThree {
+		t.Errorf("Grade = %q，期望 高三", students[0].Grade)
+	}
+}
+
+// F70：空目录应给出明确指引，不静默空跑
+func TestLoadStudentsEmptyDirFails(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := loadStudents(dir); err == nil {
+		t.Fatal("空目录应报错，不应静默空跑")
+	}
+}
+
+// F70：高三/高二的排序权重与声明序一致
+func TestGradeOrderAcrossGrades(t *testing.T) {
+	students := []Student{
+		{Name: "林宇", NameKey: "林宇", Grade: GradeThree, ClassName: "1班"},
+		{Name: "林宇", NameKey: "林宇", Grade: GradeTwo, ClassName: "1班"},
+		{Name: "林宇", NameKey: "林宇", Grade: GradeOne, ClassName: "1班"},
+	}
+	got, _ := Search(students, "林宇", 10, 0)
+	if len(got.Items) != 3 {
+		t.Fatalf("应 3 条，实际 %d", len(got.Items))
+	}
+	if got.Items[0].Grade != GradeOne || got.Items[1].Grade != GradeTwo || got.Items[2].Grade != GradeThree {
+		t.Fatalf("排序应为高一/高二/高三，实际 %s/%s/%s",
+			got.Items[0].Grade, got.Items[1].Grade, got.Items[2].Grade)
 	}
 }

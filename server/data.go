@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -39,12 +40,18 @@ type studentStore struct {
 func loadStudents(dir string) ([]Student, error) {
 	students := make([]Student, 0)
 	seen := make(map[string]struct{})
-	for _, grade := range []Grade{GradeOne, GradeTwo} {
+	found := false
+	for _, grade := range knownGrades {
 		path := filepath.Join(dir, string(grade)+".json")
 		payload, err := os.ReadFile(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			// 年段文件按需加载：目录里存在哪个就加载哪个（高一/高二/高三自由组合）
+			continue
+		}
 		if err != nil {
 			return nil, fmt.Errorf("读取%s数据失败: %w", grade, err)
 		}
+		found = true
 		payload = bytes.TrimPrefix(payload, []byte{0xEF, 0xBB, 0xBF})
 		var document sourceDocument
 		if err := json.Unmarshal(payload, &document); err != nil {
@@ -78,6 +85,10 @@ func loadStudents(dir string) ([]Student, error) {
 				students = append(students, Student{Name: name, NameKey: normalizeName(name), Grade: grade, ClassName: className})
 			}
 		}
+	}
+	if !found {
+		return nil, fmt.Errorf("数据文件缺失，请将 %s、%s 或 %s 之一放入数据目录",
+			GradeOne+".json", GradeTwo+".json", GradeThree+".json")
 	}
 	return students, nil
 }
@@ -154,14 +165,22 @@ func (s *studentStore) reload(force bool) error {
 }
 
 func dataStamps(dir string) (map[string]fileStamp, error) {
-	stamps := make(map[string]fileStamp, 2)
-	for _, grade := range []Grade{GradeOne, GradeTwo} {
+	stamps := make(map[string]fileStamp, len(knownGrades))
+	for _, grade := range knownGrades {
 		path := filepath.Join(dir, string(grade)+".json")
 		info, err := os.Stat(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
 		if err != nil {
-			return nil, fmt.Errorf("数据文件缺失，请将 %s 放入数据目录: %w", string(grade)+".json", err)
+			return nil, err
 		}
 		stamps[path] = fileStamp{size: info.Size(), modTime: info.ModTime()}
+	}
+	// 空目录守卫：至少一个年段文件必须存在，避免静默空跑
+	if len(stamps) == 0 {
+		return nil, fmt.Errorf("数据文件缺失，请将 %s、%s 或 %s 之一放入数据目录",
+			GradeOne+".json", GradeTwo+".json", GradeThree+".json")
 	}
 	return stamps, nil
 }
