@@ -2,6 +2,12 @@
 
 本文件记录 FindMyClassmate 的版本变更。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 新增
+
+- **页脚显示版本号**：页脚新增"版本"行，展示运行时版本（由 Go 二进制 ldflags 注入、`/api/health` 返回的同一版本，本地构建显示 dev）。版本获取失败时静默隐藏，不影响页面。
+
 ## [v0.5.4] - 2026-09-11
 
 ### 修复
