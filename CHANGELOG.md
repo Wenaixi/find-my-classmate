@@ -2,6 +2,12 @@
 
 本文件记录 FindMyClassmate 的版本变更。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 修复
+
+- **年级+班级连写查询不精确**：此前「高二一班」「高二1班」「高二三班」等输入只解析出年段（高二），返回整个高二年段而非对应班级的人。现在由 gradeClassToken 优先精确解析为年段+班级组合，前后端（src/lib/query.ts 与 server/search.go）同步修复。
+
 ## [v0.5.3] - 2026-09-10
 
 ### 新增

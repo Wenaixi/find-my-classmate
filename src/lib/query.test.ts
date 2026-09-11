@@ -53,11 +53,25 @@ describe("query contract", () => {
     expect(searchStudents(fixture, "")).toEqual({ items: [], total: 0, limit: 10, offset: 0, hasMore: false });
   });
 
-  // F16：年级子串输入（口语化）与 Go 端语义一致：按年级筛选而非姓名
-  it("parses grade substring like Go (口语化输入)", () => {
+  // F16/F71：年级+班级连写的口语化输入（"高二三班"）应解析出精确班级而非只按年级
+  it("parses grade+class compound into precise class", () => {
     const q = parseQuery("高二三班");
     expect(q.grade).toBe("高二");
+    expect(q.classNumber).toBe(3);
     expect(q.nameTokens).toEqual([]);
+  });
+
+  // F71：年级+班级连写精确筛选对应班级的人（用户报告：高二1班/高二一班 返回整个高二）
+  it("filters grade+class compound precisely", () => {
+    const students: Student[] = [
+      { name: "甲", grade: "高二", className: "1班" },
+      { name: "乙", grade: "高二", className: "2班" },
+      { name: "丙", grade: "高一", className: "1班" },
+    ];
+    expect(searchStudents(students, "高二一班").items.map((s) => s.name)).toEqual(["甲"]);
+    expect(searchStudents(students, "高二1班").items.map((s) => s.name)).toEqual(["甲"]);
+    expect(searchStudents(students, "高一1班").items.map((s) => s.name)).toEqual(["丙"]);
+    expect(searchStudents(students, "高二，1班").items.map((s) => s.name)).toEqual(["甲"]);
   });
 
   // F16：姓名含高/班字不被误判

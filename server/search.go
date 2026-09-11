@@ -44,6 +44,9 @@ type Query struct {
 
 var classToken = regexp.MustCompile("^([0-9]+|[一二三四五六七八九十]+)班?$")
 
+// gradeClassToken 匹配年级+班级连写（"高二三班"/"高二1班"/"高一十八班"），F71。
+var gradeClassToken = regexp.MustCompile("^(高一|高二|高三|高1|高2|高3)([0-9]+|[一二三四五六七八九十]+)班?$")
+
 var classDigits = map[string]int{"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
 
 // chineseNumberToInt 解析汉字数字（支持 一~九十九 与 十~十九），解析失败返回 0。
@@ -103,6 +106,19 @@ func parseQuery(raw string) Query {
 	normalized := strings.NewReplacer("，", " ", ",", " ", "、", " ", "+", " ").Replace(strings.TrimSpace(raw))
 	query := Query{}
 	for _, token := range strings.Fields(normalized) {
+		// F71：年级+班级连写（"高二三班"）优先于年级子串，精确解析为年段+班级
+		if match := gradeClassToken.FindStringSubmatch(token); match != nil {
+			classNo := classNumber(match[2])
+			if classNo < 0 {
+				query.NameTokens = append(query.NameTokens, normalizeName(token))
+				continue
+			}
+			query.Grade = parseGrade(match[1])
+			if classNo > 0 {
+				query.ClassNo = classNo
+			}
+			continue
+		}
 		if match := classToken.FindStringSubmatch(token); match != nil {
 			classNo := classNumber(token)
 			if classNo < 0 {

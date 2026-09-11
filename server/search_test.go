@@ -3,7 +3,6 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -126,17 +125,53 @@ func TestNameTokensNotMisparsed(t *testing.T) {
 	}
 }
 
-// F16 回归：年级子串输入（口语化）在 Go 端保持年级语义
+// F16/F71 回归：年级+班级连写输入（"高三三班"）精确解析为年段+班级：
+// 旧语义按年级子串处理返回全年级，F71 改为精确班级筛选（用户报告缺陷）。
 func TestGradeSubstringBehavior(t *testing.T) {
 	got, q := Search(testStudents(), "高三三班", 10, 0)
 	if q.Grade != GradeThree {
 		t.Errorf("高三三班 应解析为年级=高三，实际 %q", q.Grade)
 	}
-	if len(got.Items) != 1 {
-		t.Errorf("高三三班 应命中高三年级 1 条，实际 %d", len(got.Items))
+	if q.ClassNo != 3 {
+		t.Errorf("高三三班 应解析出班级=3，实际 %d", q.ClassNo)
 	}
-	if strings.Contains("示例同学", "高三三班") {
-		t.Fatal("fixture 不应包含该姓名")
+	// fixture 中高三只有 18 班，三班应精确命中 0 条（不再返回整个高三年段）
+	if len(got.Items) != 0 {
+		t.Errorf("高三三班 应精确命中 0 条（fixture 高三无三班），实际 %d", len(got.Items))
+	}
+}
+
+// F71：年级+班级连写（"高二三班"/"高二1班"）精确筛选对应班级的人
+func TestGradeClassCompoundPrecise(t *testing.T) {
+	students := []Student{
+		{Name: "甲", NameKey: "甲", Grade: GradeTwo, ClassName: "1班"},
+		{Name: "乙", NameKey: "乙", Grade: GradeTwo, ClassName: "2班"},
+		{Name: "丙", NameKey: "丙", Grade: GradeOne, ClassName: "1班"},
+		{Name: "丁", NameKey: "丁", Grade: GradeTwo, ClassName: "12班"},
+	}
+	cases := []struct {
+		query string
+		want  string
+	}{
+		{"高二一班", "甲"},
+		{"高二1班", "甲"},
+		{"高一1班", "丙"},
+		{"高二十二班", "丁"},
+		{"高二，1班", "甲"},
+	}
+	for _, c := range cases {
+		t.Run(c.query, func(t *testing.T) {
+			got, q := Search(students, c.query, 10, 0)
+			if c.query == "高一1班" && q.Grade != GradeOne {
+				t.Fatalf("%s 年级 = %q，期望 高一", c.query, q.Grade)
+			}
+			if c.query != "高一1班" && q.Grade != GradeTwo {
+				t.Fatalf("%s 年级 = %q，期望 高二", c.query, q.Grade)
+			}
+			if len(got.Items) != 1 || got.Items[0].Name != c.want {
+				t.Fatalf("%s 应精确命中 %s，实际 %+v", c.query, c.want, got.Items)
+			}
+		})
 	}
 }
 
