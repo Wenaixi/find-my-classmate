@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { searchApi } from "./api";
+import { fetchVersion, searchApi } from "./api";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -103,5 +103,29 @@ describe("searchApi request", () => {
     expect(url).toContain("q=");
     expect(url).toContain("limit=5");
     expect(url).toContain("offset=10");
+  });
+});
+
+describe("fetchVersion", () => {
+  it("returns version from a healthy payload", async () => {
+    mockFetch(200, { status: "ok", version: "v0.5.4" });
+    expect(await fetchVersion()).toBe("v0.5.4");
+  });
+
+  it("returns version even from a degraded payload (503 still carries version)", async () => {
+    mockFetch(503, { status: "degraded", reason: "data", version: "v0.5.4" });
+    expect(await fetchVersion()).toBe("v0.5.4");
+  });
+
+  it("throws invalid-response when version is missing", async () => {
+    mockFetch(200, { status: "ok" });
+    const err = await fetchVersion().then(() => null, (e) => e);
+    expect((err as any).code).toBe("invalid-response");
+  });
+
+  it("throws a network error when fetch rejects", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch failed")));
+    const err = await fetchVersion().then(() => null, (e) => e);
+    expect((err as any).code).toBe("network");
   });
 });

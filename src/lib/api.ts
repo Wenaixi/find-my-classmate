@@ -36,6 +36,24 @@ function combineSignals(a?: AbortSignal, b?: AbortSignal): AbortSignal | undefin
   return controller.signal;
 }
 
+// 读取运行时版本（/api/health 由 ldflags 注入 main.version，200 与 503 degraded 均携带）。
+// 展示为尽力而为：失败由调用方静默忽略。
+export async function fetchVersion(signal?: AbortSignal): Promise<string> {
+  const combined = combineSignals(signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS));
+  let body: { version?: unknown };
+  try {
+    const response = await fetch("/api/health", { signal: combined });
+    body = (await response.json()) as { version?: unknown };
+  } catch (cause) {
+    if (signal?.aborted) throw cause;
+    throw new ApiError("health-unreachable", undefined, "network");
+  }
+  if (typeof body.version !== "string" || body.version === "") {
+    throw new ApiError("invalid-response", undefined, "invalid-response");
+  }
+  return body.version;
+}
+
 export async function searchApi(query: string, limit = 10, offset = 0, signal?: AbortSignal): Promise<SearchResponse> {
   const params = new URLSearchParams({ q: query, limit: String(limit), offset: String(offset) });
   const timeoutSignal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
