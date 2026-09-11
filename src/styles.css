@@ -136,6 +136,8 @@ h1 em { color: #fff; font-style: normal; }
 .site-footer { width: min(var(--max), calc(100% - var(--gutter))); margin: auto; padding: 24px 0 30px; display: flex; justify-content: space-between; gap: 20px; color: var(--faint); border-top: 1px solid var(--line); font: 400 10px/1.4 var(--mono); letter-spacing: 1px; text-transform: uppercase; }
 .footer-stack { display: flex; flex-direction: column; gap: 5px; }
 .footer-fine { font: 400 10px/1.5 var(--mono); letter-spacing: .5px; }
+/* 版本行保留原始大小写（v0.5.4），不被 .site-footer 的 uppercase 转化 */
+.footer-version { text-transform: none; letter-spacing: .3px; }
 .footer-repo { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 4px 2px; color: var(--faint); text-decoration: none; font: 400 10px/1.4 var(--mono); letter-spacing: .8px; text-transform: uppercase; transition: color .2s var(--ease-color); }
 .footer-repo svg { width: 14px; height: 14px; }
 .footer-repo:hover { color: var(--ink); }
