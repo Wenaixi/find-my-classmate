@@ -2,6 +2,19 @@
 
 本文件记录 FindMyClassmate 的版本变更。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [v0.6.0] - 2026-09-24
+
+### 性能优化
+
+- **搜索核心链路重构（F73）**：预计算班级号与年段序（`ClassNo`/`GradeIdx`），排序热路径从正则 + 线性扫描降级为纯整数比较；`normalizeName` 增加零分配快路径（姓名已归一化时复用原串），归一化查询表提为包级常量；结果切片按预估容量预分配，排序改用无反射泛型实现。整年段查询从 819µs/1762 次分配降至 34.8µs/7 次（约 23 倍）；单姓名查询从 25.5µs/77 次分配降至 15.9µs/8 次。
+- **文件指纹探测节流与零拷贝视图（F72）**：文件指纹探测引入 1 秒节流窗口（热重载真实场景为管理员手工替换名单，1 秒延迟无感），消除每请求 3 次 `os.Stat` 系统调用；新增 `view()` 零拷贝只读视图（reload 整体替换切片、从不就地修改，旧切片读者不受影响），每次请求 134KB 的全量拷贝归零（443µs → 17.9ns、0 分配）。
+- **移除写死的 1000ms 最短搜索延迟**：搜索不再等人为设置的 1 秒窗口，响应返回即渲染；`searchTiming.ts` 及其测试整体删除，`StatusOrb` 加载反馈保留（网络真实慢时仍显示）。
+- **基准与回归防线（F74）**：新增 `server/bench_test.go`（单姓名 / 整年段 / 组合查询基准 + 视图路径）与 `src/lib/query.bench.ts`（前端镜像基准）；分配次数硬预算断言（`TestSearchAllocsBudget`，预算 12 次）作为机器无关的确定性回归锁——耗时随负载抖动，分配次数不会，优化一旦退化测试立即失败。
+
+### 修复
+
+- **Docker 镜像版本号恒为 dev**：`release.yml` 的 Docker job 此前未向 `docker/build-push-action` 传入 `build-args`，`Dockerfile` 中 `ARG VERSION=dev` 永远使用兜底值，导致容器内 `/api/health` 的 version 恒为 dev（页面页脚随之显示 dev）。现已补传 `build-args: VERSION=${{ github.ref_name }}`，tag 触发构建时镜像内版本与发布 tag 一致。
+
 ## [v0.5.5] - 2026-09-11
 
 ### 新增

@@ -91,6 +91,7 @@ const siteConfig = {
 npm run typecheck
 npm test
 npm run build
+npm run bench    # 搜索性能基准（可选，前/后端对比结果见 CHANGELOG）
 ```
 
 后端：
@@ -100,6 +101,7 @@ cd server
 gofmt -l .          # 应无输出
 go test ./...
 go vet ./...
+go test -bench . -benchmem .   # 搜索性能基准（可选）
 ```
 
 CI（GitHub Actions）在每次 push 时自动执行以上全部检查，详见 `.github/workflows/ci.yml`。
