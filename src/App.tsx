@@ -1,7 +1,6 @@
 import { FormEvent, Suspense, lazy, useEffect, useRef, useState } from "react";
 import { BorderBeam } from "border-beam";
 import { ApiError, fetchVersion, searchApi } from "./lib/api";
-import { getRemainingSearchDelay } from "./lib/searchTiming";
 import type { SearchState, Student } from "./types";
 import ErrorBoundary from "./components/ErrorBoundary";
 import siteConfig from "./site.config";
@@ -19,10 +18,6 @@ const COPY: Record<SearchState, string> = {
   empty: "没有找到匹配记录",
   error: "查询没有完成，请稍后重试",
 };
-
-function wait(milliseconds: number) {
-  return new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
-}
 
 function getState(items: Student[], query: string, total = items.length): SearchState {
   if (!query.trim()) return "idle";
@@ -98,7 +93,6 @@ export function App() {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-    const startedAt = performance.now();
     shouldScrollRef.current = true;
     setState("loading");
     setStatusText(COPY.loading);
@@ -108,7 +102,6 @@ export function App() {
     setLoadMoreError(false);
     try {
       const response = await searchApi(submitted, PAGE_SIZE, 0, controller.signal);
-      await wait(getRemainingSearchDelay(startedAt, performance.now()));
       if (controller.signal.aborted || requestId !== requestRef.current) return;
       setItems(response.items);
       setTotal(response.total);
@@ -124,8 +117,6 @@ export function App() {
         setStatusText(COPY[next]);
       }
     } catch (cause) {
-      if (controller.signal.aborted || requestId !== requestRef.current) return;
-      await wait(getRemainingSearchDelay(startedAt, performance.now()));
       if (controller.signal.aborted || requestId !== requestRef.current) return;
       setItems([]);
       setState("error");
