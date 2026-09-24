@@ -4,13 +4,22 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"unsafe"
 )
+
+// sameStringData 判定两个字符串是否共享同一底层数组（用于零拷贝断言）。
+func sameStringData(a, b string) bool {
+	if len(a) == 0 || len(a) != len(b) {
+		return false
+	}
+	return unsafe.StringData(a) == unsafe.StringData(b)
+}
 
 func testStudents() []Student {
 	return []Student{
-		{Name: "示例同学", NameKey: "示例同学", Grade: GradeThree, ClassName: "18班"},
-		{Name: "示 例 同 学", NameKey: "示例同学", Grade: GradeOne, ClassName: "6班"},
-		{Name: "EXAMPLE STUDENT", NameKey: "EXAMPLESTUDENT", Grade: GradeOne, ClassName: "11班"},
+		newStudent("示例同学", GradeThree, "18班"),
+		newStudent("示 例 同 学", GradeOne, "6班"),
+		newStudent("EXAMPLE STUDENT", GradeOne, "11班"),
 	}
 }
 
@@ -114,8 +123,8 @@ func TestClassNumberOverflowSafe(t *testing.T) {
 // F62：姓名包含"高"/"班"字不应被误判为年级/班级（回归保护）
 func TestNameTokensNotMisparsed(t *testing.T) {
 	students := []Student{
-		{Name: "高翔", NameKey: "高翔", Grade: GradeOne, ClassName: "1班"},
-		{Name: "班长", NameKey: "班长", Grade: GradeTwo, ClassName: "2班"},
+		newStudent("高翔", GradeOne, "1班"),
+		newStudent("班长", GradeTwo, "2班"),
 	}
 	if got, _ := Search(students, "高翔", 10, 0); len(got.Items) != 1 {
 		t.Errorf("查询高翔应命中 1 条（作为姓名），实际 %d", len(got.Items))
@@ -144,10 +153,10 @@ func TestGradeSubstringBehavior(t *testing.T) {
 // F71：年级+班级连写（"高二三班"/"高二1班"）精确筛选对应班级的人
 func TestGradeClassCompoundPrecise(t *testing.T) {
 	students := []Student{
-		{Name: "甲", NameKey: "甲", Grade: GradeTwo, ClassName: "1班"},
-		{Name: "乙", NameKey: "乙", Grade: GradeTwo, ClassName: "2班"},
-		{Name: "丙", NameKey: "丙", Grade: GradeOne, ClassName: "1班"},
-		{Name: "丁", NameKey: "丁", Grade: GradeTwo, ClassName: "12班"},
+		newStudent("甲", GradeTwo, "1班"),
+		newStudent("乙", GradeTwo, "2班"),
+		newStudent("丙", GradeOne, "1班"),
+		newStudent("丁", GradeTwo, "12班"),
 	}
 	cases := []struct {
 		query string
@@ -203,9 +212,9 @@ func TestLoadStudentsEmptyDirFails(t *testing.T) {
 // F70：高三/高二的排序权重与声明序一致
 func TestGradeOrderAcrossGrades(t *testing.T) {
 	students := []Student{
-		{Name: "林宇", NameKey: "林宇", Grade: GradeThree, ClassName: "1班"},
-		{Name: "林宇", NameKey: "林宇", Grade: GradeTwo, ClassName: "1班"},
-		{Name: "林宇", NameKey: "林宇", Grade: GradeOne, ClassName: "1班"},
+		newStudent("林宇", GradeThree, "1班"),
+		newStudent("林宇", GradeTwo, "1班"),
+		newStudent("林宇", GradeOne, "1班"),
 	}
 	got, _ := Search(students, "林宇", 10, 0)
 	if len(got.Items) != 3 {
@@ -214,5 +223,63 @@ func TestGradeOrderAcrossGrades(t *testing.T) {
 	if got.Items[0].Grade != GradeOne || got.Items[1].Grade != GradeTwo || got.Items[2].Grade != GradeThree {
 		t.Fatalf("排序应为高一/高二/高三，实际 %s/%s/%s",
 			got.Items[0].Grade, got.Items[1].Grade, got.Items[2].Grade)
+	}
+}
+
+// F73：newStudent 必须填充派生字段——排序比较直接读这些字段，零值会导致排序静默错乱
+func TestNewStudentFillsDerivedFields(t *testing.T) {
+	s := newStudent("张三", GradeTwo, "18班")
+	if s.Name != "张三" || s.NameKey != "张三" || s.Grade != GradeTwo || s.ClassName != "18班" {
+		t.Fatalf("基础字段错误: %+v", s)
+	}
+	if s.ClassNo != 18 {
+		t.Errorf("ClassNo = %d，期望 18", s.ClassNo)
+	}
+	if s.GradeIdx != 1 {
+		t.Errorf("GradeIdx = %d，期望 1（高二在 knownGrades 中下标为 1）", s.GradeIdx)
+	}
+	// 姓名归一化必须与 normalizeName 一致
+	spaced := newStudent("张 三", GradeOne, "6班")
+	if spaced.NameKey != "张三" {
+		t.Errorf("NameKey = %q，期望 张三（去空白）", spaced.NameKey)
+	}
+	if spaced.ClassNo != 6 {
+		t.Errorf("中文班级 ClassNo = %d，期望 6", spaced.ClassNo)
+	}
+	// 非法班级格式：ClassNo 为 0（与 classNumber 对非班级串的返回值一致）
+	if bad := newStudent("李四", GradeOne, "未知"); bad.ClassNo != 0 {
+		t.Errorf("非法班级 ClassNo = %d，期望 0", bad.ClassNo)
+	}
+}
+
+// F73：normalizeName 快路径必须与原语义完全一致（含全角空格与大小写）
+func TestNormalizeNameFastPath(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"张三", "张三"},
+		{"张 三", "张三"},
+		{"张　三", "张三"}, // 全角空格 U+3000
+		{"张\t三", "张三"},
+		{"abc", "ABC"},
+		{"AbC", "ABC"},
+		{"EXAMPLE STUDENT", "EXAMPLESTUDENT"},
+		{"", ""},
+	}
+	for _, c := range cases {
+		if got := normalizeName(c.in); got != c.want {
+			t.Errorf("normalizeName(%q) = %q，期望 %q", c.in, got, c.want)
+		}
+	}
+}
+
+// F73：已归一化的姓名必须零拷贝复用原串（Name 与 NameKey 共享底层数组），
+// 这是内存占用的关键优化：2000 条名单可省约一半姓名字符串内存
+func TestNormalizeNameReusesCleanInput(t *testing.T) {
+	clean := "张三"
+	if got := normalizeName(clean); got != clean {
+		t.Fatalf("normalizeName(%q) = %q", clean, got)
+	}
+	// 通过 unsafe 比较字符串头确认复用（同包测试可直接访问）
+	if !sameStringData(normalizeName(clean), clean) {
+		t.Error("已归一化姓名应复用原串底层数组，实际发生了拷贝")
 	}
 }

@@ -1,8 +1,9 @@
 package main
 
 import (
+	"cmp"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -20,12 +21,29 @@ const (
 // loadStudents 与 dataStamps 按此列表探测数据目录，存在哪个文件就加载哪个。
 var knownGrades = []Grade{GradeOne, GradeTwo, GradeThree}
 
-// Student 对外 JSON 契约：只输出 name/grade/class（隐私红线，NameKey 永不出现在任何序列化中）。
+// Student 对外 JSON 契约：只输出 name/grade/class（隐私红线，派生字段与 NameKey 永不出现在任何序列化中）。
 type Student struct {
 	Name      string `json:"name"`
 	NameKey   string `json:"-"`
 	Grade     Grade  `json:"grade"`
 	ClassName string `json:"class"`
+	// 派生字段：加载期预计算，避免排序热路径反复正则解析班级号。
+	// ClassNo 为 0 表示班级格式非法；GradeIdx 未知年段为 len(knownGrades)。
+	ClassNo  int `json:"-"`
+	GradeIdx int `json:"-"`
+}
+
+// newStudent 构造 Student 并填充派生字段。
+// 所有 Student 必须经此构造：排序比较直接读派生字段，绕过构造会导致排序静默错乱。
+func newStudent(name string, grade Grade, className string) Student {
+	return Student{
+		Name:      name,
+		NameKey:   normalizeName(name),
+		Grade:     grade,
+		ClassName: className,
+		ClassNo:   classNumber(className),
+		GradeIdx:  gradeOrder(grade),
+	}
 }
 
 type SearchResponse struct {
@@ -41,6 +59,10 @@ type Query struct {
 	Grade      Grade
 	ClassNo    int
 }
+
+// querySeparators 查询 token 分隔符（中文逗号、英文逗号、顿号、加号）。
+// 包级复用：strings.Replacer 构造需编译替换表，每请求重建是纯浪费。
+var querySeparators = strings.NewReplacer("，", " ", ",", " ", "、", " ", "+", " ")
 
 var classToken = regexp.MustCompile("^([0-9]+|[一二三四五六七八九十]+)班?$")
 
@@ -78,10 +100,28 @@ func chineseNumberToInt(value string) int {
 	return tens*10 + ones
 }
 
+// needsNormalize 判定是否真的需要归一化处理。
+// 绝大多数中文姓名既无空白也无小写字母，此时可原样返回，省去一次字符串分配。
+func needsNormalize(value string) bool {
+	for _, r := range value {
+		// unicode.IsSpace 已涵盖空格、制表符与全角空格 U+3000
+		if unicode.IsSpace(r) || unicode.IsLower(r) {
+			return true
+		}
+	}
+	return false
+}
+
+// normalizeName 删除所有空白并统一大写，作为姓名匹配键。
+// 快路径：已归一化的输入直接返回原串，使 Name 与 NameKey 共享同一底层数组。
 func normalizeName(value string) string {
+	if !needsNormalize(value) {
+		return value
+	}
 	var builder strings.Builder
+	builder.Grow(len(value))
 	for _, r := range strings.ToUpper(value) {
-		if unicode.IsSpace(r) || r == '\t' || r == '　' {
+		if unicode.IsSpace(r) {
 			continue
 		}
 		builder.WriteRune(r)
@@ -103,7 +143,7 @@ func parseGrade(title string) Grade {
 }
 
 func parseQuery(raw string) Query {
-	normalized := strings.NewReplacer("，", " ", ",", " ", "、", " ", "+", " ").Replace(strings.TrimSpace(raw))
+	normalized := querySeparators.Replace(strings.TrimSpace(raw))
 	query := Query{}
 	for _, token := range strings.Fields(normalized) {
 		// F71：年级+班级连写（"高二三班"）优先于年级子串，精确解析为年段+班级
@@ -143,7 +183,8 @@ func Search(students []Student, raw string, limit, offset int) (SearchResponse, 
 	if strings.TrimSpace(raw) == "" {
 		return SearchResponse{Items: []Student{}, Limit: limit, Offset: offset}, query
 	}
-	matches := make([]Student, 0)
+	// 预分配匹配结果，避免增长到上千条时反复扩容
+	matches := make([]Student, 0, min(len(students), 256))
 	for _, item := range students {
 		ok := true
 		for _, token := range query.NameTokens {
@@ -155,27 +196,22 @@ func Search(students []Student, raw string, limit, offset int) (SearchResponse, 
 		if query.Grade != "" && item.Grade != query.Grade {
 			ok = false
 		}
-		if query.ClassNo > 0 && classNumber(item.ClassName) != query.ClassNo {
+		if query.ClassNo > 0 && item.ClassNo != query.ClassNo {
 			ok = false
 		}
 		if ok {
 			matches = append(matches, item)
 		}
 	}
-	sort.SliceStable(matches, func(i, j int) bool {
-		left, right := matches[i], matches[j]
-		leftScore, rightScore := 0, 0
-		for _, token := range query.NameTokens {
-			leftScore += nameScore(left.NameKey, token)
-			rightScore += nameScore(right.NameKey, token)
+	// 排序热路径只做整数比较与子串计分，不再调用正则（F73）
+	slices.SortStableFunc(matches, func(a, b Student) int {
+		if c := cmp.Compare(nameScoreSum(a.NameKey, query.NameTokens), nameScoreSum(b.NameKey, query.NameTokens)); c != 0 {
+			return c
 		}
-		if leftScore != rightScore {
-			return leftScore < rightScore
+		if c := cmp.Compare(a.GradeIdx, b.GradeIdx); c != 0 {
+			return c
 		}
-		if left.Grade != right.Grade {
-			return gradeOrder(left.Grade) < gradeOrder(right.Grade)
-		}
-		return classNumber(left.ClassName) < classNumber(right.ClassName)
+		return cmp.Compare(a.ClassNo, b.ClassNo)
 	})
 	if offset > len(matches) {
 		offset = len(matches)
@@ -196,6 +232,15 @@ func nameScore(nameKey, token string) int {
 		return 1
 	}
 	return 2
+}
+
+// nameScoreSum 计算姓名匹配总分（越低越优先），供排序比较使用。
+func nameScoreSum(nameKey string, tokens []string) int {
+	total := 0
+	for _, token := range tokens {
+		total += nameScore(nameKey, token)
+	}
+	return total
 }
 
 // gradeOrder 返回年段自然顺序，用于跨年段同分排序。

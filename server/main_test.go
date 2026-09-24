@@ -109,7 +109,7 @@ func TestSearchResponseKeys(t *testing.T) {
 			t.Errorf("响应缺字段 %s", key)
 		}
 	}
-	for _, banned := range []string{"NameKey", "Name", "ClassName", "Grade"} {
+	for _, banned := range []string{"NameKey", "Name", "ClassName", "Grade", "ClassNo", "GradeIdx"} {
 		if _, ok := item[banned]; ok {
 			t.Errorf("响应不应含字段 %s（隐私红线）", banned)
 		}

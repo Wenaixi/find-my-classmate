@@ -77,12 +77,13 @@ func loadStudents(dir string) ([]Student, error) {
 				if name == "" {
 					return nil, errors.New("学生记录格式异常")
 				}
-				key := string(grade) + "\x00" + className + "\x00" + normalizeName(name)
+				student := newStudent(name, grade, className)
+				key := string(grade) + "\x00" + className + "\x00" + student.NameKey
 				if _, exists := seen[key]; exists {
 					continue
 				}
 				seen[key] = struct{}{}
-				students = append(students, Student{Name: name, NameKey: normalizeName(name), Grade: grade, ClassName: className})
+				students = append(students, student)
 			}
 		}
 	}
