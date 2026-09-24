@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -27,14 +28,21 @@ type fileStamp struct {
 	modTime time.Time
 }
 
+// probeInterval 文件指纹探测节流窗口。
+// 热重载的真实场景是管理员手工替换名单文件，1 秒延迟无感；
+// 收益是消除每请求 3 次 os.Stat 的系统调用开销。
+const probeInterval = time.Second
+
 type studentStore struct {
 	dir            string
 	mu             sync.RWMutex
 	reloadMu       sync.Mutex
 	items          []Student
 	stamps         map[string]fileStamp
+	lastProbe      atomic.Int64         // 上次文件指纹探测的 Unix 毫秒（节流基准）
 	lastFailStamps map[string]fileStamp // 失败时的文件指纹：文件未变则冷却，变化则立即重试
 	lastFailAt     time.Time
+	now            func() time.Time // 可注入时钟，供测试确定性推进（默认 time.Now）
 }
 
 func loadStudents(dir string) ([]Student, error) {
@@ -95,11 +103,27 @@ func loadStudents(dir string) ([]Student, error) {
 }
 
 func newStudentStore(dir string) (*studentStore, error) {
-	store := &studentStore{dir: dir}
+	store := &studentStore{dir: dir, now: time.Now}
 	if err := store.reload(true); err != nil {
 		return nil, err
 	}
 	return store, nil
+}
+
+// probeThrottled 判定本次是否应跳过文件指纹探测。
+// 首个请求与超过 probeInterval 的请求返回 false（需要探测），其余返回 true。
+// 并发安全：使用原子 CAS 保证同一窗口内仅一个请求获得探测权，其余被节流。
+func (s *studentStore) probeThrottled() bool {
+	nowMS := s.now().UnixMilli()
+	last := s.lastProbe.Load()
+	if last == 0 || nowMS-last >= probeInterval.Milliseconds() {
+		// 需要探测：CAS 占有本次探测权；若失败说明其他请求刚探测过，按节流处理
+		if s.lastProbe.CompareAndSwap(last, nowMS) {
+			return false
+		}
+		return true
+	}
+	return true
 }
 
 func (s *studentStore) snapshot() ([]Student, error) {
@@ -113,7 +137,37 @@ func (s *studentStore) snapshot() ([]Student, error) {
 	return items, nil
 }
 
+// view 返回名单的只读视图（零拷贝）。
+// 并发安全性：reload 整体替换 s.items 切片，从不就地修改底层数组，
+// 因此持有旧切片的读者不受后续重载影响。
+// 调用方必须只读：不得修改返回切片或其元素（需要可写副本时用 snapshot）。
+func (s *studentStore) view() ([]Student, error) {
+	if err := s.reload(false); err != nil {
+		return nil, err
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.items, nil
+}
+
+// probeThrottledAt 以指定时刻判定节流（测试专用，替代注入时钟，规避 -race 的 CGO 限制）。
+func (s *studentStore) probeThrottledAt(t time.Time) bool {
+	nowMS := t.UnixMilli()
+	last := s.lastProbe.Load()
+	if last == 0 || nowMS-last >= probeInterval.Milliseconds() {
+		if s.lastProbe.CompareAndSwap(last, nowMS) {
+			return false
+		}
+		return true
+	}
+	return true
+}
+
 func (s *studentStore) reload(force bool) error {
+	// 探测节流：force（启动自举）与超过窗口的请求才真正探测文件指纹
+	if !force && s.probeThrottled() {
+		return nil
+	}
 	stamps, err := dataStamps(s.dir)
 	if err != nil {
 		return err

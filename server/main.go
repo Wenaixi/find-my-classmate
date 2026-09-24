@@ -122,7 +122,7 @@ func buildMux(store *studentStore) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.Handle("/", frontendHandler())
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
-		if _, err := store.snapshot(); err != nil {
+		if _, err := store.view(); err != nil {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "degraded", "reason": "data", "version": version})
 			return
 		}
@@ -157,7 +157,7 @@ func buildMux(store *studentStore) *http.ServeMux {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_query"})
 			return
 		}
-		students, loadErr := store.snapshot()
+		students, loadErr := store.view()
 		if loadErr != nil {
 			logErrorf("data reload failed: %v", loadErr)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "data_unavailable"})

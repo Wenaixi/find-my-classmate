@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // 构造一个指向临时目录的 studentStore（TDD：数据层测试也一并覆盖）
@@ -38,6 +39,8 @@ func TestHealthReflectsDataAvailability(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	clock := &fakeClock{current: time.Now()}
+	store.now = clock.Now
 	mux := buildMux(store)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/health", nil))
@@ -45,8 +48,9 @@ func TestHealthReflectsDataAvailability(t *testing.T) {
 		t.Fatalf("健康数据 health 应为 200，实际 %d", rec.Code)
 	}
 
-	// 破坏数据文件
-	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte("{"+"broken"), 0o644)
+	// 破坏数据文件，并推进超过探测窗口，使探测真实命中
+	_ = os.WriteFile(filepath.Join(dir, "高二.json"), []byte("{"+"broken"), 0o644)
+	clock.advance(2 * time.Second)
 	rec = httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/health", nil))
 	if rec.Code != http.StatusServiceUnavailable {
@@ -59,7 +63,8 @@ func TestHealthReflectsDataAvailability(t *testing.T) {
 	}
 
 	// 恢复后 health 应回到 200
-	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(validGradeOne), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "高二.json"), []byte(validGradeTwo), 0o644)
+	clock.advance(2 * time.Second)
 	rec = httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/health", nil))
 	if rec.Code != http.StatusOK {
