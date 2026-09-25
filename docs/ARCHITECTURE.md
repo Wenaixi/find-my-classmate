@@ -60,7 +60,8 @@
 - 排序：完整匹配（0 分）< 前缀匹配（1 分）< 包含匹配（2 分），同分按年级声明序（高一<高二<高三，gradeOrder）再按班级号升序
 - 分页：`{ items, total, limit, offset, hasMore }`；limit 默认 10，上限 50
 
-修改解析规则时必须**同时修改两侧实现**并更新两侧测试；修改匹配/排序/分页只改后端。
+
+解析契约的**可执行事实源**是 `docs/query-contract.json`：`src/lib/query.test.ts` 与 `server/contract_test.go` 各自消费同一份语料，任何一侧漂移都会在两侧测试中同时失败。语料中的期望值以 Go 端实测结果为准。
 
 ## 4. 契约常量（双端各一份）
 

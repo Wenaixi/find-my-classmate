@@ -77,7 +77,9 @@ function classNumber(value: string): number {
   const digits = match[1];
   if (/^\d+$/.test(digits)) {
     const n = Number(digits);
-    if (!Number.isSafeInteger(n) || n > 1_000_000) return -1;
+    // 溢出判定与 Go 端 classNumber 对齐：Atoi 失败即视为无效班级。
+    // 前端用 Number.isSafeInteger 表达同一上限（超出安全整数范围的数字串即无效）。
+    if (!Number.isSafeInteger(n)) return -1;
     return n;
   }
   return chineseNumberToInt(digits);
