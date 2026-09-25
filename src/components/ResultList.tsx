@@ -1,15 +1,15 @@
 import { useEffect, useRef } from "react";
 import { Liquid } from "liquid-gooey";
 import type { Student } from "../types";
+import type { ResultSummary } from "../lib/resultSummary";
 
 interface ResultListProps {
   items: Student[];
-  total: number;
+  summary: ResultSummary;
   hasMore: boolean;
   loadingMore: boolean;
   loadMoreError: boolean;
   onLoadMore: () => void;
-  progress: number;
 }
 
 function ResultCard({ student, index }: { student: Student; index: number }) {
@@ -34,7 +34,7 @@ function ResultCard({ student, index }: { student: Student; index: number }) {
   );
 }
 
-export default function ResultList({ items, total, hasMore, loadingMore, loadMoreError, onLoadMore, progress }: ResultListProps) {
+export default function ResultList({ items, summary, hasMore, loadingMore, loadMoreError, onLoadMore }: ResultListProps) {
   const liquidWrapRef = useRef<HTMLDivElement | null>(null);
 
   // F7：liquid-gooey 渲染的装饰 SVG（data-gooey-svg）含幽灵 g 节点会被 Chrome 捕获进 Tab 序列，
@@ -49,8 +49,8 @@ export default function ResultList({ items, total, hasMore, loadingMore, loadMor
   return (
     <>
       <div className="results-toolbar">
-        <span>显示 {items.length} / {total} 条记录</span>
-        <span className="results-toolbar-state">{hasMore ? "下方继续加载" : "已全部加载"}</span>
+        <span>{summary.countLabel}</span>
+        <span className="results-toolbar-state">{summary.toolbarState}</span>
       </div>
       <div className="results-liquid" ref={liquidWrapRef}>
         <div className="results-list" role="list" aria-label="查询匹配记录">
@@ -69,9 +69,9 @@ export default function ResultList({ items, total, hasMore, loadingMore, loadMor
         </div>
       </div>
       <div className="load-more-zone" data-od-id="load-more-zone">
-        <div className="load-progress" aria-hidden="true"><span style={{ width: progress + "%" }} /></div>
-        <div className="load-more-copy"><span>{items.length} / {total} 条记录</span><span>{hasMore ? "还有 " + Math.max(0, total - items.length) + " 条" : "已全部加载"}</span></div>
-        {hasMore && <button className="load-more-button" data-od-id="load-more-cta" type="button" onClick={onLoadMore} disabled={loadingMore} aria-label={"继续加载，剩余 " + Math.max(0, total - items.length) + " 条结果"}><span>{loadingMore ? "正在加载" : "继续加载"}</span><span className="button-arrow" aria-hidden="true">↗</span></button>}
+        <div className="load-progress" aria-hidden="true"><span style={{ width: summary.progress + "%" }} /></div>
+        <div className="load-more-copy"><span>{summary.countLabel}</span><span>{summary.loadMoreLabel}</span></div>
+        {hasMore && <button className="load-more-button" data-od-id="load-more-cta" type="button" onClick={onLoadMore} disabled={loadingMore} aria-label={"继续加载，剩余 " + summary.remaining + " 条结果"}><span>{loadingMore ? "正在加载" : "继续加载"}</span><span className="button-arrow" aria-hidden="true">↗</span></button>}
         {loadMoreError && <div className="load-more-error" role="alert">加载失败，请再次点击继续加载。</div>}
       </div>
     </>

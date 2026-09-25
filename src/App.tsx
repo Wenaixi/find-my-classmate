@@ -6,6 +6,7 @@ import { createSearchSession } from "./lib/searchSession";
 import ErrorBoundary from "./components/ErrorBoundary";
 import siteConfig from "./site.config";
 import { MAX_QUERY_LENGTH, PAGE_SIZE } from "./config";
+import { deriveResultSummary } from "./lib/resultSummary";
 
 const ResultList = lazy(() => import("./components/ResultList"));
 const StatusOrb = lazy(() => import("./components/StatusOrb"));
@@ -76,8 +77,8 @@ export function App() {
   function renderResultBody() {
     if (state === "loading") return <div className="result-loading" role="status"><span>扫描名单索引</span><span className="loading-pulse" aria-hidden="true" /></div>;
     if (state === "success" || state === "duplicate") {
-      const progress = total ? (items.length / total) * 100 : 0;
-      return <ResultList items={items} total={total} hasMore={hasMore} loadingMore={loadingMore} loadMoreError={loadMoreError} onLoadMore={() => void loadMore()} progress={progress} />;
+      const summary = deriveResultSummary(items.length, total, hasMore);
+      return <ResultList items={items} summary={summary} hasMore={hasMore} loadingMore={loadingMore} loadMoreError={loadMoreError} onLoadMore={() => void loadMore()} />;
     }
     if (state === "empty") return <div className="result-message" data-od-id="empty-state"><strong>查无此人</strong><p>换个写法试试。可以只输入姓氏，或补充年段 / 班级缩小范围。</p><button className="text-action" onClick={() => document.getElementById("query")?.focus()}>继续输入 <span aria-hidden="true">↗</span></button></div>;
     if (state === "error") return <div className="result-message" data-od-id="error-state"><strong>查询没有完成</strong><p>{statusText}</p><button className="text-action" data-od-id="retry-cta" onClick={() => void submit()}>重新查询 <span aria-hidden="true">↗</span></button></div>;
