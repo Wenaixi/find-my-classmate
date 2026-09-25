@@ -126,21 +126,10 @@ func (s *studentStore) probeThrottled() bool {
 	return true
 }
 
-func (s *studentStore) snapshot() ([]Student, error) {
-	if err := s.reload(false); err != nil {
-		return nil, err
-	}
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	items := make([]Student, len(s.items))
-	copy(items, s.items)
-	return items, nil
-}
-
 // view 返回名单的只读视图（零拷贝）。
 // 并发安全性：reload 整体替换 s.items 切片，从不就地修改底层数组，
 // 因此持有旧切片的读者不受后续重载影响。
-// 调用方必须只读：不得修改返回切片或其元素（需要可写副本时用 snapshot）。
+// 调用方必须只读：不得修改返回切片或其元素（需要可写副本时自行拷贝）。
 func (s *studentStore) view() ([]Student, error) {
 	if err := s.reload(false); err != nil {
 		return nil, err
@@ -148,19 +137,6 @@ func (s *studentStore) view() ([]Student, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.items, nil
-}
-
-// probeThrottledAt 以指定时刻判定节流（测试专用，替代注入时钟，规避 -race 的 CGO 限制）。
-func (s *studentStore) probeThrottledAt(t time.Time) bool {
-	nowMS := t.UnixMilli()
-	last := s.lastProbe.Load()
-	if last == 0 || nowMS-last >= probeInterval.Milliseconds() {
-		if s.lastProbe.CompareAndSwap(last, nowMS) {
-			return false
-		}
-		return true
-	}
-	return true
 }
 
 func (s *studentStore) reload(force bool) error {
