@@ -109,10 +109,10 @@ func main() {
 	mux := buildMux(store)
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "3078"
+		port = defaultPort
 	}
 	logInfof("FindMyClassmate %s listening on :%s", version, port)
-	server := buildServer(":"+port, rateLimit(accessLog(securityHeaders(mux)), 60, time.Second))
+	server := buildServer(":"+port, rateLimit(accessLog(securityHeaders(mux)), rateCapacity, rateInterval))
 	log.Fatal(server.ListenAndServe())
 }
 
@@ -134,10 +134,10 @@ func buildMux(store *studentStore) *http.ServeMux {
 			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method_not_allowed"})
 			return
 		}
-		limit := 10
+		limit := defaultLimit
 		if value := r.URL.Query().Get("limit"); value != "" {
 			parsed, parseErr := strconv.Atoi(value)
-			if parseErr != nil || parsed < 1 || parsed > 50 {
+			if parseErr != nil || parsed < 1 || parsed > maxLimit {
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_limit"})
 				return
 			}
@@ -153,7 +153,7 @@ func buildMux(store *studentStore) *http.ServeMux {
 			offset = parsed
 		}
 		queryText := r.URL.Query().Get("q")
-		if len([]rune(strings.TrimSpace(queryText))) > 80 {
+		if len([]rune(strings.TrimSpace(queryText))) > maxQueryRunes {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_query"})
 			return
 		}

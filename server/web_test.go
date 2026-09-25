@@ -66,8 +66,8 @@ func TestFrontendAssetsImmutableCache(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /assets/app.js 状态 = %d，期望 200", rec.Code)
 	}
-	if got := rec.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
-		t.Errorf("Cache-Control = %q，期望 public, max-age=31536000, immutable", got)
+	if got := rec.Header().Get("Cache-Control"); got != assetCacheMaxAge {
+		t.Errorf("Cache-Control = %q，期望 %s", got, assetCacheMaxAge)
 	}
 }
 
@@ -78,8 +78,8 @@ func TestFrontendFontsImmutableCache(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /fonts/mona.woff2 状态 = %d，期望 200", rec.Code)
 	}
-	if got := rec.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
-		t.Errorf("Cache-Control = %q，期望 public, max-age=31536000, immutable", got)
+	if got := rec.Header().Get("Cache-Control"); got != assetCacheMaxAge {
+		t.Errorf("Cache-Control = %q，期望 %s", got, assetCacheMaxAge)
 	}
 }
 
