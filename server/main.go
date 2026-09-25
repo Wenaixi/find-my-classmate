@@ -112,8 +112,19 @@ func main() {
 		port = defaultPort
 	}
 	logInfof("FindMyClassmate %s listening on :%s", version, port)
-	server := buildServer(":"+port, rateLimit(accessLog(securityHeaders(mux)), rateCapacity, rateInterval))
+	server := buildServer(":"+port, newHandlerChain(mux))
 	log.Fatal(server.ListenAndServe())
+}
+
+// newHandlerChain 组装 production 请求链，是中间件顺序的唯一事实源。
+// 顺序（由外到内）：rateLimit → accessLog → securityHeaders → mux。
+//
+// 限流位于最外层是刻意的：被拒绝的请求在进入访问日志之前就返回，
+// 避免攻击流量放大日志磁盘写入。安全响应头仍覆盖 429：
+// writeRateLimited 在写出拒绝响应前调用 setSecurityHeaders，
+// 使全站响应头契约对被拒绝请求同样成立。
+func newHandlerChain(mux http.Handler) http.Handler {
+	return rateLimit(accessLog(securityHeaders(mux)), rateCapacity, rateInterval)
 }
 
 // buildMux 组装 API 路由（可注入 store，便于测试）。health 反映数据可用性：
@@ -244,16 +255,23 @@ func (r *statusRecorder) ReadFrom(src io.Reader) (int64, error) {
 	return io.Copy(struct{ io.Writer }{r.ResponseWriter}, src)
 }
 
+// securityHeaders 为进入下游之前的响应设置安全头。
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; font-src 'self'; style-src 'self' 'unsafe-inline'")
-		w.Header().Set("X-Frame-Options", "DENY")
-		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Cache-Control", "no-store")
+		setSecurityHeaders(w.Header())
 		next.ServeHTTP(w, r)
 	})
+}
+
+// setSecurityHeaders 是全站安全响应头的唯一事实源。
+// 正常路径与限流拒绝路径都必须经过它，避免 429 成为头部例外。
+func setSecurityHeaders(h http.Header) {
+	h.Set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; font-src 'self'; style-src 'self' 'unsafe-inline'")
+	h.Set("X-Frame-Options", "DENY")
+	h.Set("Referrer-Policy", "no-referrer")
+	h.Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Cache-Control", "no-store")
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

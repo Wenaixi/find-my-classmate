@@ -76,7 +76,11 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 
 ## 5. 请求生命周期
 
-中间件链（由外到内）：`rateLimit → accessLog → securityHeaders → mux`；限流被拒（429）在最外层直接返回 JSON，不产生访问日志。
+
+中间件链（由外到内）：`rateLimit → accessLog → securityHeaders → mux`，顺序由 `newHandlerChain` 单点定义。两条跨模块政策：
+
+- **429 不写访问日志**：限流位于 accessLog 之外，被拒请求不进入日志层，避免攻击流量放大日志磁盘写入。
+- **429 仍带安全响应头**：安全头是全站响应契约，`writeRateLimited` 在写出拒绝响应前调用 `setSecurityHeaders`，使被拒请求不成为头部例外。安全头定义只有 `setSecurityHeaders` 一处。
 
 ```
 浏览器输入 → 前端 parseQuery（即时校验/提示）

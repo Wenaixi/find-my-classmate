@@ -87,19 +87,33 @@ func (l *rateLimiter) sweep(now time.Time, idleTTL time.Duration) {
 // rateLimit 中间件：每 IP 每秒 capacity 个请求的突发窗口（capacity 即令牌容量）。
 // 429 响应为 JSON（与全站错误格式一致），Retry-After 输出整数秒（RFC 9110）。
 func rateLimit(next http.Handler, capacity float64, interval time.Duration) http.Handler {
-	limiter := newRateLimiter(capacity, interval)
+	return rateLimitWith(newRateLimiter(capacity, interval), next)
+}
+
+// rateLimitWith 是 rateLimit 的可注入变体：只替换限流器本身，429 响应与其他
+// HTTP 行为全部走 production 代码路径，测试无需复制 implementation。
+func rateLimitWith(limiter *rateLimiter, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		allowed, wait := limiter.allow(clientIP(r.RemoteAddr))
 		if !allowed {
-			// 整数秒，至少 1（"0s" 语义自相矛盾）
-			seconds := int(math.Ceil(wait.Seconds()))
-			if seconds < 1 {
-				seconds = 1
-			}
-			w.Header().Set("Retry-After", strconv.Itoa(seconds))
-			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
+			writeRateLimited(w, wait)
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// writeRateLimited 输出 429 响应：整数秒 Retry-After（至少 1，"0s" 语义自相矛盾）
+// 与全站统一的 JSON 错误体。独立成函数使限流响应只有一个事实源。
+//
+// 限流在 securityHeaders 之外短路返回，因此这里显式补齐安全响应头：
+// 安全头是全站响应契约，被拒绝的请求同样适用。
+func writeRateLimited(w http.ResponseWriter, wait time.Duration) {
+	seconds := int(math.Ceil(wait.Seconds()))
+	if seconds < 1 {
+		seconds = 1
+	}
+	setSecurityHeaders(w.Header())
+	w.Header().Set("Retry-After", strconv.Itoa(seconds))
+	writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
 }

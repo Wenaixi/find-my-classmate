@@ -2,32 +2,22 @@ package main
 
 import (
 	"encoding/json"
-	"math"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
 
-// newTestLimiter 构造带可控时钟的限流中间件，方便模拟时间推进。
+// newTestLimiter 构造可注入时钟的限流中间件。
+// 429 响应、Retry-After 与放行逻辑全部走 production rateLimitWith，
+// 测试只替换限流器的时钟，不复制任何 HTTP implementation。
 func newTestLimiter(clock *fakeClock, capacity float64, interval time.Duration) http.Handler {
 	limiter := newRateLimiter(capacity, interval)
 	limiter.now = clock.Now
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		allowed, wait := limiter.allow(clientIP(r.RemoteAddr))
-		if !allowed {
-			seconds := int(math.Ceil(wait.Seconds()))
-			if seconds < 1 {
-				seconds = 1
-			}
-			w.Header().Set("Retry-After", strconv.Itoa(seconds))
-			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
-			return
-		}
+	return rateLimitWith(limiter, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-	})
+	}))
 }
 
 type fakeClock struct{ current time.Time }
