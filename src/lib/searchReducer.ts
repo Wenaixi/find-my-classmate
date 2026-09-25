@@ -58,7 +58,7 @@ export function getState(items: Student[], query: string, total = items.length):
 }
 
 // 错误文案：按 ApiError 分类（400=输入问题、429=限流、500=数据问题、network=网络）。
-// 原 App.tsx errorMessage 只看 status，这里补上 code 维度：invalid_response 等统一归类为服务问题。
+// 其余 HTTP 状态（如 502 等）与非法响应统一归为服务问题（COPY.error）。
 export function errorMessage(cause: unknown): string {
   if (cause instanceof ApiError) {
     if (cause.status === 400) return "查询条件有误，请精简到 80 字以内后重试";

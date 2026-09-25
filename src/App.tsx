@@ -44,9 +44,8 @@ export function App() {
     if (!submitted || state === "loading" || loadingMore) return;
     dispatch({ type: "submit-start" });
     shouldScrollRef.current = true;
-    const signal = new AbortController().signal;
     try {
-      const response = await session.current!.submit(submitted, PAGE_SIZE, signal);
+      const response = await session.current!.submit(submitted, PAGE_SIZE);
       if (!response) return; // 过期响应（已被新请求取代或中止），丢弃
       const next = getState(response.items, submitted, response.total);
       // F36：纯年段/班级查询（无姓名条件）的提示分支收敛在 statusTextFor
@@ -60,9 +59,8 @@ export function App() {
     const submitted = query.trim();
     if (!submitted || !hasMore || loadingMore || state === "loading") return;
     dispatch({ type: "load-more-start" });
-    const signal = new AbortController().signal;
     try {
-      const response = await session.current!.loadMore(submitted, PAGE_SIZE, items.length, signal);
+      const response = await session.current!.loadMore(submitted, PAGE_SIZE, items.length);
       if (!response) return;
       dispatch({ type: "load-more-append", items: response.items, total: response.total, hasMore: response.hasMore });
     } catch (cause) {
@@ -73,7 +71,8 @@ export function App() {
   }
 
   function clear() {
-    session.current!.abortAll();
+    // invalidate（递增 id + 中止在途 fetch）使过期 submit/loadMore 响应失效后清空
+    session.current!.invalidate();
     dispatch({ type: "clear" });
   }
 
@@ -104,7 +103,7 @@ export function App() {
             <label className="field-label" data-od-id="search-label" htmlFor="query">查询条件 <span>NAME / CLASS / GRADE</span></label>
             <BorderBeam size="md" colorVariant="colorful" theme="dark" borderRadius={999} duration={2.2} strength={1} brightness={2} saturation={2.2} hueRange={160}>
               <div className="search-track" data-od-id="search-track">
-                <input className="search-input" id="query" type="text" autoComplete="off" spellCheck={false} maxLength={MAX_QUERY_LENGTH} value={query} onChange={(event) => dispatch({ type: "input-change", query: event.target.value })} onFocus={() => searchWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })} onCompositionStart={() => dispatch({ type: "composition-start" })} onCompositionEnd={() => dispatch({ type: "composition-end" })} onKeyDown={(event) => { if (event.key === "Escape") clear(); if (event.key === "Enter" && !event.nativeEvent.isComposing && !isComposing) void submit(event); }} placeholder="输入姓名 / 班级 / 年段" aria-describedby="search-hint" />
+                <input className="search-input" id="query" type="text" autoComplete="off" spellCheck={false} maxLength={MAX_QUERY_LENGTH} value={query} onChange={(event) => { dispatch({ type: "input-change", query: event.target.value }); session.current?.invalidate(); }} onFocus={() => searchWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })} onCompositionStart={() => { dispatch({ type: "composition-start" }); session.current?.invalidate(); }} onCompositionEnd={() => { dispatch({ type: "composition-end" }); session.current?.invalidate(); }} onKeyDown={(event) => { if (event.key === "Escape") clear(); if (event.key === "Enter" && !event.nativeEvent.isComposing && !isComposing) void submit(event); }} placeholder="输入姓名 / 班级 / 年段" aria-describedby="search-hint" />
                 {query.length > 0 && <button className="search-clear" data-od-id="search-clear" type="button" onClick={clear} aria-label="清空输入"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></button>}
                 <button className="search-send" data-od-id="search-cta" type="submit" disabled={state === "loading"} aria-label={state === "loading" ? "正在检索" : "开始搜索"}>
                   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></svg>
