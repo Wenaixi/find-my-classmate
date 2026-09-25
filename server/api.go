@@ -25,7 +25,7 @@ func buildMux(store *studentStore) *http.ServeMux {
 	mux.HandleFunc("/api/search", searchHandler(store))
 	// 未知 /api/* 统一返回 JSON 404（not_found），与全站错误格式一致
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not_found"})
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": errCodeNotFound})
 	})
 	return mux
 }
@@ -37,14 +37,14 @@ func searchHandler(store *studentStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			w.Header().Set("Allow", http.MethodGet)
-			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method_not_allowed"})
+			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": errCodeMethodNotAllowed})
 			return
 		}
 		limit := defaultLimit
 		if value := r.URL.Query().Get("limit"); value != "" {
 			parsed, parseErr := strconv.Atoi(value)
 			if parseErr != nil || parsed < 1 || parsed > maxLimit {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_limit"})
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": errCodeInvalidLimit})
 				return
 			}
 			limit = parsed
@@ -53,20 +53,20 @@ func searchHandler(store *studentStore) http.HandlerFunc {
 		if value := r.URL.Query().Get("offset"); value != "" {
 			parsed, parseErr := strconv.Atoi(value)
 			if parseErr != nil || parsed < 0 {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_offset"})
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": errCodeInvalidOffset})
 				return
 			}
 			offset = parsed
 		}
 		queryText := r.URL.Query().Get("q")
 		if len([]rune(strings.TrimSpace(queryText))) > maxQueryRunes {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_query"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": errCodeInvalidQuery})
 			return
 		}
 		students, loadErr := store.view()
 		if loadErr != nil {
 			logErrorf("data reload failed: %v", loadErr)
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "data_unavailable"})
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": errCodeDataUnavailable})
 			return
 		}
 		response, _ := Search(students, queryText, limit, offset)
