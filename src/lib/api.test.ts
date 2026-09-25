@@ -1,5 +1,13 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { fetchVersion, searchApi } from "./api";
+import { ApiError, fetchVersion, searchApi } from "./api";
+
+// expectInvalidResponse 断言解码层拒绝了不合法的 wire 形状。
+// 用 instanceof 收窄到 ApiError，既验证错误码，也避免任何类型断言。
+async function expectInvalidResponse(promise: Promise<unknown>) {
+  const err = await promise.then(() => null, (e: unknown) => e);
+  expect(err).toBeInstanceOf(ApiError);
+  expect((err as ApiError).code).toBe("invalid-response");
+}
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -51,6 +59,27 @@ describe("searchApi error classification", () => {
     mockFetch(200, { items: [{ name: "张三", grade: "高一", class: "1班" }], total: 1, limit: 10, offset: 0, hasMore: false });
     const data = await searchApi("张三");
     expect(data.items[0].className).toBe("1班");
+  });
+
+  it("accepts legacy className alias and maps it to the domain field", async () => {
+    mockFetch(200, { items: [{ name: "张三", grade: "高一", className: "1班" }], total: 1, limit: 10, offset: 0, hasMore: false });
+    const data = await searchApi("张三");
+    expect(data.items[0].className).toBe("1班");
+  });
+
+  it("rejects invalid-response when class is missing entirely", async () => {
+    mockFetch(200, { items: [{ name: "张三", grade: "高一" }], total: 1, limit: 10, offset: 0, hasMore: false });
+    await expectInvalidResponse(searchApi("张三"));
+  });
+
+  it("rejects invalid-response when class aliases conflict", async () => {
+    mockFetch(200, { items: [{ name: "张三", grade: "高一", class: "1班", className: "2班" }], total: 1, limit: 10, offset: 0, hasMore: false });
+    await expectInvalidResponse(searchApi("张三"));
+  });
+
+  it("rejects invalid-response when grade is outside the known set", async () => {
+    mockFetch(200, { items: [{ name: "张三", grade: "初四", class: "1班" }], total: 1, limit: 10, offset: 0, hasMore: false });
+    await expectInvalidResponse(searchApi("张三"));
   });
 
   it("passes AbortSignal.timeout to fetch", async () => {
