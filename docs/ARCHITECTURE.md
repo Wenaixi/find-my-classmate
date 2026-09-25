@@ -61,6 +61,10 @@
 - 分页：`{ items, total, limit, offset, hasMore }`；limit 默认 10，上限 50
 
 
+
+`Search` 自守分页前置约定：offset 归一到 `[0, len(matches)]`，越界按最近有效边界处理。
+调用方无需先行校验（HTTP 层的 `invalid_offset` 400 校验是错误契约的一部分，不是该约定的唯一兜底）。
+
 解析契约的**可执行事实源**是 `docs/query-contract.json`：`src/lib/query.test.ts` 与 `server/contract_test.go` 各自消费同一份语料，任何一侧漂移都会在两侧测试中同时失败。语料中的期望值以 Go 端实测结果为准。
 
 ## 4. 契约常量（双端各一份）
@@ -142,17 +146,23 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 | src/site.config.ts | 站点展示文案（数据来源/运营团队/数据处理方） | 无 |
 | src/types.ts | 领域类型与状态枚举 | 无 |
 
+**状态派生归位 reducer**：`submit-success` 载荷为 `{ items, total, hasMore, query }`，
+`submit-error` 为 `{ cause }`；`state` 与 `statusText` 由 reducer 内部依
+`getState`/`statusTextFor`/`hasNameCondition`/`errorMessage` 算出。调用点只提供原始事实，
+派生规则因此可被直接测试——此前把 `statusTextFor` 传错位置不会有任何测试失败。
+
 动效依赖（border-beam / thinking-orbs / liquid-gooey）全部是表现层，不承载逻辑；若替换，禁止改变查询与状态语义。
 
 ## 8. 后端模块边界
 
 | 模块 | 职责 |
 | --- | --- |
-| main.go | 装配路由、参数校验、安全头、日志、端口 |
+| main.go | 启动自举、日志、中间件（accessLog/securityHeaders/statusRecorder）、装配（newHandlerChain/buildServer） |
+| api.go | API 路由与 HTTP 翻译（buildMux/searchHandler）：参数取值、错误码映射、JSON 写出；不含查询语义 |
 | config.go | 后端契约常量（端口/分页/上限/限流/缓存头） |
 | data.go | 数据加载、规范化、去重、热重载（view 唯一只读入口） |
 | ip.go | 客户端 IP 解析唯一入口（clientIP/maskedIP） |
-| search.go | 查询执行（解析/匹配/排序/分页），运行时搜索的唯一实现 |
+| search.go | 查询执行（解析/匹配/排序/分页），运行时搜索的唯一实现；分页前置约定由其自守 |
 | ratelimit.go | 令牌桶限流（IP 提取统一走 ip.go 的 clientIP） |
 | web.go | 前端静态资源嵌入与托管（缓存按来源隔离，immutable 只给存在资源，raw/gzip/304 协商头一致） |
 
@@ -199,3 +209,10 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 - 隐私优先：任何新字段、新存储、新接口都要过隐私红线检查
 - 单产物优先：新增功能优先考虑"仍是一个二进制"的形态
 - 本文档是唯一架构文档：结构性变更必须回写本文
+
+架构决策记录（ADR）存放于 `docs/adr/`，记录"已评估但未采纳"的方案及其重启条件，
+避免后续架构评审重复提议同一项。当前：
+
+- ADR-0001：Student 不拆分为内部模型与 wire DTO——隐私已由 `json:"-"` 标签类型强制，
+  且由 `TestSearchResponseKeys` 逐一断言六个内部字段名不出现在响应中；`newStudent`
+  纪律无绕过路径。实测 DTO 转换每请求固定新增 1 次分配，收益为重复保证已有测试所保证的事项。

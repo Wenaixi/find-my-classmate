@@ -2,6 +2,28 @@
 
 本文件记录 FindMyClassmate 的版本变更。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [v0.7.1] - 2026-09-26
+
+### 修复
+
+- **`Search` 负 offset 崩溃**：分页前置约定（`offset ≥ 0`）此前只由 `buildMux` 的 HTTP 层校验兜底，`Search` 自身未声明也未自守——直接调用 `Search(students, q, 10, -3)` 触发 `panic: slice bounds out of range [-3:]`。现按既有越界钳制的同一形状在 `Search` 内把 offset 归一到 `[0, len(matches)]`，越界按最近有效边界处理。归一逻辑零分配，分配次数保持 6/7/8（预算 12）。HTTP 层 400 契约不变。
+
+### 架构深化
+
+- **状态派生归位 reducer**：`App.tsx` 的 `submit` 每次手工串联 `getState → hasNameCondition → statusTextFor → dispatch`，失败分支再串一次 `errorMessage`；派生规则无测试覆盖，把 `statusTextFor` 传错位置不会有任何测试失败。现 `submit-success` 载荷收窄为 `{ items, total, hasMore, query }`、`submit-error` 收窄为 `{ cause }`，状态与文案由 reducer 内部依既有纯函数算出。`App.tsx` 删除随之孤立的四个导入，`submit` 由 15 行缩为 9 行。
+- **API 路由独立成模块**：新增 `server/api.go` 承载 `buildMux` 与 `searchHandler`，把 HTTP 翻译（参数取值、错误码映射、JSON 写出）与查询语义（`search.go` 独占）分处两个文件。`main.go` 只留启动自举、日志、中间件与装配四个薄角色，281 → 222 行。
+- **数据层 fixture 归位**：`newTestStore` 从 `main_test.go` 迁至 `data_test.go`——学生数据构造归属数据模块，`chain_test`/`version_test`/`main_test` 跨文件复用不受影响。`validGradeOne`/`validGradeTwo` 留在 `main_test.go`：它们是 API 响应语料而非数据层 fixture。
+
+### 测试
+
+- 前端从 87 增至 **91 用例**：新增 4 个编排行为测试（success / empty / F36 纯年段提示 / 429 错误分类），首次直接锁定"响应 → 状态与文案"的完整派生链。
+- 删除 `TestStatusRecorderImplementsFlusher` 与 `TestStatusRecorderImplementsReaderFrom`——二者只断言实现满足 interface，从不调用 `Flush` 或验证字节搬运，interface 约等于 implementation。替换为经 `accessLog` 真实路径的行为断言：`Flush` 透传至下游且 `rec.Flushed` 为真、`ReadFrom` 搬运 10 字节且下游正文完整一致。
+- 新增 `TestSearchNegativeOffsetTreatedAsFirstPage` 锁定负 offset 行为。
+
+### 决策
+
+- **ADR-0001：Student 不拆分为内部模型与 wire DTO**。隐私已由 `json:"-"` 标签类型强制（`NameKey`/`ClassNo`/`GradeIdx`），并由 `TestSearchResponseKeys` 逐一断言六个内部字段名不出现在响应中；`newStudent` 纪律无绕过路径。实测 DTO 转换每请求固定新增 1 次分配，收益为重复保证已有测试所保证的事项。附明确重启条件，见 `docs/adr/0001-student-type-not-split.md`。
+
 ## [v0.7.0] - 2026-09-25
 
 ### 架构深化（五候选一次性落地）
