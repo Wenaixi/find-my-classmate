@@ -21,8 +21,8 @@ export default class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="result-message" role="alert">
-          <strong>组件加载失败</strong>
-          <p>页面部分功能未能加载，请刷新页面重试。</p>
+          <strong>查询结果未能加载</strong>
+          <p>结果区域渲染失败，刷新页面重试。</p>
           <button
             className="text-action"
             type="button"
