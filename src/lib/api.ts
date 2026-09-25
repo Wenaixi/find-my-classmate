@@ -2,12 +2,11 @@ import type { Grade, SearchResponse, Student } from "../types";
 import { REQUEST_TIMEOUT_MS } from "../config";
 
 // ApiStudent 是 /api/search 的 wire 形状，仅在本模块内用于解码。
-// 服务端 canonical 字段是 class；className 只是旧客户端兼容别名，不对外输出。
+// 服务端 canonical 字段是 class（search.go json:"class"），className 永不出现在序列化中。
 interface ApiStudent {
   name?: unknown;
   grade?: unknown;
   class?: unknown;
-  className?: unknown;
 }
 
 // decodeItem 不在前端复制年段取值域：后端 knownGrades 是唯一事实源
@@ -17,20 +16,15 @@ interface ApiStudent {
 // 值域正确性由后端保证；空串、缺失与非字符串仍被拒绝。
 
 // decodeItem 把一条 wire 记录收敛为合法领域形状，或返回 null 表示不可接受。
-// 兼容规则：class 与 className 至少一个非空字符串；两者同时存在时必须一致。
-// 缺字段、类型错误、未知年段与别名冲突都不静默降级为缺省值，避免错误数据进入界面。
+// 只接受 canonical class 单字段：缺字段、类型错误与空串都不静默降级，
+// 避免错误数据进入界面。
 function decodeItem(raw: unknown): Student | null {
   if (!raw || typeof raw !== "object") return null;
   const item = raw as ApiStudent;
   if (typeof item.name !== "string" || item.name === "") return null;
   if (typeof item.grade !== "string" || item.grade === "") return null;
-  const wireClass = typeof item.class === "string" && item.class !== "" ? item.class : undefined;
-  const legacyClass = typeof item.className === "string" && item.className !== "" ? item.className : undefined;
-  if (!wireClass && !legacyClass) return null;
-  if (wireClass && legacyClass && wireClass !== legacyClass) return null;
-  const className = wireClass ?? legacyClass;
-  if (className === undefined) return null;
-  return { name: item.name, grade: item.grade as Grade, className };
+  if (typeof item.class !== "string" || item.class === "") return null;
+  return { name: item.name, grade: item.grade as Grade, className: item.class };
 }
 
 // ApiError 携带 HTTP 状态与错误码，供前端按 400/429/500 分文案。
