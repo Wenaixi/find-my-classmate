@@ -43,29 +43,28 @@ export function App() {
     if (!submitted || state === "loading" || loadingMore) return;
     dispatch({ type: "submit-start" });
     shouldScrollRef.current = true;
-    try {
-      const response = await session.current!.submit(submitted, PAGE_SIZE);
-      if (!response) return; // 过期响应（已被新请求取代或中止），丢弃
-      // 只交原始事实：状态派生与文案由 reducer 内部完成
-      dispatch({ type: "submit-success", items: response.items, total: response.total, hasMore: response.hasMore, query: submitted });
-    } catch (cause) {
-      dispatch({ type: "submit-error", cause });
+    const result = await session.current!.submit(submitted, PAGE_SIZE);
+    if (!result.ok) {
+      // 过期/中止的请求显式判别为 stale，绝不进入业务状态；真实错误按 cause 分类
+      if (result.reason === "error") dispatch({ type: "submit-error", cause: result.cause });
+      return;
     }
+    // 只交原始事实：状态派生与文案由 reducer 内部完成
+    dispatch({ type: "submit-success", items: result.response.items, total: result.response.total, hasMore: result.response.hasMore, query: submitted });
   }
 
   async function loadMore() {
     const submitted = query.trim();
     if (!submitted || !hasMore || loadingMore || state === "loading") return;
     dispatch({ type: "load-more-start" });
-    try {
-      const response = await session.current!.loadMore(submitted, PAGE_SIZE, items.length);
-      if (!response) return;
-      dispatch({ type: "load-more-append", items: response.items, total: response.total, hasMore: response.hasMore });
-    } catch (cause) {
-      dispatch({ type: "load-more-error" });
-    } finally {
-      dispatch({ type: "load-more-settle" });
+    const result = await session.current!.loadMore(submitted, PAGE_SIZE, items.length);
+    if (!result.ok) {
+      // 过期/中止显式判别为 stale；真实错误走 load-more-error
+      if (result.reason === "error") dispatch({ type: "load-more-error" });
+    } else {
+      dispatch({ type: "load-more-append", items: result.response.items, total: result.response.total, hasMore: result.response.hasMore });
     }
+    dispatch({ type: "load-more-settle" });
   }
 
   function clear() {

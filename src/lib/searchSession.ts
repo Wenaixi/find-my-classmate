@@ -5,14 +5,24 @@ import type { SearchResponse } from "../types";
 export interface SearchSessionApi {
   search(q: string, limit: number, offset: number, signal: AbortSignal): Promise<SearchResponse>;
 }
+// SearchResult 判别联合：把"过期/中止被丢弃"从返回类型里显式化。
+// 旧实现 resolve undefined 让调用方无法区分 stale 与真实失败；判别联合
+// 使 App.tsx 只需 `if (!result.ok)` 统一处理，stale 永不进入业务失败路径。
+export type SearchResult =
+  | { ok: true; response: SearchResponse }
+  | { ok: false; reason: "stale" }
+  | { ok: false; reason: "error"; cause: unknown };
 
+// stale 与 error 的构造点：成功但过期、中止、或过期会话的失败都归为 stale。
+// 真实失败（未中止且仍当前）保留 cause，供调用方按错误分类文案。
+export const staleResult: SearchResult = { ok: false, reason: "stale" };
 export interface SearchSession {
   begin(): number;
   isCurrent(id: number): boolean;
   invalidate(): void;
   abortAll(): void;
-  submit(q: string, limit: number, signal?: AbortSignal): Promise<SearchResponse | undefined>;
-  loadMore(q: string, limit: number, offset: number, signal?: AbortSignal): Promise<SearchResponse | undefined>;
+  submit(q: string, limit: number, signal?: AbortSignal): Promise<SearchResult>;
+  loadMore(q: string, limit: number, offset: number, signal?: AbortSignal): Promise<SearchResult>;
 }
 
 export function createSearchSession(api: SearchSessionApi): SearchSession {
@@ -58,12 +68,12 @@ export function createSearchSession(api: SearchSessionApi): SearchSession {
       listen(sessionController, signal, onAbort);
       try {
         const response = await api.search(q, limit, 0, combined.signal);
-        return id === currentId ? response : undefined;
+        return id === currentId ? { ok: true, response } : staleResult;
       } catch (cause) {
-        // 中止（invalidate/新 begin/abortAll/调用方 signal）或过期会话的失败静默丢弃；
-        // 仅在响应未被中止且会话仍当前时才向上抛（App 才能按真实错误分类文案）。
-        if (combined.signal.aborted || !isCurrent(id)) return undefined;
-        throw cause;
+        // 中止（invalidate/新 begin/abortAll/调用方 signal）或过期会话的失败归为 stale；
+        // 仅在响应未被中止且会话仍当前时才是真实错误。
+        if (combined.signal.aborted || !isCurrent(id)) return staleResult;
+        return { ok: false, reason: "error", cause };
       } finally {
         unlisten(sessionController, signal, onAbort);
       }
@@ -78,10 +88,10 @@ export function createSearchSession(api: SearchSessionApi): SearchSession {
       listen(sessionController, signal, onAbort);
       try {
         const response = await api.search(q, limit, offset, combined.signal);
-        return id === currentId ? response : undefined;
+        return id === currentId ? { ok: true, response } : staleResult;
       } catch (cause) {
-        if (combined.signal.aborted || !isCurrent(id)) return undefined;
-        throw cause;
+        if (combined.signal.aborted || !isCurrent(id)) return staleResult;
+        return { ok: false, reason: "error", cause };
       } finally {
         unlisten(sessionController, signal, onAbort);
       }

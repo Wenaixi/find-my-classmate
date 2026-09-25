@@ -16,7 +16,7 @@ describe("createSearchSession", () => {
     const id1 = 1; // begin() 内部递增
     session.begin(); // 新请求使 id1 过期
     resolveFirst(okResponse());
-    expect(await p1).toBeUndefined(); // 过期响应被丢弃
+    expect(await p1).toEqual({ ok: false, reason: "stale" }); // 过期响应显式判别
 
     void id1; // 避免未使用告警
   });
@@ -35,7 +35,7 @@ describe("createSearchSession", () => {
     const session = createSearchSession({ search });
     const id = session.begin();
     const result = await session.loadMore("张三", 10, 0);
-    expect(result).toBeDefined();
+    expect(result).toEqual(expect.objectContaining({ ok: true }));
     expect(session.isCurrent(id)).toBe(true);
   });
 
@@ -44,8 +44,8 @@ describe("createSearchSession", () => {
     const session = createSearchSession({ search });
     const first = session.submit("张三", 10);
     const second = session.submit("李四", 10); // 后一次提交取代前一次
-    expect(await first).toBeUndefined(); // 被取代的响应被丢弃
-    expect(await second).toBeDefined(); // 最新请求正常返回
+    expect(await first).toEqual({ ok: false, reason: "stale" }); // 被取代的响应被丢弃
+    expect((await second).ok).toBe(true); // 最新请求正常返回
   });
 
   it("discards a submit response in flight after invalidate (clear)", async () => {
@@ -56,7 +56,7 @@ describe("createSearchSession", () => {
     const inFlight = session.submit("张三", 10);
     session.invalidate(); // clear/输入变化/IME 变化都会调用
     resolveFirst(okResponse());
-    expect(await inFlight).toBeUndefined(); // 过期响应被丢弃
+    expect(await inFlight).toEqual({ ok: false, reason: "stale" }); // 过期响应被丢弃
   });
 
   it("aborts the real fetch on invalidate", () => {
@@ -74,7 +74,7 @@ describe("createSearchSession", () => {
     expect(captured.aborted).toBe(false);
     session.invalidate();
     expect(captured.aborted).toBe(true); // abort 真实触达 api
-    return expect(inFlight).resolves.toBeUndefined();
+    return expect(inFlight).resolves.toEqual({ ok: false, reason: "stale" });
   });
 
   it("aborts the real fetch on abortAll", () => {
@@ -89,7 +89,7 @@ describe("createSearchSession", () => {
 
     const inFlight = session.submit("张三", 10);
     session.abortAll();
-    return expect(inFlight).resolves.toBeUndefined();
+    return expect(inFlight).resolves.toEqual({ ok: false, reason: "stale" });
   });
 
   it("aborts a real submit when the caller disconnects", () => {
@@ -106,7 +106,7 @@ describe("createSearchSession", () => {
     const inFlight = session.submit("张三", 10, caller.signal);
     caller.abort();
     expect(captured.aborted).toBe(true);
-    return expect(inFlight).resolves.toBeUndefined();
+    return expect(inFlight).resolves.toEqual({ ok: false, reason: "stale" });
   });
 
   it("discards a loadMore response in flight after invalidate", async () => {
@@ -118,7 +118,7 @@ describe("createSearchSession", () => {
     const inFlight = session.loadMore("张三", 10, 0);
     session.invalidate(); // loadMore 在途时失效
     resolveFirst(okResponse());
-    expect(await inFlight).toBeUndefined(); // 被丢弃
+    expect(await inFlight).toEqual({ ok: false, reason: "stale" }); // 被丢弃
   });
 
   it("discards an invalidated submit rejection instead of rethrowing", async () => {
@@ -132,6 +132,6 @@ describe("createSearchSession", () => {
     const inFlight = session.submit("张三", 10);
     session.invalidate();
     // invalidate 使 fetch 真实中止 → 后端按 AbortError 拒绝 → 不应当被 App 当作业务失败
-    await expect(inFlight).resolves.toBeUndefined();
+    await expect(inFlight).resolves.toEqual({ ok: false, reason: "stale" });
   });
 });
