@@ -56,7 +56,18 @@
 
 修改查询逻辑时必须**同时修改两份实现**并更新两侧测试。
 
-## 4. 请求生命周期
+## 4. 契约常量（双端各一份）
+
+跨端契约的数值常量无法跨语言共享，后端 `server/config.go` 与前端 `src/config.ts` 各持一份，改动必须两侧同步：
+
+- 查询串 rune 上限：80（maxQueryRunes / MAX_QUERY_LENGTH，App.tsx 输入框 maxLength 同值）
+- 分页：limit 默认 10、上限 50（defaultLimit / maxLimit / PAGE_SIZE）
+- 前端请求超时 10s（REQUEST_TIMEOUT_MS，仅前端消费）
+- 后端端口 3078、限流（突发 60、每秒回补 1）、静态资源 immutable 缓存头（仅后端消费）
+
+E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章节声明；本条只约束"同一数值两份定义必须一致"。
+
+## 5. 请求生命周期
 
 中间件链（由外到内）：`rateLimit → accessLog → securityHeaders → mux`；限流被拒（429）在最外层直接返回 JSON，不产生访问日志。
 
@@ -64,14 +75,14 @@
 浏览器输入 → 前端 parseQuery（即时校验/提示）
   → GET /api/search?q=&limit=&offset=
   → 后端参数校验（limit 1-50、offset ≥0、q ≤80 字符）
-  → 数据快照（热重载检查）→ Search() → 分页 JSON
+  → 数据视图（热重载检查）→ Search() → 分页 JSON
   → 前端校验响应结构 → 渲染
 ```
 
 前端要点：
 
-- 提交前用 AbortController 取消旧请求（防竞态）
-- loading 最短展示 1000ms（searchTiming.ts），保证思维球反馈稳定
+- 提交前用 AbortController 取消旧请求（防竞态）；竞态编排集中在 searchSession.ts（requestId + abort）
+- 查询响应返回即渲染（无最短展示延迟），思维球反馈在 loading 期间稳定展示
 - 首屏查询替换结果；加载更多只追加、不改变阅读位置
 - 输入法组合期间 Enter 不提交；Escape 清空
 
@@ -91,11 +102,11 @@
 - 错误响应统一为 `{"error": "<code>"}`（429 除外，为 `{"error":"rate_limited"}`，与全站 JSON 一致）。
 - 空 q 返回 200 + 空分页（`{items:[], limit, offset}`）。
 
-## 5. 前端状态机
+## 6. 前端状态机
 
 搜索区状态（SearchState）是 UI 的唯一事实来源：
 
-`idle → editing → loading → success | duplicate | empty | too-many | error`
+`idle → editing → loading → success | duplicate | empty | error`
 
 - 输入变化 → editing
 - 提交 → loading（清空旧结果）
@@ -105,41 +116,46 @@
 
 结果区仅在非 idle/editing 状态渲染，滚动定位由 state 变化触发。
 
-## 6. 前端模块边界
+## 7. 前端模块边界
 
 | 模块 | 职责 | 依赖 |
 | --- | --- | --- |
-| src/App.tsx | 页面组装、状态机、交互编排 | 全部 |
-| src/lib/api.ts | 网络适配与响应结构校验 | types |
-| src/lib/query.ts | 查询解析/匹配/排序（镜像后端） | types |
-| src/lib/searchTiming.ts | 最短反馈时长 | 无 |
+| src/App.tsx | 页面组装 + 装配 searchReducer/searchSession | 全部 |
+| src/config.ts | 前端契约常量（PAGE_SIZE/MAX_QUERY_LENGTH/REQUEST_TIMEOUT_MS） | 无 |
+| src/lib/api.ts | 网络适配与响应结构校验 | types, config |
+| src/lib/query.ts | 查询解析/匹配/排序（镜像后端），hasNameCondition 导出 | types |
+| src/lib/searchReducer.ts | 搜索状态机纯 reducer（状态派生/错误文案/F36 提示） | types, api, config |
+| src/lib/searchSession.ts | 请求竞态编排（requestId + abort） | types |
 | src/site.config.ts | 站点展示文案（数据来源/运营团队/数据处理方） | 无 |
 | src/types.ts | 领域类型与状态枚举 | 无 |
 
 动效依赖（border-beam / thinking-orbs / liquid-gooey）全部是表现层，不承载逻辑；若替换，禁止改变查询与状态语义。
 
-## 7. 后端模块边界
+## 8. 后端模块边界
 
 | 模块 | 职责 |
 | --- | --- |
 | main.go | 装配路由、参数校验、安全头、日志、端口 |
-| data.go | 数据加载、规范化、去重、快照热重载（RWMutex） |
+| config.go | 后端契约常量（端口/分页/上限/限流/缓存头） |
+| data.go | 数据加载、规范化、去重、热重载（view 唯一只读入口） |
+| ip.go | 客户端 IP 解析唯一入口（clientIP/maskedIP） |
 | search.go | 查询解析/匹配/排序（镜像前端） |
+| ratelimit.go | 令牌桶限流（IP 提取统一走 ip.go 的 clientIP） |
 | web.go | 前端静态资源嵌入与托管 |
 
-数据热重载策略：每次请求检查文件 size+mtime，变化则重载；并发用读写锁保护快照；重载失败有 2 秒冷却（指纹驱动）且旧快照不对外服务（一致性优先于可用性的设计决策，F59）。
+数据热重载策略：文件指纹探测带 1 秒节流（原子 CAS 保证同窗口单请求探测权）；变化则互斥重载，并发用读写锁保护（view() 为唯一数据访问入口）；重载失败有 2 秒冷却（指纹驱动）且旧数据不对外服务（一致性优先于可用性的设计决策，F59）。
 
 健康检查语义（/api/health）：进程存活 + 数据可用性。数据损坏/缺失时返回 503 {"status":"degraded","reason":"data"}；响应携带 version（ldflags -X main.version，本地构建为 dev）。
 
-## 8. 部署与发布约定
-- **单实例边界（F49）**：限流桶与数据快照均为进程内状态，不支持多副本横向扩展；热重载为运维盲操作（写文件即生效），生产更新用原子替换（写临时文件 → mv）并随后请求验证。
+## 9. 部署与发布约定
+- **单实例边界（F49）**：限流桶与数据视图（内存名单）均为进程内状态，不支持多副本横向扩展；热重载为运维盲操作（写文件即生效），生产更新用原子替换（写临时文件 → mv）并随后请求验证。
 
 - 本地：`npm run build` → `go run ./server`，端口 3078
 - Docker：多阶段构建，单一端口映射，数据目录只读挂载（热重载仍生效）
 - CI：push/PR 跑全量测试（前端 typecheck+test+build、后端 gofmt+go test+go vet、数据契约校验）；tag 触发交叉编译三平台二进制并打 Release
 - 构建产物 `server/web/` 与本地记忆文件（CLAUDE.md、.superpowers/）不入库
 
-## 9. 启动自举与日志
+## 10. 启动自举与日志
 
 启动流程（main.go）保证"开箱即起"：
 
@@ -154,14 +170,14 @@
 - 访问日志：每个请求记录"方法 路径 状态 耗时 脱敏IP"；**查询参数永不入日志**（隐私红线）
 - 不内置轮转：交由部署层（logrotate / docker json-file）
 
-## 10. 测试策略
+## 11. 测试策略
 
-- 前端：Vitest——查询契约（query.test.ts）、最短时长（searchTiming.test.ts）
+- 前端：Vitest——查询契约（query.test.ts）、状态机（searchReducer.test.ts）、竞态编排（searchSession.test.ts）
 - 后端：go test——查询与数据加载的镜像测试（search_test.go）
 - CI 数据契约 job：校验名单 JSON 结构、字段白名单（仅"姓名"）、去重
 - 查询逻辑改动：必须先改测试，再同步改前后端两份实现
 
-## 11. 演进原则
+## 12. 演进原则
 
 - 单一事实来源：数据只有一份（JSON 文件），契约只有一份（查询语义），UI 状态只有一份（SearchState）
 - 双端镜像：查询逻辑改动必须前后端同步，测试兜底
