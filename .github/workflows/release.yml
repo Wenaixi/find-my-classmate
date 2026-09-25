@@ -76,8 +76,9 @@ jobs:
       - name: 归档发布包
         run: |
           mkdir -p release-package
-          cp -r server/web release-package/web
           cp -r release/findmyclassmate-* release-package/
+          # 前端产物已嵌入二进制，不再单独随包分发 server/web：
+          # 归档中保留它会形成第二个资产事实源，且暗示使用者可以替换嵌入资产。
           # 发布包不附带任何名单数据：真实名单仅限校内部署（data/ 不入库），
           # 使用者按 README 的数据格式章节自行准备 data/ 下的年段名单（高一/高二/高三，可只放存在的年段）
           mkdir -p release-package/data

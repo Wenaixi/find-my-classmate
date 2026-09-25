@@ -120,7 +120,7 @@ git push origin v0.5.3
 ```
 
 `.github/workflows/release.yml` 会执行全量测试，然后：
-1. 交叉编译 Linux amd64 / macOS arm64 / Windows amd64 三平台二进制（内嵌前端页面与 API 服务），连同示例数据与文档打包成 `findmyclassmate.tar.gz` 并创建 GitHub Release
+1. 交叉编译 Linux amd64 / macOS arm64 / Windows amd64 三平台二进制（内嵌前端页面与 API 服务），连同空 data 占位目录与文档打包成 `findmyclassmate.tar.gz` 并创建 GitHub Release。**发布包不含任何名单数据**，使用者按下方数据格式章节自行放置 `data/高一.json` 等年段名单
 2. 构建并推送 Docker 镜像到 Docker Hub（`wenxiloveyou/find-my-classmate`），标签为 `{version}`、`{major}.{minor}`，main 分支额外推送 `latest`
 
 > Docker 推送需要仓库配置 `DOCKER_PAT` Secret（Docker Hub 访问令牌）。

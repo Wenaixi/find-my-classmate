@@ -38,21 +38,20 @@ jobs:
           if-no-files-found: error
 
   backend:
-    name: 后端 · 构建前端 + 格式化检查 / 测试 / 静态检查
+    name: 后端 · 复用前端产物 / 格式化检查 / 测试 / 静态检查
     runs-on: ubuntu-latest
+    needs: frontend
     steps:
       - uses: actions/checkout@v4
 
-      - name: 安装 Node.js 24
-        uses: actions/setup-node@v4
+      # web.go 的 //go:embed all:web 需要 server/web 产物。
+      # 复用 frontend job 的构建产物而非重建：前端只构建一次，
+      # 测试与编译看到的是与 CI 验证过的完全相同的字节。
+      - name: 下载前端构建产物
+        uses: actions/download-artifact@v4
         with:
-          node-version: 24
-          cache: npm
-
-      - name: 安装前端依赖并构建（web.go 需要 server/web 产物）
-        run: |
-          npm ci
-          npm run build
+          name: frontend-build
+          path: server/web
 
       - name: 安装 Go 1.26
         uses: actions/setup-go@v5

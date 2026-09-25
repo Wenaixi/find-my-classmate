@@ -164,7 +164,8 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 
 - 本地：`npm run build` → `go run ./server`，端口 3078
 - Docker：多阶段构建，单一端口映射，数据目录只读挂载（热重载仍生效）
-- CI：push/PR 跑全量测试（前端 typecheck+test+build、后端 gofmt+go test+go vet、数据契约校验）；tag 触发交叉编译三平台二进制并打 Release
+- CI：frontend job 完成 typecheck+test+build 并上传 `frontend-build` 产物；backend job **复用该产物**（`needs: frontend` + `download-artifact`）而非重建前端，保证测试与编译看到与 CI 验证过的相同字节；另有 gofmt/go test -race/go vet、零数据守卫与 Docker buildx 构建验证
+- 发布：tag 触发三平台交叉编译，归档只含二进制、文档与空 data 占位目录。**归档不含 server/web**——前端已嵌入二进制，保留它会形成第二个资产事实源
 - 构建产物 `server/web/` 与本地记忆文件（CLAUDE.md、.superpowers/）不入库
 
 ## 10. 启动自举与日志
