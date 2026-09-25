@@ -45,6 +45,7 @@ design/
 # 工具临时目录
 .dsh-vision-toolkit/
 artifacts/
+.worktrees/
 
 # 测试覆盖率
 coverage/
