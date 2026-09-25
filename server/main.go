@@ -104,7 +104,7 @@ func main() {
 	}
 	logInfof("loaded %d students", store.Size())
 
-	mux := buildMux(store)
+	mux := buildMux(store, version)
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = defaultPort

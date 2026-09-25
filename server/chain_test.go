@@ -44,7 +44,7 @@ func TestHandlerChainRateLimitedResponseCarriesSecurityHeaders(t *testing.T) {
 	clock := &fakeClock{current: time.Now()}
 	captureLogs(t)
 
-	handler := newTestChain(clock, 1, buildMux(store))
+	handler := newTestChain(clock, 1, buildMux(store, "dev"))
 
 	// 第一次放行
 	rec := httptest.NewRecorder()
@@ -100,7 +100,7 @@ func TestHandlerChainRateLimitedRequestIsNotAccessLogged(t *testing.T) {
 	clock := &fakeClock{current: time.Now()}
 	buf := captureLogs(t)
 
-	handler := newTestChain(clock, 1, buildMux(store))
+	handler := newTestChain(clock, 1, buildMux(store, "dev"))
 
 	// 放行一次，产生一条 access 日志
 	rec := httptest.NewRecorder()
@@ -128,7 +128,7 @@ func TestHandlerChainServesHealthWithoutAccessLog(t *testing.T) {
 	clock := &fakeClock{current: time.Now()}
 	buf := captureLogs(t)
 
-	handler := newTestChain(clock, 10, buildMux(store))
+	handler := newTestChain(clock, 10, buildMux(store, "dev"))
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/health", nil))
 	if rec.Code != http.StatusOK {
@@ -147,7 +147,7 @@ func TestHandlerChainConcurrentRequestsUnderOneLimit(t *testing.T) {
 	captureLogs(t)
 
 	const capacity = 3
-	handler := newTestChain(clock, capacity, buildMux(store))
+	handler := newTestChain(clock, capacity, buildMux(store, "dev"))
 
 	var mu sync.Mutex
 	allowed := 0

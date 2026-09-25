@@ -10,7 +10,7 @@ import (
 // F48：/api/health 应携带版本号（ldflags 注入），便于运维溯源
 func TestHealthIncludesVersion(t *testing.T) {
 	store := newTestStore(t, map[string]string{"高一.json": validGradeOne, "高二.json": validGradeTwo})
-	mux := buildMux(store)
+	mux := buildMux(store, "dev")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/health", nil))
 	var body map[string]string

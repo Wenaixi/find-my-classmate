@@ -25,7 +25,7 @@ func TestHealthReflectsDataAvailability(t *testing.T) {
 	}
 	clock := &fakeClock{current: time.Now()}
 	store.now = clock.Now
-	mux := buildMux(store)
+	mux := buildMux(store, "dev")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/health", nil))
 	if rec.Code != http.StatusOK {
@@ -59,7 +59,7 @@ func TestHealthReflectsDataAvailability(t *testing.T) {
 // F19：未知 /api/* 路径应返回 JSON 404（not_found），而非 text/plain
 func TestUnknownAPIJSON404(t *testing.T) {
 	store := newTestStore(t, map[string]string{"高一.json": validGradeOne, "高二.json": validGradeTwo})
-	mux := buildMux(store)
+	mux := buildMux(store, "dev")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/typo", nil))
 	if rec.Code != http.StatusNotFound {
@@ -80,7 +80,7 @@ func TestUnknownAPIJSON404(t *testing.T) {
 // F27+F61：/api/search 响应键集合必须只含 name/grade/class（无 NameKey）
 func TestSearchResponseKeys(t *testing.T) {
 	store := newTestStore(t, map[string]string{"高一.json": validGradeOne, "高二.json": validGradeTwo})
-	mux := buildMux(store)
+	mux := buildMux(store, "dev")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/search?q=王", nil))
 	if rec.Code != http.StatusOK {
@@ -108,7 +108,7 @@ func TestSearchResponseKeys(t *testing.T) {
 // F18 关联：数据损坏时 /api/search 应 500 data_unavailable
 func TestSearchDataUnavailable(t *testing.T) {
 	store := newTestStore(t, map[string]string{"高一.json": validGradeOne, "高二.json": validGradeTwo})
-	mux := buildMux(store)
+	mux := buildMux(store, "dev")
 	_ = os.WriteFile(filepath.Join(store.dir, "高二.json"), []byte("{"+"bad"), 0o644)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/search?q=李", nil))
@@ -125,7 +125,7 @@ func TestSearchDataUnavailable(t *testing.T) {
 // F30：/api/search 非 GET 应返回 405 且带 Allow: GET
 func TestSearchMethodNotAllowed(t *testing.T) {
 	store := newTestStore(t, map[string]string{"高一.json": validGradeOne, "高二.json": validGradeTwo})
-	mux := buildMux(store)
+	mux := buildMux(store, "dev")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/search", nil))
 	if rec.Code != http.StatusMethodNotAllowed {
