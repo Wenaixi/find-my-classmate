@@ -1,9 +1,8 @@
 import { FormEvent, Suspense, lazy, useEffect, useReducer, useRef, useState } from "react";
 import { BorderBeam } from "border-beam";
 import { fetchVersion, searchApi } from "./lib/api";
-import { initialState, searchReducer, getState, statusTextFor, errorMessage } from "./lib/searchReducer";
+import { initialState, searchReducer } from "./lib/searchReducer";
 import { createSearchSession } from "./lib/searchSession";
-import { hasNameCondition } from "./lib/query";
 import ErrorBoundary from "./components/ErrorBoundary";
 import siteConfig from "./site.config";
 import { MAX_QUERY_LENGTH, PAGE_SIZE } from "./config";
@@ -47,11 +46,10 @@ export function App() {
     try {
       const response = await session.current!.submit(submitted, PAGE_SIZE);
       if (!response) return; // 过期响应（已被新请求取代或中止），丢弃
-      const next = getState(response.items, submitted, response.total);
-      // F36：纯年段/班级查询（无姓名条件）的提示分支收敛在 statusTextFor
-      dispatch({ type: "submit-success", items: response.items, total: response.total, hasMore: response.hasMore, state: next, statusText: statusTextFor(next, response.total, hasNameCondition(submitted)) });
+      // 只交原始事实：状态派生与文案由 reducer 内部完成
+      dispatch({ type: "submit-success", items: response.items, total: response.total, hasMore: response.hasMore, query: submitted });
     } catch (cause) {
-      dispatch({ type: "submit-error", statusText: errorMessage(cause) });
+      dispatch({ type: "submit-error", cause });
     }
   }
 

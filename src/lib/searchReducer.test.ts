@@ -37,7 +37,7 @@ describe("searchReducer", () => {
   // 状态与提示文案必须一致：切到 editing 时不能保留上一轮的
   // 错误或结果文案，否则用户会看到 editing 状态配上"网络异常"之类的提示。
   it("refreshes status text when leaving error for editing", () => {
-    const afterError = searchReducer(initialState, { type: "submit-error", statusText: "网络连接异常，请检查后重试" });
+    const afterError = searchReducer(initialState, { type: "submit-error", cause: new ApiError("x", undefined, "network") });
     expect(afterError.state).toBe("error");
     const s = searchReducer(afterError, { type: "input-change", query: "张" });
     expect(s.state).toBe("editing");
@@ -52,8 +52,7 @@ describe("searchReducer", () => {
       items,
       total: 1,
       hasMore: false,
-      state: "success",
-      statusText: "已定位 1 位同学",
+      query: "张三",
     });
     const s = searchReducer(afterSuccess, { type: "input-change", query: "李" });
     expect(s.state).toBe("editing");
@@ -63,7 +62,7 @@ describe("searchReducer", () => {
   // IME 组合开始即视为一次新的编辑意图：切到 editing 并刷新文案，
   // 否则查询失败后开始打字会持续显示 error 状态配旧的错误文案。
   it("refreshes state and status text when composition starts from error", () => {
-    const afterError = searchReducer(initialState, { type: "submit-error", statusText: "网络连接异常，请检查后重试" });
+    const afterError = searchReducer(initialState, { type: "submit-error", cause: new ApiError("x", undefined, "network") });
     const s = searchReducer(afterError, { type: "composition-start" });
     expect(s.state).toBe("editing");
     expect(s.isComposing).toBe(true);
@@ -77,8 +76,7 @@ describe("searchReducer", () => {
       items,
       total: 1,
       hasMore: false,
-      state: "success",
-      statusText: "已定位 1 位同学",
+      query: "张三",
     });
     const s = searchReducer(afterSuccess, { type: "composition-start" });
     expect(s.state).toBe("editing");
@@ -112,9 +110,9 @@ describe("searchReducer", () => {
 
   it("settles to success/duplicate/empty", () => {
     const items = [{ name: "张三", grade: "高一" as const, className: "1班" }];
-    expect(searchReducer(initialState, { type: "submit-success", items, total: 1, hasMore: false, state: "success", statusText: "已定位 1 位同学" }).state).toBe("success");
-    expect(searchReducer(initialState, { type: "submit-success", items, total: 2, hasMore: true, state: "duplicate", statusText: "已定位多位同学" }).state).toBe("duplicate");
-    expect(searchReducer(initialState, { type: "submit-success", items: [], total: 0, hasMore: false, state: "empty", statusText: "没有找到匹配记录" }).state).toBe("empty");
+    expect(searchReducer(initialState, { type: "submit-success", items, total: 1, hasMore: false, query: "张三" }).state).toBe("success");
+    expect(searchReducer(initialState, { type: "submit-success", items, total: 2, hasMore: true, query: "张三" }).state).toBe("duplicate");
+    expect(searchReducer(initialState, { type: "submit-success", items: [], total: 0, hasMore: false, query: "查无此人" }).state).toBe("empty");
   });
 
   it("appends on load-more-append", () => {
@@ -137,5 +135,39 @@ describe("statusTextFor", () => {
   });
   it("normal text for named query", () => {
     expect(statusTextFor("duplicate", 200, true)).toContain("先显示前");
+  });
+});
+
+// 编排归位：调用方只提供原始事实（响应或错误），状态派生与文案由 reducer
+// 内部完成。此前 getState/hasNameCondition/statusTextFor/errorMessage 必须在
+// App.tsx 的每个分支手工串联，派生规则没有测试覆盖，调用点也无法证伪。
+describe("orchestration inside the reducer", () => {
+  it("derives success and its status text from a raw response", () => {
+    const items: Student[] = [{ name: "张三", grade: "高一", className: "1班" }];
+    const s = searchReducer(initialState, { type: "submit-start" });
+    const next = searchReducer(s, { type: "submit-success", items, total: 1, hasMore: false, query: "张三" });
+    expect(next.state).toBe("success");
+    expect(next.statusText).toBe("已定位 1 位同学");
+  });
+
+  it("derives empty when the response carries no match", () => {
+    const s = searchReducer(initialState, { type: "submit-start" });
+    const next = searchReducer(s, { type: "submit-success", items: [], total: 0, hasMore: false, query: "查无此人" });
+    expect(next.state).toBe("empty");
+    expect(next.statusText).toBe("没有找到匹配记录");
+  });
+
+  it("hints the whole grade for a pure grade query (F36) without the caller deriving it", () => {
+    const s = searchReducer(initialState, { type: "submit-start" });
+    const next = searchReducer(s, { type: "submit-success", items: [], total: 200, hasMore: true, query: "高一" });
+    expect(next.state).toBe("duplicate");
+    expect(next.statusText).toContain("整个年段/班级");
+  });
+
+  it("classifies the failure cause into status text", () => {
+    const s = searchReducer(initialState, { type: "submit-start" });
+    const next = searchReducer(s, { type: "submit-error", cause: new ApiError("x", 429, "rate_limited") });
+    expect(next.state).toBe("error");
+    expect(next.statusText).toBe("请求过于频繁，请稍候再试");
   });
 });

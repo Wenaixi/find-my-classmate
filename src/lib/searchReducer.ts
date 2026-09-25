@@ -1,5 +1,6 @@
 import type { SearchState, Student } from "../types";
 import { ApiError } from "./api";
+import { hasNameCondition } from "./query";
 import { PAGE_SIZE } from "../config";
 
 // 搜索区状态机的唯一事实来源（原 App.tsx 内联的 9 个 state 集合）。
@@ -18,8 +19,8 @@ export interface SearchControllerState {
 export type SearchAction =
   | { type: "input-change"; query: string }
   | { type: "submit-start" }
-  | { type: "submit-success"; items: Student[]; total: number; hasMore: boolean; state: SearchState; statusText: string }
-  | { type: "submit-error"; statusText: string }
+  | { type: "submit-success"; items: Student[]; total: number; hasMore: boolean; query: string }
+  | { type: "submit-error"; cause: unknown }
   | { type: "load-more-start" }
   | { type: "load-more-append"; items: Student[]; total: number; hasMore: boolean }
   | { type: "load-more-error" }
@@ -96,9 +97,21 @@ export function searchReducer(state: SearchControllerState, action: SearchAction
     case "submit-start":
       return { ...state, items: [], total: 0, hasMore: false, state: "loading", statusText: COPY.loading, loadingMore: false, loadMoreError: false };
     case "submit-success":
-      return { ...state, items: action.items, total: action.total, hasMore: action.hasMore, state: action.state, statusText: action.statusText };
+      // 派生归位：调用方只交原始事实，状态与文案在此一次性算出，
+      // 避免 App.tsx 在每个分支手工串联 getState/hasNameCondition/statusTextFor。
+      {
+        const next = getState(action.items, action.query, action.total);
+        return {
+          ...state,
+          items: action.items,
+          total: action.total,
+          hasMore: action.hasMore,
+          state: next,
+          statusText: statusTextFor(next, action.total, hasNameCondition(action.query)),
+        };
+      }
     case "submit-error":
-      return { ...state, items: [], state: "error", statusText: action.statusText };
+      return { ...state, items: [], state: "error", statusText: errorMessage(action.cause) };
     case "load-more-start":
       return { ...state, loadingMore: true, loadMoreError: false };
     case "load-more-append":
