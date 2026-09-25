@@ -382,3 +382,21 @@ func TestStoreViewNoCopy(t *testing.T) {
 		t.Error("view 应返回同一底层数组（零拷贝），实际发生了拷贝")
 	}
 }
+
+// Step B：Size 是只读视图之外的启动期计数入口——main.go 自举日志用它，
+// 不再直接读 store.items 字段（"view 是唯一读入口"纪律的补充通道）。
+func TestStoreSize(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFiles(t, dir)
+	store, err := newStudentStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	items, err := store.view()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := store.Size(); got != len(items) {
+		t.Errorf("Size() = %d，期望 %d（与 view 长度一致）", got, len(items))
+	}
+}

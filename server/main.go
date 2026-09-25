@@ -102,7 +102,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	logInfof("loaded %d students", len(store.items))
+	logInfof("loaded %d students", store.Size())
 
 	mux := buildMux(store)
 	port := os.Getenv("PORT")

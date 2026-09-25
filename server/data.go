@@ -150,6 +150,14 @@ func (s *studentStore) view() ([]Student, error) {
 	return s.items, nil
 }
 
+// Size 返回当前名单的学生数，供启动自举日志使用。
+// 只读计数入口：不暴露切片本身，维持"view() 是唯一数据访问入口"的纪律。
+func (s *studentStore) Size() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.items)
+}
+
 // reload 探测文件指纹并串行重载，是数据可用性的唯一判定点。
 // force 供启动自举使用，绕过探测节流与失败冷却。
 // 探测节流只表示"本窗口已有人探测过"，绝不表示"当前数据健康"：
