@@ -2,7 +2,6 @@ package main
 
 import (
 	"math"
-	"net"
 	"net/http"
 	"strconv"
 	"sync"
@@ -83,18 +82,6 @@ func (l *rateLimiter) sweep(now time.Time, idleTTL time.Duration) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.sweepLocked(now, idleTTL)
-}
-
-// clientIP 提取客户端 IP（IPv6 去掉端口与 zone）。
-func clientIP(remote string) string {
-	host, _, err := net.SplitHostPort(remote)
-	if err != nil {
-		host = remote
-	}
-	if ip := net.ParseIP(host); ip != nil && ip.To4() == nil {
-		return ip.String()
-	}
-	return host
 }
 
 // rateLimit 中间件：每 IP 每秒 capacity 个请求的突发窗口（capacity 即令牌容量）。

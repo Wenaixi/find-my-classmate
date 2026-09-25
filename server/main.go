@@ -244,18 +244,6 @@ func (r *statusRecorder) ReadFrom(src io.Reader) (int64, error) {
 	return io.Copy(struct{ io.Writer }{r.ResponseWriter}, src)
 }
 
-func maskedIP(remote string) string {
-	host := remote
-	if idx := strings.LastIndex(remote, ":"); idx >= 0 && strings.Count(remote, ":") == 1 {
-		host = remote[:idx]
-	}
-	parts := strings.Split(host, ".")
-	if len(parts) == 4 {
-		return parts[0] + "." + parts[1] + ".*.*"
-	}
-	return "unknown"
-}
-
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; font-src 'self'; style-src 'self' 'unsafe-inline'")
