@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"unicode"
 )
@@ -64,41 +63,10 @@ type Query struct {
 // 包级复用：strings.Replacer 构造需编译替换表，每请求重建是纯浪费。
 var querySeparators = strings.NewReplacer("，", " ", ",", " ", "、", " ", "+", " ")
 
-var classToken = regexp.MustCompile("^([0-9]+|[一二三四五六七八九十]+)班?$")
 
 // gradeClassToken 匹配年级+班级连写（"高二三班"/"高二1班"/"高一十八班"），F71。
 var gradeClassToken = regexp.MustCompile("^(高一|高二|高三|高1|高2|高3)([0-9]+|[一二三四五六七八九十]+)班?$")
 
-var classDigits = map[string]int{"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
-
-// chineseNumberToInt 解析汉字数字（支持 一~九十九 与 十~十九），解析失败返回 0。
-func chineseNumberToInt(value string) int {
-	if value == "" {
-		return 0
-	}
-	// 形如 "二十"：十位 * 10 + 个位；"二十一"：20 + 1；"十一"：10 + 1；"十"：10。
-	// 先取十位：若以"十"开头（十/十一）十位=1；若含"十"且前面有数字（二十）十位=该数字。
-	tens, ones := 0, 0
-	runes := []rune(value)
-	if runes[0] == '十' {
-		tens = 1
-		if len(runes) > 1 {
-			ones = classDigits[string(runes[1])]
-		}
-	} else if len(runes) >= 2 && runes[1] == '十' {
-		tens = classDigits[string(runes[0])]
-		if len(runes) > 2 {
-			ones = classDigits[string(runes[2])]
-		}
-	} else {
-		// 单字一~九
-		return classDigits[value]
-	}
-	if tens == 0 || ones == 0 && len(runes) > 2 {
-		return 0
-	}
-	return tens*10 + ones
-}
 
 // needsNormalize 判定是否真的需要归一化处理。
 // 绝大多数中文姓名既无空白也无小写字母，此时可原样返回，省去一次字符串分配。
@@ -260,27 +228,3 @@ func gradeOrder(grade Grade) int {
 	return len(knownGrades)
 }
 
-func classNumber(value string) int {
-	match := classToken.FindStringSubmatch(strings.TrimSpace(value))
-	if match == nil {
-		return 0
-	}
-	if number, err := strconv.Atoi(match[1]); err == nil {
-		return number
-	}
-	// 数字溢出（Atoi 失败，如超长数字串）：返回 -1 标记"无效班级"，
-	// 由 parseQuery 决定按姓名处理，避免静默变成"不筛选返回全部"。
-	if isAllDigits(match[1]) {
-		return -1
-	}
-	return chineseNumberToInt(match[1])
-}
-
-func isAllDigits(value string) bool {
-	for _, r := range value {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return len(value) > 0
-}
