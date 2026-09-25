@@ -1,4 +1,5 @@
 import type { SearchResponse, Student } from "../types";
+import { REQUEST_TIMEOUT_MS } from "../config";
 
 interface ApiStudent extends Omit<Student, "className"> {
   class?: string;
@@ -16,8 +17,6 @@ export class ApiError extends Error {
     this.code = code;
   }
 }
-
-const REQUEST_TIMEOUT_MS = 10_000;
 
 function combineSignals(a?: AbortSignal, b?: AbortSignal): AbortSignal | undefined {
   if (!a) return b;

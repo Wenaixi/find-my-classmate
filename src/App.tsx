@@ -4,11 +4,11 @@ import { ApiError, fetchVersion, searchApi } from "./lib/api";
 import type { SearchState, Student } from "./types";
 import ErrorBoundary from "./components/ErrorBoundary";
 import siteConfig from "./site.config";
+import { MAX_QUERY_LENGTH, PAGE_SIZE } from "./config";
 
 const ResultList = lazy(() => import("./components/ResultList"));
 const StatusOrb = lazy(() => import("./components/StatusOrb"));
 
-const PAGE_SIZE = 10;
 const COPY: Record<SearchState, string> = {
   idle: "输入姓名、班级或年段后开始查询",
   editing: "支持姓名、班级和年段组合查询",
@@ -185,7 +185,7 @@ export function App() {
             <label className="field-label" data-od-id="search-label" htmlFor="query">查询条件 <span>NAME / CLASS / GRADE</span></label>
             <BorderBeam size="md" colorVariant="colorful" theme="dark" borderRadius={999} duration={2.2} strength={1} brightness={2} saturation={2.2} hueRange={160}>
               <div className="search-track" data-od-id="search-track">
-                <input className="search-input" id="query" type="text" autoComplete="off" spellCheck={false} maxLength={80} value={query} onChange={(event) => setQuery(event.target.value)} onFocus={() => searchWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })} onCompositionStart={() => setIsComposing(true)} onCompositionEnd={() => setIsComposing(false)} onKeyDown={(event) => { if (event.key === "Escape") clear(); if (event.key === "Enter" && !event.nativeEvent.isComposing && !isComposing) void submit(event); }} placeholder="输入姓名 / 班级 / 年段" aria-describedby="search-hint" />
+                <input className="search-input" id="query" type="text" autoComplete="off" spellCheck={false} maxLength={MAX_QUERY_LENGTH} value={query} onChange={(event) => setQuery(event.target.value)} onFocus={() => searchWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })} onCompositionStart={() => setIsComposing(true)} onCompositionEnd={() => setIsComposing(false)} onKeyDown={(event) => { if (event.key === "Escape") clear(); if (event.key === "Enter" && !event.nativeEvent.isComposing && !isComposing) void submit(event); }} placeholder="输入姓名 / 班级 / 年段" aria-describedby="search-hint" />
                 {query.length > 0 && <button className="search-clear" data-od-id="search-clear" type="button" onClick={clear} aria-label="清空输入"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></button>}
                 <button className="search-send" data-od-id="search-cta" type="submit" disabled={state === "loading"} aria-label={state === "loading" ? "正在检索" : "开始搜索"}>
                   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></svg>
