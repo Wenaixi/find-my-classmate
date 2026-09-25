@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getState, errorMessage, initialState, searchReducer, statusTextFor } from "./searchReducer";
 import { ApiError } from "./api";
-import type { SearchState } from "../types";
+import type { SearchState, Student } from "../types";
 
 describe("getState", () => {
   it("derives idle/empty/success/duplicate", () => {
@@ -34,8 +34,42 @@ describe("searchReducer", () => {
     expect(s.state).toBe("editing");
   });
 
+  // 状态与提示文案必须一致：切到 editing 时不能保留上一轮的
+  // 错误或结果文案，否则用户会看到 editing 状态配上"网络异常"之类的提示。
+  it("refreshes status text when leaving error for editing", () => {
+    const afterError = searchReducer(initialState, { type: "submit-error", statusText: "网络连接异常，请检查后重试" });
+    expect(afterError.state).toBe("error");
+    const s = searchReducer(afterError, { type: "input-change", query: "张" });
+    expect(s.state).toBe("editing");
+    expect(s.statusText).not.toBe("网络连接异常，请检查后重试");
+    expect(s.statusText).toContain("姓名");
+  });
+
+  it("refreshes status text when leaving success for editing", () => {
+    const items: Student[] = [{ name: "张三", grade: "高一", className: "1班" }];
+    const afterSuccess = searchReducer(initialState, {
+      type: "submit-success",
+      items,
+      total: 1,
+      hasMore: false,
+      state: "success",
+      statusText: "已定位 1 位同学",
+    });
+    const s = searchReducer(afterSuccess, { type: "input-change", query: "李" });
+    expect(s.state).toBe("editing");
+    expect(s.statusText).not.toBe("已定位 1 位同学");
+  });
+
+  // IME 组合期间的输入变化不是一次新的编辑意图，状态与文案都不应改变。
+  it("keeps state and status text during composition", () => {
+    const composing = searchReducer(initialState, { type: "composition-start" });
+    const s = searchReducer(composing, { type: "input-change", query: "张" });
+    expect(s.state).toBe("idle");
+    expect(s.statusText).toBe(initialState.statusText);
+  });
+
   it("clears results on submit-start", () => {
-    const withResults = { ...initialState, items: [{} as any], state: "duplicate" as SearchState };
+    const withResults = { ...initialState, items: [] as Student[], state: "duplicate" as SearchState };
     const s = searchReducer(withResults, { type: "submit-start" });
     expect(s.state).toBe("loading");
     expect(s.items).toEqual([]);

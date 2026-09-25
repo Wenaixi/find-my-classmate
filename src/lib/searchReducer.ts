@@ -86,7 +86,13 @@ export function searchReducer(state: SearchControllerState, action: SearchAction
       if (action.query.trim() === "") {
         return { ...initialState, query: action.query, isComposing: state.isComposing };
       }
-      return { ...state, query: action.query, state: state.isComposing ? state.state : "editing" };
+      if (state.isComposing) {
+        // IME 组合期间不改状态，也不改文案：组合中的候选文字不是一次新的编辑意图
+        return { ...state, query: action.query };
+      }
+      // 切到 editing 时同步刷新 statusText：状态与提示文案必须一致，
+      // 否则失败后继续输入会显示 editing 状态配上"网络异常"之类的旧文案。
+      return { ...state, query: action.query, state: "editing", statusText: COPY.editing };
     case "submit-start":
       return { ...state, items: [], total: 0, hasMore: false, state: "loading", statusText: COPY.loading, loadingMore: false, loadMoreError: false };
     case "submit-success":
