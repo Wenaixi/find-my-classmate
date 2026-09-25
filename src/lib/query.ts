@@ -1,4 +1,4 @@
-import type { Grade, ParsedQuery, SearchResponse, Student } from "../types";
+import type { Grade, ParsedQuery } from "../types";
 
 const separators = /[，,、+]+/g;
 const classDigits: Record<string, string> = { 一: "1", 二: "2", 三: "3", 四: "4", 五: "5", 六: "6", 七: "7", 八: "8", 九: "9", 十: "10" };
@@ -90,37 +90,3 @@ export function hasNameCondition(raw: string): boolean {
   return parseQuery(raw).nameTokens.length > 0;
 }
 
-function nameScore(nameKey: string, token: string): number {
-  if (nameKey === token) return 0;
-  if (nameKey.startsWith(token)) return 1;
-  return 2;
-}
-
-export function searchStudents(students: Student[], raw: string, limit = 10, offset = 0): SearchResponse {
-  const query = parseQuery(raw);
-  if (!raw.trim()) return { items: [], total: 0, limit, offset: 0, hasMore: false };
-
-  const items = students
-    .map((student) => ({ student, nameKey: normalizeName(student.name) }))
-    .filter(({ student, nameKey }) => {
-      const nameMatch = query.nameTokens.every((token) => nameKey.includes(token));
-      const classMatch = !query.classNumber || classNumber(student.className) === query.classNumber;
-      return nameMatch && (!query.grade || student.grade === query.grade) && classMatch;
-    })
-    .sort((a, b) => {
-      const scoreA = query.nameTokens.reduce((sum, token) => sum + nameScore(a.nameKey, token), 0);
-      const scoreB = query.nameTokens.reduce((sum, token) => sum + nameScore(b.nameKey, token), 0);
-      if (scoreA !== scoreB) return scoreA - scoreB;
-      // F23：与 Go 端一致，同分时按年级升序（高一 < 高二 < 高三）
-      if (a.student.grade !== b.student.grade) {
-        const order = { 高一: 0, 高二: 1, 高三: 2 } as const;
-        return (order[a.student.grade] ?? 0) - (order[b.student.grade] ?? 0);
-      }
-      return classNumber(a.student.className) - classNumber(b.student.className);
-    })
-    .map(({ student }) => student);
-
-  const safeOffset = Math.min(Math.max(offset, 0), items.length);
-  const page = items.slice(safeOffset, safeOffset + limit);
-  return { items: page, total: items.length, limit, offset: safeOffset, hasMore: safeOffset + page.length < items.length };
-}

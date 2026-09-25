@@ -8,7 +8,6 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
-    "bench": "vitest bench",
     "preview": "vite preview"
   },
   "dependencies": {

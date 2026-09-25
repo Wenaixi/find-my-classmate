@@ -1,56 +1,31 @@
 import { describe, expect, it } from "vitest";
-import { hasNameCondition, normalizeName, parseQuery, searchStudents } from "./query";
-import type { Student } from "../types";
+import { hasNameCondition, normalizeName, parseQuery } from "./query";
 
-const fixture: Student[] = [
-  { name: "示例同学", grade: "高三", className: "18班" },
-  { name: "示 例 同 学", grade: "高二", className: "6班" },
-  { name: "EXAMPLE STUDENT", grade: "高一", className: "11班" },
-  { name: "高一同学", grade: "高一", className: "1班" },
-];
+// 前端只保留查询解释语义：解析查询串、判断是否含姓名条件。
+// 运行时搜索（匹配、排序、分页）唯一归属 Go 端 search.go，
+// 其行为契约由 server/search_test.go 与跨语言 corpus 验证。
+// 本文件因此只断言 parseQuery 的输出，不在前端复刻匹配与排序实现。
 
 describe("query contract", () => {
   it("normalizes internal whitespace and case", () => {
     expect(normalizeName(" eXample  student ")).toBe("EXAMPLESTUDENT");
   });
 
-  it("supports grade, class aliases and every separator", () => {
-    expect(searchStudents(fixture, "高1 1").items).toHaveLength(1);
-    expect(searchStudents(fixture, "高二，六班").items).toHaveLength(1);
-    expect(searchStudents(fixture, "高一，一班").items).toHaveLength(1);
+  it("parses every separator into the same tokens", () => {
+    expect(parseQuery("高1、六班").nameTokens).toEqual([]);
     expect(parseQuery("高1、六班")).toMatchObject({ grade: "高一", classNumber: 6 });
-    expect(searchStudents(fixture, "高三、示例同学、18班").items).toHaveLength(1);
-    expect(searchStudents(fixture, "高二, 示例同学").items).toHaveLength(1);
-    expect(searchStudents(fixture, "高三+示例同学+18班").items).toHaveLength(1);
-    expect(searchStudents(fixture, "示例，18班").items[0].className).toBe("18班");
-    expect(searchStudents(fixture, "一班").items).toHaveLength(1);
-    expect(searchStudents(fixture, "18").items[0].className).toBe("18班");
+    expect(parseQuery("高二，六班")).toMatchObject({ grade: "高二", classNumber: 6 });
+    expect(parseQuery("高三+示例同学+18班")).toMatchObject({ grade: "高三", classNumber: 18, nameTokens: ["示例同学"] });
+    expect(parseQuery("示例，18班")).toMatchObject({ classNumber: 18, nameTokens: ["示例"] });
   });
 
   it("parses grade three (高三 / 高3)", () => {
     expect(parseQuery("高三")).toMatchObject({ grade: "高三" });
     expect(parseQuery("高3")).toMatchObject({ grade: "高三" });
-    expect(searchStudents(fixture, "高三").items).toHaveLength(1);
   });
 
   it("treats numeric input as class text", () => {
     expect(parseQuery("223").classNumber).toBe(223);
-    expect(searchStudents(fixture, "223").items).toEqual([]);
-  });
-
-  it("paginates broad results without hiding them", () => {
-    const first = searchStudents([...fixture, ...fixture], "示例", 2, 0);
-    const second = searchStudents([...fixture, ...fixture], "示例", 2, 2);
-    expect(first.items).toHaveLength(2);
-    expect(first.total).toBe(4);
-    expect(first.hasMore).toBe(true);
-    expect(second.items).toHaveLength(2);
-    expect(second.offset).toBe(2);
-    expect(second.hasMore).toBe(false);
-  });
-
-  it("returns an empty paged response for blank input", () => {
-    expect(searchStudents(fixture, "")).toEqual({ items: [], total: 0, limit: 10, offset: 0, hasMore: false });
   });
 
   // F16/F71：年级+班级连写的口语化输入（"高二三班"）应解析出精确班级而非只按年级
@@ -59,19 +34,6 @@ describe("query contract", () => {
     expect(q.grade).toBe("高二");
     expect(q.classNumber).toBe(3);
     expect(q.nameTokens).toEqual([]);
-  });
-
-  // F71：年级+班级连写精确筛选对应班级的人（用户报告：高二1班/高二一班 返回整个高二）
-  it("filters grade+class compound precisely", () => {
-    const students: Student[] = [
-      { name: "甲", grade: "高二", className: "1班" },
-      { name: "乙", grade: "高二", className: "2班" },
-      { name: "丙", grade: "高一", className: "1班" },
-    ];
-    expect(searchStudents(students, "高二一班").items.map((s) => s.name)).toEqual(["甲"]);
-    expect(searchStudents(students, "高二1班").items.map((s) => s.name)).toEqual(["甲"]);
-    expect(searchStudents(students, "高一1班").items.map((s) => s.name)).toEqual(["丙"]);
-    expect(searchStudents(students, "高二，1班").items.map((s) => s.name)).toEqual(["甲"]);
   });
 
   // F16：姓名含高/班字不被误判
@@ -88,20 +50,11 @@ describe("query contract", () => {
     expect(parseQuery("十八班").classNumber).toBe(18);
   });
 
-  // F22：超长数字按姓名处理（与 Go -1 语义一致 → 无匹配）
+  // F22：超长数字按姓名处理（与 Go -1 语义一致 → 不作为班级条件）
   it("treats overflow digits as name token", () => {
-    expect(searchStudents(fixture, "99999999999999999999").items).toEqual([]);
-  });
-
-  // F23：排序含 Grade 二级键（同分跨年级时高一在前）
-  it("sorts by grade when scores tie", () => {
-    const students: Student[] = [
-      { name: "林宇", grade: "高三", className: "1班" },
-      { name: "林宇", grade: "高二", className: "1班" },
-      { name: "林宇", grade: "高一", className: "2班" },
-    ];
-    const result = searchStudents(students, "林宇");
-    expect(result.items.map((s) => s.grade)).toEqual(["高一", "高二", "高三"]);
+    const q = parseQuery("99999999999999999999");
+    expect(q.classNumber).toBeUndefined();
+    expect(q.nameTokens).toEqual(["99999999999999999999"]);
   });
 });
 

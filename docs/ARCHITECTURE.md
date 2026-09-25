@@ -42,19 +42,25 @@
 - 不读取、不存储、不返回学籍辅号等任何额外字段
 - 前端不写 localStorage，不把查询词或结果写入 URL
 
-## 3. 查询契约（前后端镜像实现）
+## 3. 查询契约（前端解释 + 后端执行）
 
-前端 `src/lib/query.ts` 与后端 `server/search.go` 是**同一套查询逻辑的两份实现**，必须保持行为一致：
+查询语义的**运行时执行唯一归属后端** `server/search.go`；前端 `src/lib/query.ts` 只保留查询解释（解析 token、判断是否含姓名条件、姓名归一化），供页面提示文案使用。前端不再复刻匹配、排序与分页实现。
+
+两侧必须一致的**解析**契约：
 
 - 分隔符：中文逗号、英文逗号、顿号、加号、连续空白，均视为 token 分隔
-- 班级 token：阿拉伯数字或中文数字（一~十），可带可省略"班"字
+- 班级 token：阿拉伯数字或汉字数字（一~九十九，含十位组合如十一、二十、二十一），可带可省略"班"字
 - 年段 token：`高一/高二/高三`、`高1/高2/高3` 为别名
 - 姓名匹配键：删除中英文空格、全角空格、制表符，统一大写（normalizeName）
+- 超长数字串按姓名处理，不作为班级条件（与 Go 的 -1 语义一致）
+
+后端独占的**执行**契约：
+
 - 匹配规则：所有姓名 token 都必须包含匹配（AND 语义），年段精确匹配，班级按班号匹配
 - 排序：完整匹配（0 分）< 前缀匹配（1 分）< 包含匹配（2 分），同分按年级声明序（高一<高二<高三，gradeOrder）再按班级号升序
 - 分页：`{ items, total, limit, offset, hasMore }`；limit 默认 10，上限 50
 
-修改查询逻辑时必须**同时修改两份实现**并更新两侧测试。
+修改解析规则时必须**同时修改两侧实现**并更新两侧测试；修改匹配/排序/分页只改后端。
 
 ## 4. 契约常量（双端各一份）
 
@@ -123,7 +129,7 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 | src/App.tsx | 页面组装 + 装配 searchReducer/searchSession | 全部 |
 | src/config.ts | 前端契约常量（PAGE_SIZE/MAX_QUERY_LENGTH/REQUEST_TIMEOUT_MS） | 无 |
 | src/lib/api.ts | 网络适配与响应结构校验 | types, config |
-| src/lib/query.ts | 查询解析/匹配/排序（镜像后端），hasNameCondition 导出 | types |
+| src/lib/query.ts | 查询解释（解析 token、hasNameCondition、姓名归一化），不含匹配/排序/分页 | types |
 | src/lib/searchReducer.ts | 搜索状态机纯 reducer（状态派生/错误文案/F36 提示） | types, api, config |
 | src/lib/searchSession.ts | 请求竞态编排（requestId + abort） | types |
 | src/site.config.ts | 站点展示文案（数据来源/运营团队/数据处理方） | 无 |
@@ -139,7 +145,7 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 | config.go | 后端契约常量（端口/分页/上限/限流/缓存头） |
 | data.go | 数据加载、规范化、去重、热重载（view 唯一只读入口） |
 | ip.go | 客户端 IP 解析唯一入口（clientIP/maskedIP） |
-| search.go | 查询解析/匹配/排序（镜像前端） |
+| search.go | 查询执行（解析/匹配/排序/分页），运行时搜索的唯一实现 |
 | ratelimit.go | 令牌桶限流（IP 提取统一走 ip.go 的 clientIP） |
 | web.go | 前端静态资源嵌入与托管 |
 
@@ -174,14 +180,14 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 ## 11. 测试策略
 
 - 前端：Vitest——查询契约（query.test.ts）、状态机（searchReducer.test.ts）、竞态编排（searchSession.test.ts）
-- 后端：go test——查询与数据加载的镜像测试（search_test.go）
+- 后端：go test——查询执行与数据加载（search_test.go）
 - CI 数据契约 job：校验名单 JSON 结构、字段白名单（仅"姓名"）、去重
-- 查询逻辑改动：必须先改测试，再同步改前后端两份实现
+- 查询改动：解析规则先改测试再同步前后端；匹配/排序/分页只改后端
 
 ## 12. 演进原则
 
 - 单一事实来源：数据只有一份（JSON 文件），契约只有一份（查询语义），UI 状态只有一份（SearchState）
-- 双端镜像：查询逻辑改动必须前后端同步，测试兜底
+- 解析双端一致：解析规则改动必须前后端同步，测试兜底；执行语义单端（后端）
 - 隐私优先：任何新字段、新存储、新接口都要过隐私红线检查
 - 单产物优先：新增功能优先考虑"仍是一个二进制"的形态
 - 本文档是唯一架构文档：结构性变更必须回写本文
