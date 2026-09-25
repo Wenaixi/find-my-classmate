@@ -11,22 +11,6 @@ import (
 	"time"
 )
 
-// 构造一个指向临时目录的 studentStore（TDD：数据层测试也一并覆盖）
-func newTestStore(t *testing.T, files map[string]string) *studentStore {
-	t.Helper()
-	dir := t.TempDir()
-	for name, content := range files {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	store, err := newStudentStore(dir)
-	if err != nil {
-		t.Fatalf("newStudentStore: %v", err)
-	}
-	return store
-}
-
 const validGradeOne = `{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"王皓轩"},{"姓名":"张三"}]}}`
 const validGradeTwo = `{"标题":"福清一中2025级高二编班名单","名单":{"2班":[{"姓名":"李四"}]}}`
 

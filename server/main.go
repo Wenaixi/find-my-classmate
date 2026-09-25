@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -125,63 +123,6 @@ func main() {
 // 使全站响应头契约对被拒绝请求同样成立。
 func newHandlerChain(mux http.Handler) http.Handler {
 	return rateLimit(accessLog(securityHeaders(mux)), rateCapacity, rateInterval)
-}
-
-// buildMux 组装 API 路由（可注入 store，便于测试）。health 反映数据可用性：
-// 数据损坏/缺失时返回 503 degraded，避免编排层误判健康。
-func buildMux(store *studentStore) *http.ServeMux {
-	mux := http.NewServeMux()
-	mux.Handle("/", frontendHandler())
-	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
-		if _, err := store.view(); err != nil {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "degraded", "reason": "data", "version": version})
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": version})
-	})
-	mux.HandleFunc("/api/search", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			w.Header().Set("Allow", http.MethodGet)
-			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method_not_allowed"})
-			return
-		}
-		limit := defaultLimit
-		if value := r.URL.Query().Get("limit"); value != "" {
-			parsed, parseErr := strconv.Atoi(value)
-			if parseErr != nil || parsed < 1 || parsed > maxLimit {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_limit"})
-				return
-			}
-			limit = parsed
-		}
-		offset := 0
-		if value := r.URL.Query().Get("offset"); value != "" {
-			parsed, parseErr := strconv.Atoi(value)
-			if parseErr != nil || parsed < 0 {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_offset"})
-				return
-			}
-			offset = parsed
-		}
-		queryText := r.URL.Query().Get("q")
-		if len([]rune(strings.TrimSpace(queryText))) > maxQueryRunes {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_query"})
-			return
-		}
-		students, loadErr := store.view()
-		if loadErr != nil {
-			logErrorf("data reload failed: %v", loadErr)
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "data_unavailable"})
-			return
-		}
-		response, _ := Search(students, queryText, limit, offset)
-		writeJSON(w, http.StatusOK, response)
-	})
-	// 未知 /api/* 统一返回 JSON 404（not_found），与全站错误格式一致
-	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not_found"})
-	})
-	return mux
 }
 
 // buildServer 组装带超时配置的 http.Server：防止慢速攻击挂起连接。

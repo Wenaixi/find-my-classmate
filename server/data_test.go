@@ -23,6 +23,24 @@ func writeTestFiles(t *testing.T, dir string) {
 	}
 }
 
+// newTestStore 构造指向临时目录的 studentStore，是数据层 fixture 的唯一入口。
+// 供 API、请求链与版本测试复用：学生数据的构造与断言归属数据模块，
+// 各调用方只提供自己关心的名单文件。
+func newTestStore(t *testing.T, files map[string]string) *studentStore {
+	t.Helper()
+	dir := t.TempDir()
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	store, err := newStudentStore(dir)
+	if err != nil {
+		t.Fatalf("newStudentStore: %v", err)
+	}
+	return store
+}
+
 func TestLoadStudentsDedup(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFiles(t, dir)
