@@ -70,6 +70,25 @@ func TestSearchPagination(t *testing.T) {
 	}
 }
 
+// Search 必须自守分页前置约定：offset 早于列表开头时按第一页处理。
+// 该约定此前只由 buildMux 的 HTTP 层校验兜底，Search 自身对负 offset 会
+// panic（slice bounds out of range）。把不变量收进接口，调用者无需记忆。
+func TestSearchNegativeOffsetTreatedAsFirstPage(t *testing.T) {
+	students := append(testStudents(), testStudents()...)
+	got, _ := Search(students, "示例", 2, -3)
+	if got.Offset != 0 {
+		t.Fatalf("负 offset 应归一到 0，实际 %d", got.Offset)
+	}
+	first, _ := Search(students, "示例", 2, 0)
+	if len(got.Items) != len(first.Items) {
+		t.Fatalf("负 offset 与 offset=0 结果条目数应一致：%d vs %d", len(got.Items), len(first.Items))
+	}
+	if got.Total != first.Total || got.HasMore != first.HasMore {
+		t.Fatalf("负 offset 与 offset=0 的分页元数据应一致：total %d/%d hasMore %v/%v",
+			got.Total, first.Total, got.HasMore, first.HasMore)
+	}
+}
+
 // F22：汉字多位班级号（十一~九十九）应解析为数值
 func TestClassNumberChineseMultiDigit(t *testing.T) {
 	cases := []struct {

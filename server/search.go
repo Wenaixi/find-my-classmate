@@ -213,6 +213,12 @@ func Search(students []Student, raw string, limit, offset int) (SearchResponse, 
 		}
 		return cmp.Compare(a.ClassNo, b.ClassNo)
 	})
+	// 分页区间钳制到 [0, len(matches)]：越界的 offset 按最近的有效边界处理，
+	// 使 Search 自守分页前置约定，不依赖调用方先行校验。
+	// 负 offset 若不在此归一，切片下界会为负并 panic。
+	if offset < 0 {
+		offset = 0
+	}
 	if offset > len(matches) {
 		offset = len(matches)
 	}
