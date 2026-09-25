@@ -134,7 +134,7 @@ func TestStoreViewConcurrent(t *testing.T) {
 					return
 				}
 				if len(got) != 3 {
-					t.Errorf("并发快照应恒为 3 条，实际 %d", len(got))
+					t.Errorf("并发视图应恒为 3 条，实际 %d", len(got))
 					return
 				}
 			}
@@ -175,11 +175,11 @@ func TestStoreConcurrentHotReloadStampede(t *testing.T) {
 			for j := 0; j < 20; j++ {
 				got, err := store.view()
 				if err != nil {
-					t.Errorf("并发快照失败: %v", err)
+					t.Errorf("并发视图失败: %v", err)
 					return
 				}
 				if len(got) != 4 {
-					t.Errorf("并发快照应恒为 4 条，实际 %d", len(got))
+					t.Errorf("并发视图应恒为 4 条，实际 %d", len(got))
 					return
 				}
 			}
