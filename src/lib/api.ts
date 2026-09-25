@@ -10,9 +10,11 @@ interface ApiStudent {
   className?: unknown;
 }
 
-// gradeIndex 是服务端可能返回的年段全集，与 server/search.go 的 knownGrades 对齐。
-// 固定三值用 Record 查表，避免为静态字面量分配 Set。
-const gradeIndex: Record<string, true> = { 高一: true, 高二: true, 高三: true };
+// decodeItem 不在前端复制年段取值域：后端 knownGrades 是唯一事实源
+// （CLAUDE.md 承诺扩展年段只需在 knownGrades 末尾追加）。若前端硬编码
+// 一份年段清单，后端新增年段后前端会把全部响应判为 invalid-response，
+// 表现为"后端数据正常但全站查询失败"。因此这里只校验 grade 是非空字符串，
+// 值域正确性由后端保证；空串、缺失与非字符串仍被拒绝。
 
 // decodeItem 把一条 wire 记录收敛为合法领域形状，或返回 null 表示不可接受。
 // 兼容规则：class 与 className 至少一个非空字符串；两者同时存在时必须一致。
@@ -21,7 +23,7 @@ function decodeItem(raw: unknown): Student | null {
   if (!raw || typeof raw !== "object") return null;
   const item = raw as ApiStudent;
   if (typeof item.name !== "string" || item.name === "") return null;
-  if (typeof item.grade !== "string" || gradeIndex[item.grade] !== true) return null;
+  if (typeof item.grade !== "string" || item.grade === "") return null;
   const wireClass = typeof item.class === "string" && item.class !== "" ? item.class : undefined;
   const legacyClass = typeof item.className === "string" && item.className !== "" ? item.className : undefined;
   if (!wireClass && !legacyClass) return null;

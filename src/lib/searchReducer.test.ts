@@ -60,12 +60,46 @@ describe("searchReducer", () => {
     expect(s.statusText).not.toBe("已定位 1 位同学");
   });
 
-  // IME 组合期间的输入变化不是一次新的编辑意图，状态与文案都不应改变。
+  // IME 组合开始即视为一次新的编辑意图：切到 editing 并刷新文案，
+  // 否则查询失败后开始打字会持续显示 error 状态配旧的错误文案。
+  it("refreshes state and status text when composition starts from error", () => {
+    const afterError = searchReducer(initialState, { type: "submit-error", statusText: "网络连接异常，请检查后重试" });
+    const s = searchReducer(afterError, { type: "composition-start" });
+    expect(s.state).toBe("editing");
+    expect(s.isComposing).toBe(true);
+    expect(s.statusText).not.toBe("网络连接异常，请检查后重试");
+  });
+
+  it("refreshes state and status text when composition starts from success", () => {
+    const items: Student[] = [{ name: "张三", grade: "高一", className: "1班" }];
+    const afterSuccess = searchReducer(initialState, {
+      type: "submit-success",
+      items,
+      total: 1,
+      hasMore: false,
+      state: "success",
+      statusText: "已定位 1 位同学",
+    });
+    const s = searchReducer(afterSuccess, { type: "composition-start" });
+    expect(s.state).toBe("editing");
+    expect(s.statusText).not.toBe("已定位 1 位同学");
+  });
+
+  // 组合不影响在途请求：处于 loading 时组合开始必须保留 loading，
+  // 否则响应返回时会落到已被改写的状态上。
+  it("keeps loading when composition starts during a request", () => {
+    const loading = searchReducer(initialState, { type: "submit-start" });
+    const s = searchReducer(loading, { type: "composition-start" });
+    expect(s.state).toBe("loading");
+    expect(s.isComposing).toBe(true);
+  });
+
+  // 组合进行中的候选文字变化不应再改写状态与文案。
   it("keeps state and status text during composition", () => {
     const composing = searchReducer(initialState, { type: "composition-start" });
     const s = searchReducer(composing, { type: "input-change", query: "张" });
-    expect(s.state).toBe("idle");
-    expect(s.statusText).toBe(initialState.statusText);
+    expect(s.state).toBe("editing");
+    expect(s.statusText).toBe(composing.statusText);
   });
 
   it("clears results on submit-start", () => {

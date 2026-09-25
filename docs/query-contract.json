@@ -1,5 +1,5 @@
 {
-  "$comment": "跨语言查询解析契约的唯一事实源。src/lib/query.test.ts 与 server/search_test.go 各自消费本文件；修改解析规则时必须同时更新两侧实现与本文件。执行语义（匹配/排序/分页）只属于后端，不在本文件范围内。所有期望值以 Go 端实测结果为准——Go 是运行时唯一执行者。",
+  "$comment": "跨语言查询解析契约的唯一事实源。src/lib/query.test.ts 与 server/contract_test.go 各自消费本文件；修改解析规则时必须同时更新两侧实现与本文件。执行语义（匹配/排序/分页）只属于后端，不在本文件范围内。整数上限说明：前端 classNumber 用 Number.isSafeInteger 判定溢出（上限 2^53-1），Go 端用 strconv.Atoi（上限 2^63-1），因此 2^53 到 2^63-1 之间两侧行为不同——这是刻意保留的差异，因为 JS Number 无法精确表示更大的整数，继续放行会把用户输入静默舍入成错误的班级号。语料只覆盖 2^53 以下，两侧在此区间必须完全一致；不要为了让语料全绿而放宽前端上限。",
   "cases": [
     { "raw": "张三", "nameTokens": ["张三"], "grade": null, "classNumber": null },
     { "raw": "示 例", "nameTokens": ["示", "例"], "grade": null, "classNumber": null },

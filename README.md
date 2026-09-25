@@ -104,8 +104,6 @@ gofmt -l .          # 应无输出
 go test ./...
 go vet ./...
 go test -bench . -benchmem .   # 搜索性能基准（可选）
-> 搜索性能基准只存在于后端（server/bench_test.go）：前端不执行搜索，
-> 浏览器侧只有查询解释，没有可基准的搜索路径。
 ```
 
 CI（GitHub Actions）在每次 push 时自动执行以上全部检查，详见 `.github/workflows/ci.yml`。

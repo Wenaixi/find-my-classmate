@@ -136,6 +136,47 @@ func TestStoreReloadFailureIsFailClosedThenRecovers(t *testing.T) {
 	}
 }
 
+// 冷却期内对外暴露的错误必须保留原始失败原因：运维在 /api/search 的
+// error 日志中要能区分解析失败、标题不一致、班级格式异常等具体成因，
+// 而不是只看到无信息量的"数据不可用"。
+func TestStoreCoolingPreservesFailureCause(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFiles(t, dir)
+	store, err := newStudentStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock := &fakeClock{current: time.Now()}
+	store.now = clock.Now
+
+	// 破坏名单，首次失败会带上解析根因
+	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte("{broken"), 0o644)
+	clock.advance(2 * time.Second)
+	first, err := store.view()
+	if err == nil {
+		t.Fatal("损坏文件 view 应报错")
+	}
+	if len(first) != 0 {
+		t.Fatalf("fail-closed 下不应返回旧快照，实际 %d 条", len(first))
+	}
+	firstMsg := err.Error()
+	if !strings.Contains(firstMsg, "解析") {
+		t.Errorf("首次失败错误应说明解析失败，实际 %q", firstMsg)
+	}
+
+	// 冷却窗口内：文件未变，仍处于冷却，应保留同一根因
+	cooling, err := store.view()
+	if err == nil {
+		t.Fatal("冷却期内 view 应继续报错")
+	}
+	if len(cooling) != 0 {
+		t.Fatalf("冷却期内不应返回旧快照，实际 %d 条", len(cooling))
+	}
+	if coolingMsg := err.Error(); coolingMsg != firstMsg {
+		t.Errorf("冷却期错误应保留原始根因\n首次: %q\n冷却: %q", firstMsg, coolingMsg)
+	}
+}
+
 // 失败已发布时探测节流必须让位：否则"指纹变化立即重试"失效，
 // 已修好的名单会最长延迟一个节流窗口才恢复。
 func TestStoreRecoveryBypassesProbeThrottle(t *testing.T) {

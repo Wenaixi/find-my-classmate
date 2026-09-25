@@ -46,6 +46,7 @@ type studentStore struct {
 	lastProbe      atomic.Int64         // 上次文件指纹探测的 Unix 毫秒（节流基准）
 	lastFailStamps map[string]fileStamp // 失败时的文件指纹：文件未变则冷却，变化则立即重试
 	lastFailAt     atomic.Int64         // 上次重载失败的 Unix 毫秒（与 lastProbe 共用同一时钟）
+	lastFailErr    error                // 上次失败的原始错误：冷却期对外保留根因，不退化为无信息量的哨兵
 	now            func() time.Time     // 可注入时钟，供测试确定性推进探测与冷却（默认 time.Now）
 }
 
@@ -162,7 +163,7 @@ func (s *studentStore) reload(force bool) error {
 	}
 	stamps, err := dataStamps(s.dir)
 	if err != nil {
-		s.recordFailure(nil)
+		s.recordFailure(nil, err)
 		return err
 	}
 	s.mu.RLock()
@@ -186,18 +187,21 @@ func (s *studentStore) reload(force bool) error {
 
 	// 失败冷却：数据损坏期间每次请求都重试解析坏文件会放大 IO 与日志。
 	// 仅当文件指纹与失败时相同（坏文件未变）才冷却；文件被修复（指纹变化）则立即重试。
+	// 冷却期返回原始失败原因而非裸哨兵：运维在 /api/search 日志中仍能区分
+	// 解析失败、标题不一致、班级格式异常等具体成因。
 	if s.cooling(stamps) {
-		return errDataUnavailable
+		return s.coolingError()
 	}
 	items, err := loadStudents(s.dir)
 	if err != nil {
-		s.recordFailure(stamps)
+		s.recordFailure(stamps, err)
 		return err
 	}
 	s.mu.Lock()
 	s.items = items
 	s.stamps = stamps
 	s.lastFailStamps = nil
+	s.lastFailErr = nil
 	s.lastFailAt.Store(0)
 	s.mu.Unlock()
 	if !force {
@@ -218,14 +222,28 @@ func (s *studentStore) cooling(stamps map[string]fileStamp) bool {
 	return s.now().UnixMilli()-last < reloadCooldown.Milliseconds()
 }
 
-// recordFailure 发布失败状态：记录失败指纹与失败时间，使后续读取在冷却窗口内
-// 继续观察到不可用，而不是把保留在内存中的旧快照误报为当前健康。
+// recordFailure 发布失败状态：记录失败指纹、失败时间与原始错误，使后续读取在冷却
+// 窗口内继续观察到不可用，而不是把保留在内存中的旧快照误报为当前健康。
 // dataStamps 自身失败时 stamps 为 nil，此时只更新时间基准（缺失目录同样需要冷却）。
-func (s *studentStore) recordFailure(stamps map[string]fileStamp) {
+func (s *studentStore) recordFailure(stamps map[string]fileStamp, cause error) {
 	s.mu.Lock()
 	s.lastFailStamps = stamps
+	s.lastFailErr = cause
 	s.lastFailAt.Store(s.now().UnixMilli())
 	s.mu.Unlock()
+}
+
+// coolingError 返回冷却期内应对外暴露的错误：保留上次失败的原始原因，
+// 便于运维从 /api/search 的错误日志直接判断名单损坏的具体成因。
+// 没有记录根因时退回共享哨兵，避免每次读取分配新错误对象。
+func (s *studentStore) coolingError() error {
+	s.mu.RLock()
+	cause := s.lastFailErr
+	s.mu.RUnlock()
+	if cause == nil {
+		return errDataUnavailable
+	}
+	return cause
 }
 
 func dataStamps(dir string) (map[string]fileStamp, error) {

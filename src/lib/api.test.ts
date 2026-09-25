@@ -77,8 +77,19 @@ describe("searchApi error classification", () => {
     await expectInvalidResponse(searchApi("张三"));
   });
 
-  it("rejects invalid-response when grade is outside the known set", async () => {
-    mockFetch(200, { items: [{ name: "张三", grade: "初四", class: "1班" }], total: 1, limit: 10, offset: 0, hasMore: false });
+  // 年段取值域由后端 knownGrades 唯一保证，前端不复制一份会漂移的清单：
+  // 后端扩展年段时前端必须自动跟随，因此这里接受任意非空年段字符串。
+  it("accepts a grade outside the currently known set", async () => {
+    mockFetch(200, { items: [{ name: "张三", grade: "高四", class: "1班" }], total: 1, limit: 10, offset: 0, hasMore: false });
+    const data = await searchApi("张三");
+    expect(data.items[0].grade).toBe("高四");
+  });
+
+  it("rejects invalid-response when grade is missing or empty", async () => {
+    mockFetch(200, { items: [{ name: "张三", class: "1班" }], total: 1, limit: 10, offset: 0, hasMore: false });
+    await expectInvalidResponse(searchApi("张三"));
+
+    mockFetch(200, { items: [{ name: "张三", grade: "", class: "1班" }], total: 1, limit: 10, offset: 0, hasMore: false });
     await expectInvalidResponse(searchApi("张三"));
   });
 
