@@ -83,6 +83,13 @@ function classNumber(value: string): number {
   return chineseNumberToInt(digits);
 }
 
+// 判定查询是否含姓名条件（任一 token 解析后成为姓名匹配词）。
+// 供 App 决定"纯年段/班级查询"提示；替代原先 App.tsx 内嵌的 hasNameCondition 正则，
+// 消除查询语义的第三份实现（query.ts / search.go / App.tsx 三拷贝 → 两份 + 消费方）。
+export function hasNameCondition(raw: string): boolean {
+  return parseQuery(raw).nameTokens.length > 0;
+}
+
 function nameScore(nameKey: string, token: string): number {
   if (nameKey === token) return 0;
   if (nameKey.startsWith(token)) return 1;

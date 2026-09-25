@@ -5,6 +5,7 @@ import type { SearchState, Student } from "./types";
 import ErrorBoundary from "./components/ErrorBoundary";
 import siteConfig from "./site.config";
 import { MAX_QUERY_LENGTH, PAGE_SIZE } from "./config";
+import { hasNameCondition } from "./lib/query";
 
 const ResultList = lazy(() => import("./components/ResultList"));
 const StatusOrb = lazy(() => import("./components/StatusOrb"));
@@ -109,9 +110,9 @@ export function App() {
       const next = getState(response.items, submitted, response.total);
       setState(next);
       // F36：纯年段/班级查询（无姓名条件）时提示将返回整个年级/班级
-      const hasNameCondition = /[一-龥a-zA-Z]/.test(submitted.replace(/[，,、+\s高一高二高三高1高2高3\d班]+/g, ""));
+      const hasName = hasNameCondition(submitted);
       if (next === "duplicate" && response.total >= PAGE_SIZE) {
-        const prefix = hasNameCondition ? COPY[next] : (response.total >= 100 ? "已匹配整个年段/班级" : COPY[next]);
+        const prefix = hasName ? COPY[next] : (response.total >= 100 ? "已匹配整个年段/班级" : COPY[next]);
         setStatusText(prefix + "，先显示前 " + PAGE_SIZE + " 条");
       } else {
         setStatusText(COPY[next]);
