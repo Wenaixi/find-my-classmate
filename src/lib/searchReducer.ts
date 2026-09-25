@@ -1,7 +1,7 @@
 import type { SearchState, Student } from "../types";
 import { ApiError } from "./api";
 import { hasNameCondition } from "./query";
-import { PAGE_SIZE } from "../config";
+import { MAX_QUERY_LENGTH, PAGE_SIZE } from "../config";
 
 // 搜索区状态机的唯一事实来源（原 App.tsx 内联的 9 个 state 集合）。
 export interface SearchControllerState {
@@ -62,7 +62,7 @@ export function getState(items: Student[], query: string, total = items.length):
 // 其余 HTTP 状态（如 502 等）与非法响应统一归为服务问题（COPY.error）。
 export function errorMessage(cause: unknown): string {
   if (cause instanceof ApiError) {
-    if (cause.status === 400) return "查询条件有误，请精简到 80 字以内后重试";
+    if (cause.status === 400) return `查询条件有误，请精简到 ${MAX_QUERY_LENGTH} 字以内后重试`;
     if (cause.status === 429) return "请求过于频繁，请稍候再试";
     if (cause.status === 500) return "名单数据暂时不可用，请稍后重试";
     if (cause.code === "network") return "网络连接异常，请检查后重试";
