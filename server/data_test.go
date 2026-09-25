@@ -97,21 +97,67 @@ func TestStoreHotReload(t *testing.T) {
 	}
 }
 
-func TestStoreReloadErrorKeepsOldDataAndRecovers(t *testing.T) {
+// 重载失败后 fail-closed：失败一经发布，内存中保留的旧快照不再对外服务。
+// 修复后指纹变化必须立即重试并恢复，不能被探测节流或失败冷却挡住。
+func TestStoreReloadFailureIsFailClosedThenRecovers(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFiles(t, dir)
 	store, err := newStudentStore(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
+	clock := &fakeClock{current: time.Now()}
+	store.now = clock.Now
+
+	// 破坏名单：应发布失败并进入不可用
 	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte("{broken"), 0o644)
+	clock.advance(2 * time.Second)
 	if _, err := store.view(); err == nil {
 		t.Fatal("损坏文件 view 应报错")
 	}
+
+	// 不推进时钟：仍在探测节流窗口内，reload 会跳过探测并返回 nil。
+	// 此时只有 fail-closed 检查能阻止旧快照对外服务——若该检查缺失，本断言必须失败。
+	if got, err := store.view(); err == nil || len(got) != 0 {
+		t.Fatalf("探测窗口内失败后仍应不可用，不得返回旧快照，实际 err=%v len=%d", err, len(got))
+	}
+
+	// 修复文件：指纹变化后必须立即重试并恢复，无需等待冷却或探测窗口
 	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"王皓轩"},{"姓名":"张三"}]}}`), 0o644)
 	got, err := store.view()
 	if err != nil || len(got) != 3 {
-		t.Fatalf("修复后应恢复 3 条，err=%v len=%d", err, len(got))
+		t.Fatalf("修复后应立即恢复 3 条，err=%v len=%d", err, len(got))
+	}
+
+	// 恢复后再推进一个探测窗口，数据仍应稳定可用
+	clock.advance(2 * time.Second)
+	if got, err := store.view(); err != nil || len(got) != 3 {
+		t.Fatalf("恢复后应持续可用 3 条，err=%v len=%d", err, len(got))
+	}
+}
+
+// 失败已发布时探测节流必须让位：否则"指纹变化立即重试"失效，
+// 已修好的名单会最长延迟一个节流窗口才恢复。
+func TestStoreRecoveryBypassesProbeThrottle(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFiles(t, dir)
+	store, err := newStudentStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock := &fakeClock{current: time.Now()}
+	store.now = clock.Now
+
+	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte("{broken"), 0o644)
+	clock.advance(2 * time.Second)
+	if _, err := store.view(); err == nil {
+		t.Fatal("损坏文件 view 应报错")
+	}
+
+	// 未推进时钟：仍在探测节流窗口内。修复后必须仍能立即恢复。
+	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"王皓轩"},{"姓名":"张三"}]}}`), 0o644)
+	if got, err := store.view(); err != nil || len(got) != 3 {
+		t.Fatalf("探测窗口内修复也应立即恢复 3 条，err=%v len=%d", err, len(got))
 	}
 }
 
