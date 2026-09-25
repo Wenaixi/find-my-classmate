@@ -29,25 +29,53 @@ func TestStatusRecorderWriteDefaults200(t *testing.T) {
 	}
 }
 
-// F30：statusRecorder 应实现 http.Flusher
-func TestStatusRecorderImplementsFlusher(t *testing.T) {
+// F30：handler 调用 Flush 时，透传必须真实到达下游 writer，且状态落账 200。
+// 这取代"仅断言 statusRecorder 满足 http.Flusher"的形状测试：
+// 形状断言在 Flush 实现体被改坏时不会失败，透传断言会。
+func TestStatusRecorderFlushPassesThrough(t *testing.T) {
 	rec := httptest.NewRecorder()
-	sr := &statusRecorder{ResponseWriter: rec, status: http.StatusOK}
-	if _, ok := any(sr).(http.Flusher); !ok {
-		t.Fatal("statusRecorder 应实现 http.Flusher")
+	handler := accessLog(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if _, err := w.Write([]byte("chunk")); err != nil {
+			t.Errorf("写入失败: %v", err)
+		}
+		f, ok := w.(http.Flusher)
+		if !ok {
+			t.Fatal("accessLog 包装后应仍满足 http.Flusher")
+		}
+		f.Flush()
+	}))
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/flush", nil))
+
+	if rec.Body.String() != "chunk" {
+		t.Fatalf("Flush 前写入的正文应可读，实际 %q", rec.Body.String())
+	}
+	if !rec.Flushed {
+		t.Error("Flush 应真实透传到下游 writer")
 	}
 }
 
-// F30：statusRecorder 应实现 io.ReaderFrom
-func TestStatusRecorderImplementsReaderFrom(t *testing.T) {
+// F30：handler 通过 ReadFrom 搬运正文时，字节应完整到达下游且状态落账 200。
+// ReadFrom 存在是为了保住 FileServer 的 sendfile 路径，真实字节搬运才是它的职责。
+func TestStatusRecorderReadFromTransportsBytes(t *testing.T) {
+	payload := "0123456789"
 	rec := httptest.NewRecorder()
-	sr := &statusRecorder{ResponseWriter: rec, status: http.StatusOK}
-	if _, ok := any(sr).(io.ReaderFrom); !ok {
-		t.Fatal("statusRecorder 应实现 io.ReaderFrom")
-	}
-	n, err := sr.ReadFrom(strings.NewReader(""))
-	if err != nil || n != 0 {
-		t.Fatalf("ReadFrom 空 reader 应返回 0,nil，实际 %d,%v", n, err)
+	handler := accessLog(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		rf, ok := w.(io.ReaderFrom)
+		if !ok {
+			t.Fatal("accessLog 包装后应仍满足 io.ReaderFrom")
+		}
+		n, err := rf.ReadFrom(strings.NewReader(payload))
+		if err != nil {
+			t.Errorf("ReadFrom 返回错误: %v", err)
+		}
+		if n != int64(len(payload)) {
+			t.Errorf("ReadFrom 搬运字节数 = %d，期望 %d", n, len(payload))
+		}
+	}))
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/readfrom", nil))
+
+	if rec.Body.String() != payload {
+		t.Fatalf("ReadFrom 正文应完整透传，实际 %q", rec.Body.String())
 	}
 }
 
