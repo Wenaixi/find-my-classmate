@@ -2,6 +2,21 @@
 
 本文件记录 FindMyClassmate 的版本变更。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [v0.7.0] - 2026-09-25
+
+### 架构深化（五候选一次性落地）
+
+- **删除生产死代码**：移除唯一调用方为测试的 `snapshot()` 与纯死代码 `probeThrottledAt()`；测试改走零拷贝 `view()`，热重载/并发/错误恢复断言等价，只读视图不变量由 `TestStoreViewNoCopy` 接管。
+- **收敛跨端契约常量**：后端新增 `server/config.go`（端口、分页默认/上限、查询长度上限、限流参数、缓存头）、前端新增 `src/config.ts`（`PAGE_SIZE`/`MAX_QUERY_LENGTH`/`REQUEST_TIMEOUT_MS`），双端各一份、改动须同步两侧。
+- **统一客户端 IP 解析**：新增 `server/ip.go` 作为 IP 解析唯一入口，日志脱敏与限流共享同一 host 视图；`maskedIP` 对 IPv6 从 `unknown` 改善为保留前两组脱敏，并用归一化 IP 做分割（IPv4-mapped 不再混入映射前缀、畸形输入保守降级 `unknown`，绝不泄露完整地址）。
+- **查询语义第三拷贝归零**：`App.tsx` 内嵌的 `hasNameCondition` 正则移入 `query.ts` 复用 `parseQuery`，F36 纯年段/班级提示改由解析结果驱动——查询语义只剩 `query.ts` 与 `search.go` 两份镜像实现。
+- **拆解 App 状态机与竞态编排**：新增 `src/lib/searchReducer.ts`（纯 reducer，11 个 action 覆盖状态派生/错误文案/F36 提示/IME 组合）与 `src/lib/searchSession.ts`（竞态编排：requestId 递增 + 真实 abort 传导 + `invalidate` 使 clear/onChange/IME 失效在途请求）；`App.tsx` 从 204 行降至 123 行，错误文案补齐 code 维度。逐 Task 审查发现并修复 clear/输入修改后在途响应被应用的竞态回归。
+
+### 测试
+
+- 前端测试从 25 增至 **52 用例**（query 18 / api 13 / searchReducer 11 / searchSession 10），覆盖状态机转换、竞态丢弃、真实 abort 传导、错误分类；零新依赖、不引入 jsdom。
+- 后端新增 IP 解析边界测试（IPv4-mapped 归一、畸形输入降级）。
+
 ## [v0.6.0] - 2026-09-24
 
 ### 性能优化
