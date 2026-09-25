@@ -1,76 +1,28 @@
-import { FormEvent, Suspense, lazy, useEffect, useRef, useState } from "react";
+import { FormEvent, Suspense, lazy, useEffect, useReducer, useRef, useState } from "react";
 import { BorderBeam } from "border-beam";
-import { ApiError, fetchVersion, searchApi } from "./lib/api";
-import type { SearchState, Student } from "./types";
+import { fetchVersion, searchApi } from "./lib/api";
+import { initialState, searchReducer, getState, statusTextFor, errorMessage } from "./lib/searchReducer";
+import { createSearchSession } from "./lib/searchSession";
+import { hasNameCondition } from "./lib/query";
 import ErrorBoundary from "./components/ErrorBoundary";
 import siteConfig from "./site.config";
 import { MAX_QUERY_LENGTH, PAGE_SIZE } from "./config";
-import { hasNameCondition } from "./lib/query";
 
 const ResultList = lazy(() => import("./components/ResultList"));
 const StatusOrb = lazy(() => import("./components/StatusOrb"));
 
-const COPY: Record<SearchState, string> = {
-  idle: "输入姓名、班级或年段后开始查询",
-  editing: "支持姓名、班级和年段组合查询",
-  loading: "正在检索完整名单",
-  success: "已定位 1 位同学",
-  duplicate: "已定位多位同学",
-  empty: "没有找到匹配记录",
-  error: "查询没有完成，请稍后重试",
-};
-
-function getState(items: Student[], query: string, total = items.length): SearchState {
-  if (!query.trim()) return "idle";
-  if (items.length === 0 && total === 0) return "empty";
-  return total === 1 ? "success" : "duplicate";
-}
-
-// F2：按 ApiError 分类给出准确文案（400=输入问题、429=限流、其他=服务问题）
-function errorMessage(cause: unknown): string {
-  if (cause instanceof ApiError) {
-    if (cause.status === 400) return "查询条件有误，请精简到 80 字以内后重试";
-    if (cause.status === 429) return "请求过于频繁，请稍候再试";
-    if (cause.status === 500) return "名单数据暂时不可用，请稍后重试";
-    if (cause.code === "network") return "网络连接异常，请检查后重试";
-  }
-  return COPY.error;
-}
-
 export function App() {
-  const [query, setQuery] = useState("");
-  const [items, setItems] = useState<Student[]>([]);
-  const [total, setTotal] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
-  const [state, setState] = useState<SearchState>("idle");
-  const [statusText, setStatusText] = useState(COPY.idle);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [loadMoreError, setLoadMoreError] = useState(false);
-  const [isComposing, setIsComposing] = useState(false);
+  const [controller, dispatch] = useReducer(searchReducer, initialState);
+  const { query, items, total, hasMore, state, statusText, loadingMore, loadMoreError, isComposing } = controller;
   const [version, setVersion] = useState("");
-  const requestRef = useRef(0);
-  const abortRef = useRef<AbortController | null>(null);
+  const session = useRef<ReturnType<typeof createSearchSession>>();
+  if (!session.current) session.current = createSearchSession({ search: searchApi });
   const resultsRef = useRef<HTMLElement | null>(null);
   const searchWrapRef = useRef<HTMLFormElement | null>(null);
   const shouldScrollRef = useRef(false);
 
-  useEffect(() => {
-    requestRef.current += 1;
-    abortRef.current?.abort();
-    setLoadingMore(false);
-    if (!query.trim()) {
-      setItems([]);
-      setTotal(0);
-      setHasMore(false);
-      setState("idle");
-      setStatusText(COPY.idle);
-      return;
-    }
-    // F5：IME 组合期间不切换到 editing，避免每击键打扰读屏与文案抖动
-    if (!isComposing) setState("editing");
-  }, [query, isComposing]);
-
-  useEffect(() => () => abortRef.current?.abort(), []);
+  // 卸载时中止在途请求（请求竞态编排归属 searchSession）
+  useEffect(() => () => session.current?.abortAll(), []);
 
   // 页脚版本号：读 /api/health（ldflags 注入的运行时版本），失败静默隐藏。
   useEffect(() => {
@@ -90,73 +42,39 @@ export function App() {
     event?.preventDefault();
     const submitted = query.trim();
     if (!submitted || state === "loading" || loadingMore) return;
-    const requestId = ++requestRef.current;
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
+    dispatch({ type: "submit-start" });
     shouldScrollRef.current = true;
-    setState("loading");
-    setStatusText(COPY.loading);
-    setItems([]);
-    setTotal(0);
-    setHasMore(false);
-    setLoadMoreError(false);
+    const signal = new AbortController().signal;
     try {
-      const response = await searchApi(submitted, PAGE_SIZE, 0, controller.signal);
-      if (controller.signal.aborted || requestId !== requestRef.current) return;
-      setItems(response.items);
-      setTotal(response.total);
-      setHasMore(response.hasMore);
+      const response = await session.current!.submit(submitted, PAGE_SIZE, signal);
+      if (!response) return; // 过期响应（已被新请求取代或中止），丢弃
       const next = getState(response.items, submitted, response.total);
-      setState(next);
-      // F36：纯年段/班级查询（无姓名条件）时提示将返回整个年级/班级
-      const hasName = hasNameCondition(submitted);
-      if (next === "duplicate" && response.total >= PAGE_SIZE) {
-        const prefix = hasName ? COPY[next] : (response.total >= 100 ? "已匹配整个年段/班级" : COPY[next]);
-        setStatusText(prefix + "，先显示前 " + PAGE_SIZE + " 条");
-      } else {
-        setStatusText(COPY[next]);
-      }
+      // F36：纯年段/班级查询（无姓名条件）的提示分支收敛在 statusTextFor
+      dispatch({ type: "submit-success", items: response.items, total: response.total, hasMore: response.hasMore, state: next, statusText: statusTextFor(next, response.total, hasNameCondition(submitted)) });
     } catch (cause) {
-      if (controller.signal.aborted || requestId !== requestRef.current) return;
-      setItems([]);
-      setState("error");
-      setStatusText(errorMessage(cause));
+      dispatch({ type: "submit-error", statusText: errorMessage(cause) });
     }
   }
 
   async function loadMore() {
     const submitted = query.trim();
     if (!submitted || !hasMore || loadingMore || state === "loading") return;
-    const requestId = requestRef.current;
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setLoadingMore(true);
-    setLoadMoreError(false);
+    dispatch({ type: "load-more-start" });
+    const signal = new AbortController().signal;
     try {
-      const response = await searchApi(submitted, PAGE_SIZE, items.length, controller.signal);
-      if (requestId !== requestRef.current) return;
-      setItems((current) => [...current, ...response.items]);
-      setTotal(response.total);
-      setHasMore(response.hasMore);
+      const response = await session.current!.loadMore(submitted, PAGE_SIZE, items.length, signal);
+      if (!response) return;
+      dispatch({ type: "load-more-append", items: response.items, total: response.total, hasMore: response.hasMore });
     } catch (cause) {
-      if (!controller.signal.aborted && requestId === requestRef.current) setLoadMoreError(true);
+      dispatch({ type: "load-more-error" });
     } finally {
-      if (requestId === requestRef.current) setLoadingMore(false);
+      dispatch({ type: "load-more-settle" });
     }
   }
 
   function clear() {
-    requestRef.current += 1;
-    abortRef.current?.abort();
-    setQuery("");
-    setItems([]);
-    setTotal(0);
-    setHasMore(false);
-    setLoadMoreError(false);
-    setLoadingMore(false);
-    setState("idle");
-    setStatusText(COPY.idle);
+    session.current!.abortAll();
+    dispatch({ type: "clear" });
   }
 
   function renderResultBody() {
@@ -186,7 +104,7 @@ export function App() {
             <label className="field-label" data-od-id="search-label" htmlFor="query">查询条件 <span>NAME / CLASS / GRADE</span></label>
             <BorderBeam size="md" colorVariant="colorful" theme="dark" borderRadius={999} duration={2.2} strength={1} brightness={2} saturation={2.2} hueRange={160}>
               <div className="search-track" data-od-id="search-track">
-                <input className="search-input" id="query" type="text" autoComplete="off" spellCheck={false} maxLength={MAX_QUERY_LENGTH} value={query} onChange={(event) => setQuery(event.target.value)} onFocus={() => searchWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })} onCompositionStart={() => setIsComposing(true)} onCompositionEnd={() => setIsComposing(false)} onKeyDown={(event) => { if (event.key === "Escape") clear(); if (event.key === "Enter" && !event.nativeEvent.isComposing && !isComposing) void submit(event); }} placeholder="输入姓名 / 班级 / 年段" aria-describedby="search-hint" />
+                <input className="search-input" id="query" type="text" autoComplete="off" spellCheck={false} maxLength={MAX_QUERY_LENGTH} value={query} onChange={(event) => dispatch({ type: "input-change", query: event.target.value })} onFocus={() => searchWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })} onCompositionStart={() => dispatch({ type: "composition-start" })} onCompositionEnd={() => dispatch({ type: "composition-end" })} onKeyDown={(event) => { if (event.key === "Escape") clear(); if (event.key === "Enter" && !event.nativeEvent.isComposing && !isComposing) void submit(event); }} placeholder="输入姓名 / 班级 / 年段" aria-describedby="search-hint" />
                 {query.length > 0 && <button className="search-clear" data-od-id="search-clear" type="button" onClick={clear} aria-label="清空输入"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></button>}
                 <button className="search-send" data-od-id="search-cta" type="submit" disabled={state === "loading"} aria-label={state === "loading" ? "正在检索" : "开始搜索"}>
                   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></svg>
