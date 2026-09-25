@@ -72,19 +72,23 @@
 跨端契约的数值常量无法跨语言共享，后端 `server/config.go` 与前端 `src/config.ts` 各持一份，改动必须两侧同步：
 
 - 查询串 rune 上限：80（maxQueryRunes / MAX_QUERY_LENGTH，App.tsx 输入框 maxLength 同值）
-- 分页：limit 默认 10、上限 50（defaultLimit / maxLimit / PAGE_SIZE）
+- 分页：limit 默认 10、上限 50（defaultLimit / maxLimit / PAGE_SIZE / MAX_LIMIT）
 - 前端请求超时 10s（REQUEST_TIMEOUT_MS，仅前端消费）
 - 后端端口 3078、限流（突发 60、每秒回补 1）、静态资源 immutable 缓存头（仅后端消费）
+
+**跨语言对拍**：`server/contract_constants_test.go` 读取前端 `src/config.ts` 的三个常量
+（PAGE_SIZE / MAX_QUERY_LENGTH / MAX_LIMIT）与后端 config.go 断言一致，任一侧漂移立即失败——
+与 query-contract.json 对解析契约的机制相同，同步义务不再只靠注释。
 
 E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章节声明；本条只约束"同一数值两份定义必须一致"。
 
 ## 5. 请求生命周期
 
 
-中间件链（由外到内）：`rateLimit → accessLog → securityHeaders → mux`，顺序由 `newHandlerChain` 单点定义。两条跨模块政策：
+中间件链（由外到内）：`securityHeaders → rateLimit → accessLog → mux`，顺序由 `newHandlerChain` 单点定义。两条跨模块政策：
 
 - **429 不写访问日志**：限流位于 accessLog 之外，被拒请求不进入日志层，避免攻击流量放大日志磁盘写入。
-- **429 仍带安全响应头**：安全头是全站响应契约，`writeRateLimited` 在写出拒绝响应前调用 `setSecurityHeaders`，使被拒请求不成为头部例外。安全头定义只有 `setSecurityHeaders` 一处。
+- **429 仍带安全响应头**：安全头置于链最外，全站响应头契约对包括限流拒绝在内的所有响应成立；`writeRateLimited` 无需手工重放（2026-09-26 起，原实现在拒绝路径内重复调用 `setSecurityHeaders` 已删除）。安全头定义只有 `setSecurityHeaders` 一处。
 
 ```
 浏览器输入 → 前端 parseQuery（即时校验/提示）
@@ -138,11 +142,12 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 | 模块 | 职责 | 依赖 |
 | --- | --- | --- |
 | src/App.tsx | 页面组装 + 装配 searchReducer/searchSession | 全部 |
-| src/config.ts | 前端契约常量（PAGE_SIZE/MAX_QUERY_LENGTH/REQUEST_TIMEOUT_MS） | 无 |
-| src/lib/api.ts | 网络适配与响应结构校验 | types, config |
-| src/lib/query.ts | 查询解释（解析 token、hasNameCondition、姓名归一化），不含匹配/排序/分页 | types |
+| src/config.ts | 前端契约常量（PAGE_SIZE/MAX_QUERY_LENGTH/MAX_LIMIT/REQUEST_TIMEOUT_MS） | 无 |
+| src/lib/api.ts | 网络适配与响应结构校验（decodeItem 只认 canonical class 单字段） | types, config |
+| src/lib/query.ts | 查询解释（解析 token、hasNameCondition、姓名归一化，空白语义与 Go 对齐含 NEL），不含匹配/排序/分页 | types |
 | src/lib/searchReducer.ts | 搜索状态机纯 reducer（状态派生/错误文案/F36 提示） | types, api, config |
-| src/lib/searchSession.ts | 请求竞态编排（requestId + abort） | types |
+| src/lib/searchSession.ts | 请求竞态编排（requestId + abort），submit/loadMore 返回 SearchResult 判别联合 | types |
+| src/lib/resultSummary.ts | 结果摘要单点派生（进度/计数/剩余文案） | 无 |
 | src/site.config.ts | 站点展示文案（数据来源/运营团队/数据处理方） | 无 |
 | src/types.ts | 领域类型与状态枚举 | 无 |
 
@@ -157,13 +162,15 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 
 | 模块 | 职责 |
 | --- | --- |
-| main.go | 启动自举、日志、中间件（accessLog/securityHeaders/statusRecorder）、装配（newHandlerChain/buildServer） |
-| api.go | API 路由与 HTTP 翻译（buildMux/searchHandler）：参数取值、错误码映射、JSON 写出；不含查询语义 |
-| config.go | 后端契约常量（端口/分页/上限/限流/缓存头） |
-| data.go | 数据加载、规范化、去重、热重载（view 唯一只读入口） |
+| main.go | 启动自举、日志、中间件（accessLog/securityHeaders/statusRecorder）、装配（newHandlerChain/buildServer）；buildMux 注入版本号 |
+| api.go | API 路由与 HTTP 翻译（buildMux(store, version)/searchHandler）：参数取值、错误码映射、JSON 写出；不含查询语义 |
+| errors.go | API 错误码常量表（not_found/method_not_allowed/invalid_limit/invalid_offset/invalid_query/data_unavailable/rate_limited） |
+| config.go | 后端契约常量（端口/分页/上限/限流/缓存头），与 src/config.ts 对拍 |
+| data.go | 数据加载、规范化、去重、热重载（view 唯一只读入口 + Size 只读计数） |
+| classparse.go | 班级解析基础设施（班级名 → 班号），查询与数据加载共享 |
 | ip.go | 客户端 IP 解析唯一入口（clientIP/maskedIP） |
 | search.go | 查询执行（解析/匹配/排序/分页），运行时搜索的唯一实现；分页前置约定由其自守 |
-| ratelimit.go | 令牌桶限流（IP 提取统一走 ip.go 的 clientIP） |
+| ratelimit.go | 令牌桶限流（IP 提取统一走 ip.go 的 clientIP），429 响应由外层 securityHeaders 统一带头 |
 | web.go | 前端静态资源嵌入与托管（缓存按来源隔离，immutable 只给存在资源，raw/gzip/304 协商头一致） |
 
 数据热重载策略：文件指纹探测带 1 秒节流（原子 CAS 保证同窗口单请求探测权）；变化则互斥重载，并发用读写锁保护（view() 为唯一数据访问入口）；重载失败有 2 秒冷却（指纹驱动）且旧数据不对外服务（一致性优先于可用性的设计决策，F59）。
