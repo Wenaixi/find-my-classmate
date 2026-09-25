@@ -35,6 +35,15 @@ describe("query contract", () => {
   it("normalizes internal whitespace and case", () => {
     expect(normalizeName(" eXample  student ")).toBe("EXAMPLESTUDENT");
   });
+  // 与 Go 端 strings.Fields 对齐：U+0085（NEL）在 Go 是分隔符（unicode.IsSpace），
+  // JS \s 不覆盖。tokenizer 补上 NEL 后，NEL 分隔的两个汉字 token 各自走分类：
+  // "张" 是姓名，"三" 是汉字数字 → 班级条件。两端行为一致（corpus 锁定）。
+  it("splits on NEL (U+0085) and classifies each token", () => {
+    const parsed = parseQuery("张\u0085三");
+    expect(parsed.tokens).toEqual(["张", "三"]);
+    expect(parsed.nameTokens).toEqual(["张"]);
+    expect(parsed.classNumber).toBe(3);
+  });
 });
 
 // Step D：查询语义第三拷贝归零——App 的"纯年段/班级查询"提示必须与解析结果一致，

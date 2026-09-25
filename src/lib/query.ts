@@ -6,8 +6,10 @@ const classToken = /^(\d+|[一二三四五六七八九十]+)班?$/;
 // F71：年级+班级连写（"高二三班" / "高二1班" / "高一十八班"）→ 精确解析为年段+班级
 const gradeClassToken = /^(高一|高二|高三|高1|高2|高3)(\d+|[一二三四五六七八九十]+)班?$/;
 
+// 与 Go 端 unicode.IsSpace 对齐（含 U+0085 NEL）：JS \s 不覆盖 NEL，需显式补上。
+// 姓名匹配键必须两端删除同一集合的空白，否则 corpus 盲区会漂移（核实见 docs/query-contract.json）。
 export function normalizeName(value: string): string {
-  return value.replace(/[\s\u3000\t]/g, "").toLocaleUpperCase();
+  return value.replace(/[\s\u3000\t\u0085]/g, "").toLocaleUpperCase();
 }
 
 // parseGrade 与 Go 端 search.go 语义一致：子串匹配（已是班级连写的 token 由 gradeClassToken 优先精确解析，F71）。
@@ -34,7 +36,9 @@ function chineseNumberToInt(value: string): number {
 }
 
 export function parseQuery(raw: string): ParsedQuery {
-  const tokens = raw.trim().replace(separators, " ").split(/\s+/).filter(Boolean);
+  // 与 Go 端 strings.Fields 对齐：Fields 按 unicode.IsSpace 切分，含 U+0085（NEL）。
+  // JS \s 不含 NEL，此处显式补上，避免两端 token 集合漂移（核实见 docs/query-contract.json）。
+  const tokens = raw.trim().replace(separators, " ").split(/[\s\u0085]+/).filter(Boolean);
   const parsed: ParsedQuery = { tokens, nameTokens: [] };
 
   for (const token of tokens) {
