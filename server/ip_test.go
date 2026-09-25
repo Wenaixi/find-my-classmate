@@ -31,3 +31,32 @@ func TestMaskedIPConsumesClientIP(t *testing.T) {
 		}
 	}
 }
+
+// PR 审查发现：IPv4-mapped 地址（::ffff:1.2.3.4，后端 IPv6-mapped RemoteAddr 可能出现）
+// 旧实现用原始 host 串做 split，把"::ffff:"映射前缀混进脱敏串（::ffff:1.2.*.*）。
+// 修复：ParseIP 成功后一律用 ip.String() 归一再脱敏——映射地址归一为纯 IPv4。
+func TestMaskedIPNormalizesIPv4Mapped(t *testing.T) {
+	cases := []struct{ remote, want string }{
+		{"::ffff:192.168.1.1", "192.168.*.*"},
+		{"[::ffff:192.168.1.1]:8080", "192.168.*.*"},
+	}
+	for _, c := range cases {
+		if got := maskedIP(c.remote); got != c.want {
+			t.Errorf("maskedIP(%q) = %q，期望 %q", c.remote, got, c.want)
+		}
+	}
+}
+
+// 畸形输入（多冒号含端口字段、ParseIP 失败）：脱敏必须保守降级为 unknown，
+// 绝不把任何疑似端口/字段前缀泄露进日志。
+func TestMaskedIPMalformedFallback(t *testing.T) {
+	cases := []struct{ remote, want string }{
+		{"1.2.3.4:5678:999", "unknown"},
+		{"999.888.777.666", "unknown"},
+	}
+	for _, c := range cases {
+		if got := maskedIP(c.remote); got != c.want {
+			t.Errorf("maskedIP(%q) = %q，期望 %q", c.remote, got, c.want)
+		}
+	}
+}

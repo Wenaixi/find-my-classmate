@@ -32,14 +32,21 @@ func clientIP(remote string) string {
 
 // maskedIP 脱敏客户端 IP 用于访问日志（隐私红线：只保留前缀，不记录完整地址）。
 // IPv4 保留前两段；IPv6 保留前两组（行为改善，原实现将 IPv6 判为 unknown）。
+// 统一用 net.ParseIP 归一化后的 ip.String() 做分割：
+//   - IPv4-mapped（::ffff:1.2.3.4）经 clientIP 归一已是纯 IPv4，不会把映射前缀混进脱敏串
+//   - 畸形输入（ParseIP 失败，如 "1.2.3.4:5678:999"）保守降级为 unknown，绝不泄露疑似端口/字段前缀
 func maskedIP(remote string) string {
 	host := clientIP(remote)
-	if ip := net.ParseIP(host); ip != nil && ip.To4() != nil {
-		parts := strings.Split(host, ".")
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return "unknown"
+	}
+	if v4 := ip.To4(); v4 != nil {
+		parts := strings.Split(ip.String(), ".")
 		return parts[0] + "." + parts[1] + ".*.*"
 	}
-	// IPv6（或无法解析）：保留前两组 + ::*
-	groups := strings.Split(host, ":")
+	// IPv6：保留前两组 + :::*（::1 回环首位组为空，保守降级 unknown，与旧行为一致）
+	groups := strings.Split(ip.String(), ":")
 	if len(groups) >= 2 && groups[0] != "" {
 		return groups[0] + ":" + groups[1] + ":::*"
 	}
