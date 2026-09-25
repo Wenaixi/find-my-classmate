@@ -27,7 +27,7 @@ func TestReloadLogRespectsLogLevel(t *testing.T) {
 	defer func() { logLevel = oldLevel }()
 
 	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte("{\"标题\":\"福清一中2025级高一编班名单\",\"名单\":{\"1班\":[{\"姓名\":\"王皓轩\"},{\"姓名\":\"张三\"},{\"姓名\":\"新同学\"}]}}"), 0o644)
-	_, _ = store.snapshot()
+	_, _ = store.view()
 
 	if buf.Len() > 0 {
 		t.Fatalf("error 级别下热重载不应输出日志，实际: %s", buf.String())

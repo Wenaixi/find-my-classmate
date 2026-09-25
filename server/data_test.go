@@ -73,7 +73,7 @@ func TestLoadStudentsBadClassKey(t *testing.T) {
 	}
 }
 
-func TestSnapshotHotReload(t *testing.T) {
+func TestStoreHotReload(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFiles(t, dir)
 	store, err := newStudentStore(dir)
@@ -82,13 +82,13 @@ func TestSnapshotHotReload(t *testing.T) {
 	}
 	clock := &fakeClock{current: time.Now()}
 	store.now = clock.Now
-	if got, _ := store.snapshot(); len(got) != 3 {
+	if got, _ := store.view(); len(got) != 3 {
 		t.Fatalf("初始应 3 条，实际 %d", len(got))
 	}
 	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"王皓轩"},{"姓名":"张三"},{"姓名":"新人"}]}}`), 0o644)
 	// 超过探测窗口后应发现变更并重载
 	clock.advance(2 * time.Second)
-	got, err := store.snapshot()
+	got, err := store.view()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestSnapshotHotReload(t *testing.T) {
 	}
 }
 
-func TestSnapshotErrorKeepsOldDataAndRecovers(t *testing.T) {
+func TestStoreReloadErrorKeepsOldDataAndRecovers(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFiles(t, dir)
 	store, err := newStudentStore(dir)
@@ -105,17 +105,17 @@ func TestSnapshotErrorKeepsOldDataAndRecovers(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte("{broken"), 0o644)
-	if _, err := store.snapshot(); err == nil {
-		t.Fatal("损坏文件 snapshot 应报错")
+	if _, err := store.view(); err == nil {
+		t.Fatal("损坏文件 view 应报错")
 	}
 	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"王皓轩"},{"姓名":"张三"}]}}`), 0o644)
-	got, err := store.snapshot()
+	got, err := store.view()
 	if err != nil || len(got) != 3 {
 		t.Fatalf("修复后应恢复 3 条，err=%v len=%d", err, len(got))
 	}
 }
 
-func TestSnapshotConcurrent(t *testing.T) {
+func TestStoreViewConcurrent(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFiles(t, dir)
 	store, err := newStudentStore(dir)
@@ -128,13 +128,13 @@ func TestSnapshotConcurrent(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 20; j++ {
-				got, err := store.snapshot()
+				got, err := store.view()
 				if err != nil {
 					t.Error(err)
 					return
 				}
 				if len(got) != 3 {
-					t.Errorf("并发快照应恒为 3 条，实际 %d", len(got))
+					t.Errorf("并发视图应恒为 3 条，实际 %d", len(got))
 					return
 				}
 			}
@@ -143,7 +143,7 @@ func TestSnapshotConcurrent(t *testing.T) {
 	wg.Wait()
 }
 
-func TestSnapshotConcurrentHotReloadStampede(t *testing.T) {
+func TestStoreConcurrentHotReloadStampede(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFiles(t, dir)
 	store, err := newStudentStore(dir)
@@ -152,7 +152,7 @@ func TestSnapshotConcurrentHotReloadStampede(t *testing.T) {
 	}
 	clock := &fakeClock{current: time.Now()}
 	store.now = clock.Now
-	if got, _ := store.snapshot(); len(got) != 3 {
+	if got, _ := store.view(); len(got) != 3 {
 		t.Fatalf("初始应 3 条，实际 %d", len(got))
 	}
 
@@ -161,7 +161,7 @@ func TestSnapshotConcurrentHotReloadStampede(t *testing.T) {
 
 	// 推进超过探测窗口后，单次调用应完成热重载（F72：窗口过后首次探测生效）
 	clock.advance(2 * time.Second)
-	if got, err := store.snapshot(); err != nil || len(got) != 4 {
+	if got, err := store.view(); err != nil || len(got) != 4 {
 		t.Fatalf("窗口过后重载应 4 条，err=%v len=%d", err, len(got))
 	}
 
@@ -173,13 +173,13 @@ func TestSnapshotConcurrentHotReloadStampede(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 20; j++ {
-				got, err := store.snapshot()
+				got, err := store.view()
 				if err != nil {
-					t.Errorf("并发快照失败: %v", err)
+					t.Errorf("并发视图失败: %v", err)
 					return
 				}
 				if len(got) != 4 {
-					t.Errorf("并发快照应恒为 4 条，实际 %d", len(got))
+					t.Errorf("并发视图应恒为 4 条，实际 %d", len(got))
 					return
 				}
 			}
@@ -228,20 +228,6 @@ func TestRateLimitAutomaticSweep(t *testing.T) {
 	}
 }
 
-func TestSnapshotReturnsCopy(t *testing.T) {
-	dir := t.TempDir()
-	writeTestFiles(t, dir)
-	store, _ := newStudentStore(dir)
-	got, _ := store.snapshot()
-	got[0].Name = "篡改"
-	fresh, _ := store.snapshot()
-	if fresh[0].Name == "篡改" {
-		t.Fatal("snapshot 应返回副本，修改不应影响 store")
-	}
-}
-
-// F72：探测节流——同一秒内的重复请求不应触发文件指纹探测。
-// now 字段可注入 fakeClock，使探测窗口内的时序完全确定。
 func TestStoreProbeThrottle(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFiles(t, dir)
@@ -289,26 +275,5 @@ func TestStoreViewNoCopy(t *testing.T) {
 	// 同一切片底层数组：取首元素地址比较
 	if unsafe.SliceData(first) != unsafe.SliceData(second) {
 		t.Error("view 应返回同一底层数组（零拷贝），实际发生了拷贝")
-	}
-}
-
-// F72：view 与 snapshot 并存——snapshot 仍须返回副本（原有契约不变）
-func TestViewAndSnapshotCoexist(t *testing.T) {
-	dir := t.TempDir()
-	writeTestFiles(t, dir)
-	store, err := newStudentStore(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	view, _ := store.view()
-	if len(view) != 3 {
-		t.Fatalf("视图应 3 条，实际 %d", len(view))
-	}
-	copied, _ := store.snapshot()
-	if len(copied) != 3 {
-		t.Fatalf("快照应 3 条，实际 %d", len(copied))
-	}
-	if unsafe.SliceData(view) == unsafe.SliceData(copied) {
-		t.Error("snapshot 必须返回副本，不应与 view 共享底层数组")
 	}
 }

@@ -57,7 +57,7 @@ func frontendHandlerWithFS(fsys fs.FS) http.Handler {
 			return
 		}
 		if strings.HasPrefix(r.URL.Path, "/assets/") || strings.HasPrefix(r.URL.Path, "/fonts/") {
-			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			w.Header().Set("Cache-Control", assetCacheMaxAge)
 			serveCachedStatic(w, r, fsys, r.URL.Path)
 			return
 		}

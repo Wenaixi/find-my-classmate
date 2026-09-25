@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeName, parseQuery, searchStudents } from "./query";
+import { hasNameCondition, normalizeName, parseQuery, searchStudents } from "./query";
 import type { Student } from "../types";
 
 const fixture: Student[] = [
@@ -102,5 +102,36 @@ describe("query contract", () => {
     ];
     const result = searchStudents(students, "林宇");
     expect(result.items.map((s) => s.grade)).toEqual(["高一", "高二", "高三"]);
+  });
+});
+
+// Step D：查询语义第三拷贝归零——App 的"纯年段/班级查询"提示必须与解析结果一致，
+// 而非另一套内嵌正则（原 App.tsx:112 的 hasNameCondition 正则已移入 query.ts）。
+describe("hasNameCondition", () => {
+  it("true for name tokens", () => {
+    expect(hasNameCondition("张三")).toBe(true);
+    expect(hasNameCondition("李四，高一")).toBe(true);
+  });
+
+  it("false for pure class token", () => {
+    expect(hasNameCondition("18")).toBe(false);
+    expect(hasNameCondition("18班")).toBe(false);
+  });
+
+  it("false for pure grade token", () => {
+    expect(hasNameCondition("高一")).toBe(false);
+    expect(hasNameCondition("高3")).toBe(false);
+  });
+
+  it("false for grade+class compound", () => {
+    expect(hasNameCondition("高二三班")).toBe(false);
+  });
+
+  it("true for overflow digits (treated as name)", () => {
+    expect(hasNameCondition("99999999999999999999")).toBe(true);
+  });
+
+  it("true for mixed name + class", () => {
+    expect(hasNameCondition("张三，18班")).toBe(true);
   });
 });
