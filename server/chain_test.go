@@ -13,10 +13,12 @@ import (
 )
 
 // newTestChain 组装可注入时钟的 production 请求链。
+// 顺序与 newHandlerChain 同构（securityHeaders → rateLimit → accessLog → mux）：
+// 安全头居最外覆盖所有响应（含 429），限流在 accessLog 之外短路。
 func newTestChain(clock *fakeClock, capacity float64, mux http.Handler) http.Handler {
 	limiter := newRateLimiter(capacity, time.Second)
 	limiter.now = clock.Now
-	return rateLimitWith(limiter, accessLog(securityHeaders(mux)))
+	return securityHeaders(rateLimitWith(limiter, accessLog(mux)))
 }
 
 // captureLogs 把标准日志输出重定向到缓冲区，测试结束后恢复。

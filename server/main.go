@@ -115,14 +115,15 @@ func main() {
 }
 
 // newHandlerChain 组装 production 请求链，是中间件顺序的唯一事实源。
-// 顺序（由外到内）：rateLimit → accessLog → securityHeaders → mux。
+// 顺序（由外到内）：securityHeaders → rateLimit → accessLog → mux。
 //
-// 限流位于最外层是刻意的：被拒绝的请求在进入访问日志之前就返回，
-// 避免攻击流量放大日志磁盘写入。安全响应头仍覆盖 429：
-// writeRateLimited 在写出拒绝响应前调用 setSecurityHeaders，
-// 使全站响应头契约对被拒绝请求同样成立。
+// 安全头居最外是刻意的：全站响应头契约必须覆盖所有响应，包括限流拒绝
+// （429）与被访问日志跳过的健康检查；限流在 accessLog 之外短路，
+// 被拒绝的请求不写访问日志，避免攻击流量放大日志磁盘写入。
+// 429 因位于 securityHeaders 内侧，响应头由外层统一设置，writeRateLimited
+// 无需手工重放。
 func newHandlerChain(mux http.Handler) http.Handler {
-	return rateLimit(accessLog(securityHeaders(mux)), rateCapacity, rateInterval)
+	return securityHeaders(rateLimit(accessLog(mux), rateCapacity, rateInterval))
 }
 
 // buildServer 组装带超时配置的 http.Server：防止慢速攻击挂起连接。

@@ -106,14 +106,13 @@ func rateLimitWith(limiter *rateLimiter, next http.Handler) http.Handler {
 // writeRateLimited 输出 429 响应：整数秒 Retry-After（至少 1，"0s" 语义自相矛盾）
 // 与全站统一的 JSON 错误体。独立成函数使限流响应只有一个事实源。
 //
-// 限流在 securityHeaders 之外短路返回，因此这里显式补齐安全响应头：
-// 安全头是全站响应契约，被拒绝的请求同样适用。
+// 安全响应头不再在此重放：中间件链把 securityHeaders 置于 rateLimit 外侧
+// （main.go newHandlerChain），429 短路响应自动继承全站安全头契约。
 func writeRateLimited(w http.ResponseWriter, wait time.Duration) {
 	seconds := int(math.Ceil(wait.Seconds()))
 	if seconds < 1 {
 		seconds = 1
 	}
-	setSecurityHeaders(w.Header())
 	w.Header().Set("Retry-After", strconv.Itoa(seconds))
 	writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": errCodeRateLimited})
 }
