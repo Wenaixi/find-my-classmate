@@ -68,10 +68,19 @@ type Query struct {
 // 包级复用：strings.Replacer 构造需编译替换表，每请求重建是纯浪费。
 var querySeparators = strings.NewReplacer("，", " ", ",", " ", "、", " ", "+", " ")
 
+// tokenize 把原始查询串切成 token：分隔符归一为空白后按 unicode.IsSpace 切分。
+// 抽出的理由是跨语言对拍——前端 parseQuery 返回的 tokens 此前在 Go 侧没有对应物，
+// 「两端空白集合逐码位对齐」这条不变量因此只能在单侧断言。把切分单点化后，
+// contract_test.go 经同一个函数对拍，避免测试复制一份切分规则。
+//
+// 注意不能用 strings.FieldsFunc 之类的近似：U+0085（NEL）在 unicode.IsSpace 内
+// 是空白、在 JS 的 \s 外不是，两端差集恰为 U+0085 与 U+FEFF 两处且方向相反。
+func tokenize(raw string) []string {
+	return strings.Fields(querySeparators.Replace(strings.TrimSpace(raw)))
+}
 
 // gradeClassToken 匹配年级+班级连写（"高二三班"/"高二1班"/"高一十八班"）。
 var gradeClassToken = regexp.MustCompile("^(高一|高二|高三|高1|高2|高3)([0-9]+|[一二三四五六七八九十]+)班?$")
-
 
 // needsNormalize 判定是否真的需要归一化处理。
 // 绝大多数中文姓名既无空白也无小写字母，此时可原样返回，省去一次字符串分配。
@@ -116,9 +125,8 @@ func parseGrade(title string) Grade {
 }
 
 func parseQuery(raw string) Query {
-	normalized := querySeparators.Replace(strings.TrimSpace(raw))
 	query := Query{}
-	for _, token := range strings.Fields(normalized) {
+	for _, token := range tokenize(raw) {
 		// 年级+班级连写（"高二三班"）优先于年级子串，精确解析为年段+班级
 		if match := gradeClassToken.FindStringSubmatch(token); match != nil {
 			// 降级策略由 classCondition 单点承载：!Valid 与 Overflow 一律按姓名处理。
@@ -248,4 +256,3 @@ func gradeOrder(grade Grade) int {
 	}
 	return len(knownGrades)
 }
-

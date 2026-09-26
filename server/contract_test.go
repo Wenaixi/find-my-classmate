@@ -8,7 +8,11 @@ import (
 
 // contractCase 与 docs/query-contract.json 的单条记录一一对应。
 type contractCase struct {
-	Raw         string   `json:"raw"`
+	Raw string `json:"raw"`
+	// Tokens 是分词中间结果：归一后按空白切出的全部 token，在分类之前就已确定。
+	// 它此前是前端独有字段、Go 侧无对应物，空白集合的分词行为只能在单侧断言；
+	// 纳入契约后经 tokenize 对拍，两端各有一条承重断言。
+	Tokens      []string `json:"tokens"`
 	NameTokens  []string `json:"nameTokens"`
 	Grade       *string  `json:"grade"`
 	ClassNumber *int     `json:"classNumber"`
@@ -43,6 +47,16 @@ func TestParseQueryContractCorpus(t *testing.T) {
 	for _, c := range loadContractCases(t) {
 		t.Run(c.Raw, func(t *testing.T) {
 			got := parseQuery(c.Raw)
+			wantTokens := c.Tokens
+			gotTokens := tokenize(c.Raw)
+			if len(wantTokens) != len(gotTokens) {
+				t.Fatalf("tokens = %v，期望 %v", gotTokens, wantTokens)
+			}
+			for i := range wantTokens {
+				if wantTokens[i] != gotTokens[i] {
+					t.Fatalf("tokens = %v，期望 %v", gotTokens, wantTokens)
+				}
+			}
 
 			wantNames := c.NameTokens
 			gotNames := got.NameTokens

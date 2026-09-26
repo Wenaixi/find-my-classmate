@@ -1,9 +1,13 @@
 {
   "$comment": "跨语言查询解析契约的唯一事实源。src/lib/query.test.ts 与 server/contract_test.go 各自消费本文件；修改解析规则时必须同时更新两侧实现与本文件。执行语义（匹配/排序/分页）只属于后端，不在本文件范围内。整数上限说明：前端 classNumber 用 Number.isSafeInteger 判定溢出（上限 2^53-1），Go 端用 strconv.Atoi（上限 2^63-1），因此 2^53 到 2^63-1 之间两侧行为不同——这是刻意保留的差异，因为 JS Number 无法精确表示更大的整数，继续放行会把用户输入静默舍入成错误的班级号。语料只覆盖 2^53 以下，两侧在此区间必须完全一致；不要为了让语料全绿而放宽前端上限。",
   "$comment2": "U+0085（NEL）是 Go strings.Fields（unicode.IsSpace）切分的空白，JS \\s 不覆盖。前端 tokenizer 与 normalizeName 已显式补上 U+0085，与 Go 对齐；本用例锁住该行为。",
+  "$comment3": "tokens 是分词中间结果：查询串经分隔符归一后按空白切分的全部 token，在分类为姓名/年段/班级之前就已确定。此前它是前端独有字段、Go 侧无对应物，因此空白集合（U+0085 NEL、U+FEFF 等两端差异点）的分词行为只能在单侧断言；纳入契约后，同一事实源在两侧各有一条承重断言。语料以 Go 端实测值为准。",
   "cases": [
     {
       "raw": "张三",
+      "tokens": [
+        "张三"
+      ],
       "nameTokens": [
         "张三"
       ],
@@ -12,6 +16,10 @@
     },
     {
       "raw": "示 例",
+      "tokens": [
+        "示",
+        "例"
+      ],
       "nameTokens": [
         "示",
         "例"
@@ -21,144 +29,220 @@
     },
     {
       "raw": "高1",
+      "tokens": [
+        "高1"
+      ],
       "nameTokens": [],
       "grade": "高一",
       "classNumber": null
     },
     {
       "raw": "高2",
+      "tokens": [
+        "高2"
+      ],
       "nameTokens": [],
       "grade": "高二",
       "classNumber": null
     },
     {
       "raw": "高3",
+      "tokens": [
+        "高3"
+      ],
       "nameTokens": [],
       "grade": "高三",
       "classNumber": null
     },
     {
       "raw": "高一",
+      "tokens": [
+        "高一"
+      ],
       "nameTokens": [],
       "grade": "高一",
       "classNumber": null
     },
     {
       "raw": "高二",
+      "tokens": [
+        "高二"
+      ],
       "nameTokens": [],
       "grade": "高二",
       "classNumber": null
     },
     {
       "raw": "高三",
+      "tokens": [
+        "高三"
+      ],
       "nameTokens": [],
       "grade": "高三",
       "classNumber": null
     },
     {
       "raw": "18",
+      "tokens": [
+        "18"
+      ],
       "nameTokens": [],
       "grade": null,
       "classNumber": 18
     },
     {
       "raw": "18班",
+      "tokens": [
+        "18班"
+      ],
       "nameTokens": [],
       "grade": null,
       "classNumber": 18
     },
     {
       "raw": "一班",
+      "tokens": [
+        "一班"
+      ],
       "nameTokens": [],
       "grade": null,
       "classNumber": 1
     },
     {
       "raw": "六班",
+      "tokens": [
+        "六班"
+      ],
       "nameTokens": [],
       "grade": null,
       "classNumber": 6
     },
     {
       "raw": "十一班",
+      "tokens": [
+        "十一班"
+      ],
       "nameTokens": [],
       "grade": null,
       "classNumber": 11
     },
     {
       "raw": "十八班",
+      "tokens": [
+        "十八班"
+      ],
       "nameTokens": [],
       "grade": null,
       "classNumber": 18
     },
     {
       "raw": "二十班",
+      "tokens": [
+        "二十班"
+      ],
       "nameTokens": [],
       "grade": null,
       "classNumber": 20
     },
     {
       "raw": "二十一班",
+      "tokens": [
+        "二十一班"
+      ],
       "nameTokens": [],
       "grade": null,
       "classNumber": 21
     },
     {
       "raw": "三十班",
+      "tokens": [
+        "三十班"
+      ],
       "nameTokens": [],
       "grade": null,
       "classNumber": 30
     },
     {
       "raw": "三十五班",
+      "tokens": [
+        "三十五班"
+      ],
       "nameTokens": [],
       "grade": null,
       "classNumber": 35
     },
     {
       "raw": "九十九班",
+      "tokens": [
+        "九十九班"
+      ],
       "nameTokens": [],
       "grade": null,
       "classNumber": 99
     },
     {
       "raw": "高二三班",
+      "tokens": [
+        "高二三班"
+      ],
       "nameTokens": [],
       "grade": "高二",
       "classNumber": 3
     },
     {
       "raw": "高二1班",
+      "tokens": [
+        "高二1班"
+      ],
       "nameTokens": [],
       "grade": "高二",
       "classNumber": 1
     },
     {
       "raw": "高一十八班",
+      "tokens": [
+        "高一十八班"
+      ],
       "nameTokens": [],
       "grade": "高一",
       "classNumber": 18
     },
     {
       "raw": "高二十二班",
+      "tokens": [
+        "高二十二班"
+      ],
       "nameTokens": [],
       "grade": "高二",
       "classNumber": 12
     },
     {
       "raw": "高二，1班",
+      "tokens": [
+        "高二",
+        "1班"
+      ],
       "nameTokens": [],
       "grade": "高二",
       "classNumber": 1
     },
     {
       "raw": "高1、六班",
+      "tokens": [
+        "高1",
+        "六班"
+      ],
       "nameTokens": [],
       "grade": "高一",
       "classNumber": 6
     },
     {
       "raw": "高三+示例同学+18班",
+      "tokens": [
+        "高三",
+        "示例同学",
+        "18班"
+      ],
       "nameTokens": [
         "示例同学"
       ],
@@ -167,6 +251,10 @@
     },
     {
       "raw": "示例，18班",
+      "tokens": [
+        "示例",
+        "18班"
+      ],
       "nameTokens": [
         "示例"
       ],
@@ -175,12 +263,18 @@
     },
     {
       "raw": "223",
+      "tokens": [
+        "223"
+      ],
       "nameTokens": [],
       "grade": null,
       "classNumber": 223
     },
     {
       "raw": "高翔",
+      "tokens": [
+        "高翔"
+      ],
       "nameTokens": [
         "高翔"
       ],
@@ -189,6 +283,9 @@
     },
     {
       "raw": "班长",
+      "tokens": [
+        "班长"
+      ],
       "nameTokens": [
         "班长"
       ],
@@ -197,12 +294,18 @@
     },
     {
       "raw": "高一同学",
+      "tokens": [
+        "高一同学"
+      ],
       "nameTokens": [],
       "grade": "高一",
       "classNumber": null
     },
     {
       "raw": "99999999999999999999",
+      "tokens": [
+        "99999999999999999999"
+      ],
       "nameTokens": [
         "99999999999999999999"
       ],
@@ -211,18 +314,28 @@
     },
     {
       "raw": "1000001",
+      "tokens": [
+        "1000001"
+      ],
       "nameTokens": [],
       "grade": null,
       "classNumber": 1000001
     },
     {
       "raw": "1000001班",
+      "tokens": [
+        "1000001班"
+      ],
       "nameTokens": [],
       "grade": null,
       "classNumber": 1000001
     },
     {
       "raw": "张三",
+      "tokens": [
+        "张",
+        "三"
+      ],
       "nameTokens": [
         "张"
       ],
@@ -231,6 +344,9 @@
     },
     {
       "raw": "一一班",
+      "tokens": [
+        "一一班"
+      ],
       "nameTokens": [
         "一一班"
       ],
@@ -240,6 +356,9 @@
     },
     {
       "raw": "高一一一班",
+      "tokens": [
+        "高一一一班"
+      ],
       "nameTokens": [
         "高一一一班"
       ],
@@ -249,6 +368,9 @@
     },
     {
       "raw": "张﻿三",
+      "tokens": [
+        "张﻿三"
+      ],
       "nameTokens": [
         "张﻿三"
       ],
@@ -258,6 +380,9 @@
     },
     {
       "raw": "﻿18班",
+      "tokens": [
+        "﻿18班"
+      ],
       "nameTokens": [
         "﻿18班"
       ],
@@ -267,6 +392,7 @@
     },
     {
       "raw": "、",
+      "tokens": [],
       "nameTokens": [],
       "grade": null,
       "classNumber": null,
@@ -274,6 +400,7 @@
     },
     {
       "raw": "，,、+",
+      "tokens": [],
       "nameTokens": [],
       "grade": null,
       "classNumber": null,
@@ -281,6 +408,9 @@
     },
     {
       "raw": "0班",
+      "tokens": [
+        "0班"
+      ],
       "nameTokens": [
         "0班"
       ],
@@ -290,6 +420,9 @@
     },
     {
       "raw": "高一0班",
+      "tokens": [
+        "高一0班"
+      ],
       "nameTokens": [
         "高一0班"
       ],
@@ -299,6 +432,9 @@
     },
     {
       "raw": "00班",
+      "tokens": [
+        "00班"
+      ],
       "nameTokens": [
         "00班"
       ],

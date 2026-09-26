@@ -9,6 +9,8 @@ import contract from "../../docs/query-contract.json";
 
 interface ContractCase {
   raw: string;
+  /** 分词中间结果：归一后按空白切出的全部 token，在分类之前就已确定 */
+  tokens: string[];
   nameTokens: string[];
   grade: string | null;
   classNumber: number | null;
@@ -24,6 +26,9 @@ describe("cross-language parse contract", () => {
   for (const c of contractCases) {
     it(`parses ${JSON.stringify(c.raw)} exactly as the corpus declares`, () => {
       const parsed = parseQuery(c.raw);
+      // tokens 纳入对拍后，「两端空白集合逐码位对齐」这条不变量在两侧各有承重断言。
+      // 此前它是前端独有字段、Go 侧无对应物，分词行为只能在单侧验证。
+      expect(parsed.tokens).toEqual(c.tokens);
       expect(parsed.nameTokens).toEqual(c.nameTokens);
       expect(parsed.grade ?? null).toBe(c.grade);
       expect(parsed.classNumber ?? null).toBe(c.classNumber);
