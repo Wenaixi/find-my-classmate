@@ -3,6 +3,7 @@ package main
 import (
 	"compress/gzip"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -17,6 +18,66 @@ func testFrontendFS() fstest.MapFS {
 		"assets/app.mjs":   {Data: []byte("export default 1")},
 		"assets/app.css":   {Data: []byte("body { color: red }")},
 		"fonts/mona.woff2": {Data: []byte("font-data")},
+	}
+}
+
+// countingFS 包装源 FS 并统计打开次数，用于验证静态资源服务路径的读盘次数。
+type countingFS struct {
+	fs    fs.FS
+	opens int
+}
+
+func (c *countingFS) Open(name string) (fs.File, error) {
+	c.opens++
+	return c.fs.Open(name)
+}
+
+func (c *countingFS) reset() { c.opens = 0 }
+
+// 缓存命中后不得再触碰来源 FS：
+// 修复前每次请求都先跑 assetExists（Open + Stat）确认存在性，
+// 命中缓存时仍产生 2 次文件系统调用。
+func TestStaticCacheHitDoesNotTouchFS(t *testing.T) {
+	source := &countingFS{fs: testFrontendFS()}
+	handler := frontendHandlerWithFS(source)
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/assets/app.js", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("首次请求状态 = %d，期望 200", rec.Code)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != assetCacheMaxAge {
+		t.Errorf("Cache-Control = %q，期望 %q", got, assetCacheMaxAge)
+	}
+	if source.opens == 0 {
+		t.Fatal("首次请求应至少打开一次来源")
+	}
+
+	// 二次请求命中缓存：来源不应再被打开
+	source.reset()
+	rec2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest(http.MethodGet, "/assets/app.js", nil)
+	req2.Header.Set("If-None-Match", rec.Header().Get("ETag"))
+	handler.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusNotModified {
+		t.Fatalf("ETag 命中应返回 304，实际 %d", rec2.Code)
+	}
+	if source.opens != 0 {
+		t.Fatalf("缓存命中后不应触碰来源 FS，实际打开 %d 次", source.opens)
+	}
+}
+
+// 缺失资源不得继承 immutable 缓存头（补上文件后客户端不应长期命中旧缓存）。
+func TestStaticMissingAssetHasNoImmutable(t *testing.T) {
+	handler := frontendHandlerWithFS(testFrontendFS())
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/assets/missing.js", nil))
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("缺失资源状态 = %d，期望 404", rec.Code)
+	}
+	if got := rec.Header().Get("Cache-Control"); got == assetCacheMaxAge {
+		t.Errorf("缺失资源不应带 immutable 缓存头，实际 %q", got)
 	}
 }
 

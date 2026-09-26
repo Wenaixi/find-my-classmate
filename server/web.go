@@ -67,13 +67,10 @@ func frontendHandlerWithFS(fsys fs.FS) http.Handler {
 			return
 		}
 		if strings.HasPrefix(r.URL.Path, "/assets/") || strings.HasPrefix(r.URL.Path, "/fonts/") {
+			// 存在性判定与内容读取合为一次来源访问：缓存命中即证明资源存在
+			// （未命中时才读盘，读不到即 404），不再每次请求都预检。
 			// immutable 只在资源确实存在时设置：缺失资源不得继承一年长缓存，
 			// 否则补上同名文件后客户端仍会长期命中旧缓存。
-			if !assetExists(fsys, r.URL.Path) {
-				http.Error(w, "not found", http.StatusNotFound)
-				return
-			}
-			w.Header().Set("Cache-Control", assetCacheMaxAge)
 			serveCachedStatic(w, r, fsys, cache, r.URL.Path)
 			return
 		}
@@ -81,22 +78,11 @@ func frontendHandlerWithFS(fsys fs.FS) http.Handler {
 	})
 }
 
-// assetExists 判定静态资源是否存在于给定来源。
-// 用于在设置 immutable 之前确认资源真实存在。
-func assetExists(fsys fs.FS, path string) bool {
-	file, err := fsys.Open(strings.TrimPrefix(path, "/"))
-	if err != nil {
-		return false
-	}
-	defer file.Close()
-	info, err := file.Stat()
-	if err != nil {
-		return false
-	}
-	return !info.IsDir()
-}
-
 // serveCachedStatic 提供带 ETag / gzip / 304 的静态资源响应。
+//
+// 存在性判定与内容读取合为一次来源访问：缓存命中即证明资源存在（不再预检），
+// 缓存未命中时读盘一次，读不到即 404。immutable 缓存头只在此处确认资源存在后设置，
+// 缺失资源因此不会继承一年长缓存。
 //
 // 协商事实一致性：同一资源可能以 raw 或 gzip 返回，因此 200 与 304 都必须
 // 声明 Vary: Accept-Encoding——否则共享缓存会把某一种表示复用到另一种请求上。
@@ -118,6 +104,9 @@ func serveCachedStatic(w http.ResponseWriter, r *http.Request, fsys fs.FS, cache
 		cached = &cachedAsset{etag: etag, raw: content, gzipped: buf.Bytes()}
 		cache.assets.Store(path, cached)
 	}
+	// 走到这里即证明资源存在（命中缓存，或刚读盘成功）：
+	// immutable 只给确认存在的资源，缺失资源已在上面的 404 分支返回。
+	w.Header().Set("Cache-Control", assetCacheMaxAge)
 	asset := cached.(*cachedAsset)
 	ext := filepath.Ext(path)
 	var contentType string
