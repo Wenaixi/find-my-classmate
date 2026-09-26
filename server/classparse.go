@@ -71,8 +71,19 @@ func parseClassName(value string) ClassParseResult {
 	if match == nil {
 		return ClassParseResult{}
 	}
+	// 班号必须是正数：「0」语法上是合法数字（strconv.Atoi 成功且无错），
+	// 但班级域里不存在 0 班。此处原样把 0 包成 Valid=true，违背本文件声明的
+	// 「Valid ⇒ ClassNo > 0」不变量——下游 classCondition 因此既不产生班级条件
+	// 也不降级为姓名条件，token 静默消失；与年级连写时（"高一0班"）条件落空，
+	// Search 退化为整年段全量返回。不变量必须由实现强制，不能只写在注释里。
 	if number, err := strconv.Atoi(match[1]); err == nil {
-		return ClassParseResult{ClassNo: number, Valid: true}
+		// Atoi 成功即证明这是格式合法的数字，因此不可能是溢出。
+		// 班号必须为正：「0」在班级域里不存在，属非法而非溢出——
+		// 若落入下方 isAllDigits 分支会被谎报成 Overflow，两种语义不可混同。
+		if number > 0 {
+			return ClassParseResult{ClassNo: number, Valid: true}
+		}
+		return ClassParseResult{}
 	}
 	if isAllDigits(match[1]) {
 		return ClassParseResult{Overflow: true} // 数字溢出：格式合法但超出 int

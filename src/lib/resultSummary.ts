@@ -4,8 +4,6 @@
 // 归位后组件只接收派生结果，不再自行计算。
 
 export interface ResultSummary {
-  /** 总命中条数 */
-  total: number;
   /** 进度百分比（0-100），total 为 0 时为 0 */
   progress: number;
   /** "显示 X / Y 条记录" */
@@ -22,7 +20,6 @@ export function deriveResultSummary(loaded: number, total: number, hasMore: bool
   const remaining = Math.max(0, total - loaded);
   const progress = total > 0 ? (loaded / total) * 100 : 0;
   return {
-    total,
     progress,
     countLabel: `显示 ${loaded} / ${total} 条记录`,
     toolbarState: hasMore ? "下方继续加载" : "已全部加载",

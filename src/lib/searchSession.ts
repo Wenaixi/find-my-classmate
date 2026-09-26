@@ -13,9 +13,10 @@ export type SearchResult =
   | { ok: false; reason: "stale" }
   | { ok: false; reason: "error"; cause: unknown };
 
-// stale 与 error 的构造点：成功但过期、中止、或过期会话的失败都归为 stale。
-// 真实失败（未中止且仍当前）保留 cause，供调用方按错误分类文案。
-export const staleResult: SearchResult = { ok: false, reason: "stale" };
+// staleResult 是 stale 的唯一构造点：成功但过期、中止、或过期会话的失败
+// 都归为 stale。真实失败（未中止且仍当前）保留 cause，供调用方按错误分类文案。
+// 不导出——外部无消费方，导出只会让人误以为它是对外契约的一部分。
+const staleResult: SearchResult = { ok: false, reason: "stale" };
 export interface SearchSession {
   invalidate(): void;
   abortAll(): void;

@@ -278,6 +278,33 @@
       "grade": null,
       "classNumber": null,
       "$comment": "四种分隔符混合，同样产出零条件。修复前 Go 的空查询守卫只剥空白、不剥分隔符，此输入既非空查询又无任何条件，Search 退化为全校检索（实测 2112 条全量返回）。本条锁住「解析层不产生条件」这一事实，判空职责在 Search 而非解析层。"
-     }
+    },
+    {
+      "raw": "0班",
+      "nameTokens": [
+        "0班"
+      ],
+      "grade": null,
+      "classNumber": null,
+      "$comment": "0 班号：strconv.Atoi(\"0\") 语法成功但班级域不存在 0 班，属非法而非溢出。修复前 Go 端把它包成 Valid=true，classCondition 因此既不产生班级条件也不降级为姓名条件，token 静默消失。"
+    },
+    {
+      "raw": "高一0班",
+      "nameTokens": [
+        "高一0班"
+      ],
+      "grade": "高一",
+      "classNumber": null,
+      "$comment": "年级+班级连写且班级非法：保留年级条件、整个 token 按姓名处理。不降级为「纯年级」——那会把精确查询放大成整个年段全量（修复前实测 total=2 即全校）；也不静默丢弃。TS 端本就按此解释，本条是双端一致性的回归锁。"
+    },
+    {
+      "raw": "00班",
+      "nameTokens": [
+        "00班"
+      ],
+      "grade": null,
+      "classNumber": null,
+      "$comment": "前导零形式同样解析为 0，与「0班」同归一。与「10班」「18班」等正数班号区分：正数必须仍是 classNumber 条件，不得被本次修复误伤。"
+    }
   ]
 }

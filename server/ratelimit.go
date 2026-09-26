@@ -87,14 +87,14 @@ func (l *rateLimiter) sweepLocked(now time.Time, idleTTL time.Duration) {
 	}
 }
 
-// rateLimit 中间件：每 IP 每秒 capacity 个请求的突发窗口（capacity 即令牌容量）。
-// 429 响应为 JSON（与全站错误格式一致），Retry-After 输出整数秒（RFC 9110）。
-func rateLimit(next http.Handler, capacity float64, interval time.Duration) http.Handler {
-	return rateLimitWith(newRateLimiter(capacity, interval, time.Now), next)
-}
-
-// rateLimitWith 是 rateLimit 的可注入变体：只替换限流器本身，429 响应与其他
-// HTTP 行为全部走 production 代码路径，测试无需复制 implementation。
+// rateLimitWith 组装限流中间件：每 IP 每秒 capacity 个请求的突发窗口
+// （capacity 即令牌容量）。429 响应为 JSON（与全站错误格式一致），
+// Retry-After 输出整数秒（RFC 9110）。
+//
+// 限流器由调用方构造并注入，生产与测试共用这一个装配点——生产传真实时钟
+// 构造的限流器，测试传可推进时钟的限流器，其余 HTTP 行为完全一致。
+// 此前存在一个零调用点的 rateLimit 薄包装（只做 newRateLimiter + 转发），
+// 它让读者误以为生产装配走该入口，实际生产与测试都直接调用本函数。
 func rateLimitWith(limiter *rateLimiter, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		allowed, wait := limiter.allow(clientIP(r.RemoteAddr))
