@@ -8,6 +8,8 @@
 
 - **年段扩展路径断裂**：`data.go` 的名单标题校验反过来依赖 `parseGrade`，而 `parseGrade` 与 `gradeClassToken` 各自硬编码年段字面量（前端 `query.ts` 另有两处）。实测：往 `knownGrades` 追加新年段后，运维提示正确列出该文件、排序正确排位，但 `loadStudents` 报「文件名与年级标题不一致」拒绝加载合法名单，查询返回 0 条且与真不存在的年段结果完全一致。跨语言对拍无法发现——两端一致地不认识新年段，对拍语料必须先有该年段样本。现年段规范名与书写别名统一从 `knownGrades` 派生，加载侧与查询侧共用同一份值域。
 - **`gradeClassToken` 编译结果的分配退化**：首版实现改为每次调用重新编译正则，整年段查询分配次数从 6 涨到 117（实测），被 `TestSearchAllocsBudget` 当场拦下。现缓存编译结果并提供 `rebuildGradePattern` 供扩展后重建，分配次数回到 6/7/8 基线。
+- **CI 格式化检查失败**：`gofmt -l` 在本地报出 11 个文件，此前被记为「Windows CRLF 既存状况，由 CI 兜底」——该判断有误，CI 执行的是 `test -z "$(gofmt -l .)"`，任何文件不干净即硬失败。实际存在两类此前混为一谈的差异：map/struct 字面量的**对齐差异**，与整文件**行尾差异**。已全部 `gofmt -w` 规范化，`git diff -w` 确认无语义变化，分配预算 6/7/8 不变。
+- **镜像构建的类型检查失败**：容器内 `npm run build` 报 `TS2307: Cannot find module '../../docs/query-contract.json'`。根因是 `tsconfig.app.json` 的 `include` 为 `["src"]`，把 `*.test.ts` 一并纳入类型检查，而 `query.test.ts` 依赖被 `.dockerignore` 排除的 `docs/query-contract.json`。已在 `.dockerignore` 排除测试文件——生产镜像本不应因测试代码而构建失败；本地 `npm run typecheck` 仍全量检查测试，类型覆盖不减少。
 
 ### 架构深化
 
@@ -24,6 +26,7 @@
 - 前端 135 → **142 用例**（新增 `present` 三条、`gradeDomain` 三条、别名连写对拍语料一条）；后端新增年段扩展性回归锁与三条 wire 参数用例。
 - 变异实验六次：Go 端 `parseGrade` 跳过 `knownGrades` 循环、正则退回硬编码，前端 `parseGrade` 跳过规范名循环、`present` 的滚动与提示色各自改坏，api 三条参数判定改恒假——全部精确翻红。
 - 诚实记录一次未翻红：前端把 `gradeClassToken` 退回硬编码正则时 54 条用例全绿——对已声明年段而言派生与硬编码行为等价，契约语料无法区分。故补充 `gradeDomain` 一组断言锁「声明本身完整且自洽」，而非试图锁「正则长什么样」。
+
 
 ## [v0.9.3] - 2026-09-26
 
