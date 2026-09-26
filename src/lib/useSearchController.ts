@@ -22,6 +22,7 @@ export interface SearchOrchestrator {
   submit(): Promise<void>;
   loadMore(): Promise<void>;
   clear(): void;
+  abortAll(): void;
   onCompositionStart(): void;
   onCompositionEnd(): void;
 }
@@ -72,6 +73,7 @@ export function createSearchOrchestrator(opts: OrchestratorOptions): SearchOrche
     submit,
     loadMore,
     clear,
+    abortAll: () => session.abortAll(),
     onCompositionStart: () => {
       state = searchReducer(state, { type: "composition-start" });
     },
@@ -104,6 +106,7 @@ export function useSearchController(opts: OrchestratorOptions) {
       submit: wrap("submit"),
       loadMore: wrap("loadMore"),
       clear: wrap("clear"),
+      abortAll: () => orch.abortAll(),
       onCompositionStart: wrap("onCompositionStart"),
       onCompositionEnd: wrap("onCompositionEnd"),
     };
