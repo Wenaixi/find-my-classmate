@@ -128,8 +128,12 @@ func TestClassNumberChineseMultiDigit(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.in, func(t *testing.T) {
-			if got := classNumber(c.in); got != c.want {
-				t.Fatalf("classNumber(%q) = %d, want %d", c.in, got, c.want)
+			parsed := parseClassName(c.in)
+			if !parsed.Valid || parsed.Overflow {
+				t.Fatalf("汉字多位数班级 %q 应解析为合法: %+v", c.in, parsed)
+			}
+			if parsed.ClassNo != c.want {
+				t.Fatalf("parseClassName(%q).ClassNo = %d, want %d", c.in, parsed.ClassNo, c.want)
 			}
 		})
 	}
@@ -148,14 +152,13 @@ func TestSearchChineseMultiDigitClass(t *testing.T) {
 }
 
 // 超长数字班级串应被安全处理（不 panic、按姓名处理返回空）。
-// C3 三态化：classNumber 不再返回 -1 哨兵，溢出由 parseClassName().Overflow 显式表达。
+// 三态化后溢出由 parseClassName().Overflow 显式表达。
+// 此用例此前还断言薄包装 classNumber 溢出返回 0——那是测试自身的行为
+// （该薄包装生产零调用），已随薄包装一并删除。
 func TestClassNumberOverflowSafe(t *testing.T) {
 	parsed := parseClassName("99999999999999999999班")
 	if parsed.Valid || !parsed.Overflow {
 		t.Fatalf("超长数字应 Overflow=true, Valid=false，实际 %+v", parsed)
-	}
-	if got := classNumber("99999999999999999999班"); got != 0 {
-		t.Fatalf("classNumber 薄包装溢出应返回 0（与非法同值），实际 %d", got)
 	}
 	// 查询超长数字不应 panic；按姓名处理（姓名不含数字）应返回空结果
 	got := Search(testStudents(), "99999999999999999999", 10, 0)

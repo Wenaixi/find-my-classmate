@@ -84,12 +84,6 @@ func parseClassName(value string) ClassParseResult {
 	return ClassParseResult{}
 }
 
-// classNumber 保留为薄包装（返回班号；0 表示非法或溢出），供查询路径过渡使用。
-// 数据路径应改用 parseClassName 获取完整三态语义。
-func classNumber(value string) int {
-	return parseClassName(value).ClassNo
-}
-
 // isAllDigits 判定字符串是否全为阿拉伯数字。
 func isAllDigits(value string) bool {
 	for _, r := range value {
