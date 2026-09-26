@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// F29：FMC_LOG_LEVEL=error 时热重载日志不应输出（裸 log.Printf 绕过级别控制）
+// FMC_LOG_LEVEL=error 时热重载日志不应输出（裸 log.Printf 绕过级别控制）
 func TestReloadLogRespectsLogLevel(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFiles(t, dir)

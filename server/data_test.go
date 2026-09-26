@@ -264,7 +264,7 @@ func TestStoreConcurrentHotReloadStampede(t *testing.T) {
 	// 模拟写入新名单，触发指纹变更
 	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"王皓轩"},{"姓名":"张三"},{"姓名":"新人"}]}}`), 0o644)
 
-	// 推进超过探测窗口后，单次调用应完成热重载（F72：窗口过后首次探测生效）
+	// 推进超过探测窗口后，单次调用应完成热重载（窗口过后首次探测生效）
 	clock.advance(2 * time.Second)
 	if got, err := store.view(); err != nil || len(got) != 4 {
 		t.Fatalf("窗口过后重载应 4 条，err=%v len=%d", err, len(got))
@@ -358,7 +358,7 @@ func TestStoreProbeThrottle(t *testing.T) {
 	}
 }
 
-// F72：view 返回零拷贝视图——不得分配新切片
+// view 返回零拷贝视图——不得分配新切片
 func TestStoreViewNoCopy(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFiles(t, dir)

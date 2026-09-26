@@ -3,7 +3,7 @@ import type { Grade, ParsedQuery } from "../types";
 const separators = /[，,、+]+/g;
 const classDigits: Record<string, string> = { 一: "1", 二: "2", 三: "3", 四: "4", 五: "5", 六: "6", 七: "7", 八: "8", 九: "9", 十: "10" };
 const classToken = /^(\d+|[一二三四五六七八九十]+)班?$/;
-// F71：年级+班级连写（"高二三班" / "高二1班" / "高一十八班"）→ 精确解析为年段+班级
+// 年级+班级连写（"高二三班" / "高二1班" / "高一十八班"）→ 精确解析为年段+班级
 const gradeClassToken = /^(高一|高二|高三|高1|高2|高3)(\d+|[一二三四五六七八九十]+)班?$/;
 
 // 与 Go 端 unicode.IsSpace 对齐（含 U+0085 NEL）：JS \s 不覆盖 NEL，需显式补上。
@@ -12,7 +12,7 @@ export function normalizeName(value: string): string {
   return value.replace(/[\s\u3000\t\u0085]/g, "").toLocaleUpperCase();
 }
 
-// parseGrade 与 Go 端 search.go 语义一致：子串匹配（已是班级连写的 token 由 gradeClassToken 优先精确解析，F71）。
+// parseGrade 与 Go 端 search.go 语义一致：子串匹配（已是班级连写的 token 由 gradeClassToken 优先精确解析）。
 function parseGrade(token: string): Grade | undefined {
   if (token.includes("高一") || token.includes("高1")) return "高一";
   if (token.includes("高二") || token.includes("高2")) return "高二";
@@ -42,7 +42,7 @@ export function parseQuery(raw: string): ParsedQuery {
   const parsed: ParsedQuery = { tokens, nameTokens: [] };
 
   for (const token of tokens) {
-    // F71：年级+班级连写（"高二三班"）优先于年级子串，精确解析为年段+班级
+    // 年级+班级连写（"高二三班"）优先于年级子串，精确解析为年段+班级
     const gradeClass = token.match(gradeClassToken);
     if (gradeClass) {
       const classNo = classNumber(gradeClass[2]);

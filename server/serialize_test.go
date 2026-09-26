@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// F27+F61：直序列化 SearchResponse 时 Student 的 NameKey 必须被排除（隐私红线由类型保证）
+// 直序列化 SearchResponse 时 Student 的 NameKey 必须被排除（隐私红线由类型保证）
 func TestSearchResponseDirectSerializeNoNameKey(t *testing.T) {
 	resp := SearchResponse{
 		Items: []Student{
@@ -35,7 +35,7 @@ func TestSearchResponseDirectSerializeNoNameKey(t *testing.T) {
 	}
 }
 
-// F61：/api/search 响应与直序列化等价（toResponse 删除后由结构体直接输出）
+// /api/search 响应与直序列化等价（toResponse 删除后由结构体直接输出）
 func TestSearchResponseJSONContract(t *testing.T) {
 	resp := SearchResponse{
 		Items: []Student{{Name: "张三", NameKey: "张三", Grade: GradeOne, ClassName: "1班"}},

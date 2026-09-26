@@ -28,7 +28,7 @@ function ResultCard({ student, index }: { student: Student; index: number }) {
         <span className="result-location-label">班级</span>
         <strong>{student.className}</strong>
       </div>
-      {/* F7：result-check 是纯装饰视觉标记，aria-label 在无 role 的 span 上违反 aria-prohibited-attr 并造成读屏冗余播报 */}
+      {/* result-check 是纯装饰视觉标记，aria-label 在无 role 的 span 上违反 aria-prohibited-attr 并造成读屏冗余播报 */}
       <span className="result-check" aria-hidden="true" />
     </div>
   );
@@ -37,7 +37,7 @@ function ResultCard({ student, index }: { student: Student; index: number }) {
 export default function ResultList({ items, summary, hasMore, loadingMore, loadMoreError, onLoadMore }: ResultListProps) {
   const liquidWrapRef = useRef<HTMLDivElement | null>(null);
 
-  // F7：liquid-gooey 渲染的装饰 SVG（data-gooey-svg）含幽灵 g 节点会被 Chrome 捕获进 Tab 序列，
+  // liquid-gooey 渲染的装饰 SVG（data-gooey-svg）含幽灵 g 节点会被 Chrome 捕获进 Tab 序列，
   // 落在"搜索"与"继续加载"之间造成键盘焦点陷落。SVG 是纯装饰层（aria-hidden），对其 inert 阻断焦点。
   useEffect(() => {
     const svgs = liquidWrapRef.current?.querySelectorAll("[data-gooey-svg]");

@@ -177,6 +177,6 @@ h1 em { color: #fff; font-style: normal; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
-  /* F8：border-beam 的 @property 驱动动画在 CSS 层照转，此处强制停止 */
+  /* border-beam 的 @property 驱动动画在 CSS 层照转，此处强制停止 */
   .search-wrap [data-beam] * { animation: none !important; }
 }

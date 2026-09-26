@@ -144,7 +144,7 @@ describe("searchReducer", () => {
 });
 
 describe("statusTextFor", () => {
-  it("hints whole-grade message for pure grade query (F36)", () => {
+  it("hints whole-grade message for pure grade query", () => {
     expect(statusTextFor("duplicate", 200, false)).toContain("整个年段/班级");
   });
   it("normal text for named query", () => {
@@ -171,7 +171,7 @@ describe("orchestration inside the reducer", () => {
     expect(next.statusText).toBe("没有找到匹配记录");
   });
 
-  it("hints the whole grade for a pure grade query (F36) without the caller deriving it", () => {
+  it("hints the whole grade for a pure grade query without the caller deriving it", () => {
     const s = searchReducer(initialState, { type: "submit-start" });
     const next = searchReducer(s, { type: "submit-success", items: [], total: 200, hasMore: true, query: "高一" });
     expect(next.state).toBe("duplicate");

@@ -89,7 +89,7 @@ func TestSearchNegativeOffsetTreatedAsFirstPage(t *testing.T) {
 	}
 }
 
-// F22：汉字多位班级号（十一~九十九）应解析为数值
+// 汉字多位班级号（十一~九十九）应解析为数值
 func TestClassNumberChineseMultiDigit(t *testing.T) {
 	cases := []struct {
 		in   string
@@ -115,7 +115,7 @@ func TestClassNumberChineseMultiDigit(t *testing.T) {
 	}
 }
 
-// F22 关联：查询 "十一班" 应命中 11 班而不是全校
+// 查询 "十一班" 应命中 11 班而不是全校
 func TestSearchChineseMultiDigitClass(t *testing.T) {
 	// fixture 中 11 班有 EXAMPLE STUDENT（1 条）；18 班与 6 班不应命中
 	got, _ := Search(testStudents(), "十一班", 10, 0)
@@ -127,7 +127,7 @@ func TestSearchChineseMultiDigitClass(t *testing.T) {
 	}
 }
 
-// F22 关联：超长数字班级串应被安全处理（不 panic、按姓名处理返回空）
+// 超长数字班级串应被安全处理（不 panic、按姓名处理返回空）
 func TestClassNumberOverflowSafe(t *testing.T) {
 	if got := classNumber("99999999999999999999班"); got != -1 {
 		t.Fatalf("超长数字应解析为 -1（无效班级标记），实际 %d", got)
@@ -139,7 +139,7 @@ func TestClassNumberOverflowSafe(t *testing.T) {
 	}
 }
 
-// F62：姓名包含"高"/"班"字不应被误判为年级/班级（回归保护）
+// 姓名包含"高"/"班"字不应被误判为年级/班级（回归保护）
 func TestNameTokensNotMisparsed(t *testing.T) {
 	students := []Student{
 		newStudent("高翔", GradeOne, "1班"),
@@ -153,8 +153,8 @@ func TestNameTokensNotMisparsed(t *testing.T) {
 	}
 }
 
-// F16/F71 回归：年级+班级连写输入（"高三三班"）精确解析为年段+班级：
-// 旧语义按年级子串处理返回全年级，F71 改为精确班级筛选（用户报告缺陷）。
+// 年级+班级连写输入（"高三三班"）精确解析为年段+班级：
+// 旧语义按年级子串处理返回全年级，现改为精确班级筛选（用户报告缺陷）。
 func TestGradeSubstringBehavior(t *testing.T) {
 	got, q := Search(testStudents(), "高三三班", 10, 0)
 	if q.Grade != GradeThree {
@@ -169,7 +169,7 @@ func TestGradeSubstringBehavior(t *testing.T) {
 	}
 }
 
-// F71：年级+班级连写（"高二三班"/"高二1班"）精确筛选对应班级的人
+// 年级+班级连写（"高二三班"/"高二1班"）精确筛选对应班级的人
 func TestGradeClassCompoundPrecise(t *testing.T) {
 	students := []Student{
 		newStudent("甲", GradeTwo, "1班"),
@@ -203,7 +203,7 @@ func TestGradeClassCompoundPrecise(t *testing.T) {
 	}
 }
 
-// F70：按数据目录实际文件探测年段，缺失的年级文件跳过不报错
+// 按数据目录实际文件探测年段，缺失的年级文件跳过不报错
 func TestLoadStudentsSkipMissingGrade(t *testing.T) {
 	dir := t.TempDir()
 	// 只放高三，高一高二不存在
@@ -220,7 +220,7 @@ func TestLoadStudentsSkipMissingGrade(t *testing.T) {
 	}
 }
 
-// F70：空目录应给出明确指引，不静默空跑
+// 空目录应给出明确指引，不静默空跑
 func TestLoadStudentsEmptyDirFails(t *testing.T) {
 	dir := t.TempDir()
 	if _, err := loadStudents(dir); err == nil {
@@ -228,7 +228,7 @@ func TestLoadStudentsEmptyDirFails(t *testing.T) {
 	}
 }
 
-// F70：高三/高二的排序权重与声明序一致
+// 高三/高二的排序权重与声明序一致
 func TestGradeOrderAcrossGrades(t *testing.T) {
 	students := []Student{
 		newStudent("林宇", GradeThree, "1班"),
@@ -245,7 +245,7 @@ func TestGradeOrderAcrossGrades(t *testing.T) {
 	}
 }
 
-// F73：newStudent 必须填充派生字段——排序比较直接读这些字段，零值会导致排序静默错乱
+// newStudent 必须填充派生字段——排序比较直接读这些字段，零值会导致排序静默错乱
 func TestNewStudentFillsDerivedFields(t *testing.T) {
 	s := newStudent("张三", GradeTwo, "18班")
 	if s.Name != "张三" || s.NameKey != "张三" || s.Grade != GradeTwo || s.ClassName != "18班" {
@@ -271,7 +271,7 @@ func TestNewStudentFillsDerivedFields(t *testing.T) {
 	}
 }
 
-// F73：normalizeName 快路径必须与原语义完全一致（含全角空格与大小写）
+// normalizeName 快路径必须与原语义完全一致（含全角空格与大小写）
 func TestNormalizeNameFastPath(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"张三", "张三"},
@@ -290,7 +290,7 @@ func TestNormalizeNameFastPath(t *testing.T) {
 	}
 }
 
-// F73：已归一化的姓名必须零拷贝复用原串（Name 与 NameKey 共享底层数组），
+// 已归一化的姓名必须零拷贝复用原串（Name 与 NameKey 共享底层数组），
 // 这是内存占用的关键优化：2000 条名单可省约一半姓名字符串内存
 func TestNormalizeNameReusesCleanInput(t *testing.T) {
 	clean := "张三"

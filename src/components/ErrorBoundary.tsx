@@ -8,7 +8,7 @@ interface State {
   hasError: boolean;
 }
 
-// F1：异步 chunk 加载失败（网络抖动/部署切换后旧 chunk 404）时，
+// 异步 chunk 加载失败（网络抖动/部署切换后旧 chunk 404）时，
 // 错误会冒泡到 React 根导致整页白屏。此边界捕获错误并给出可恢复的 UI。
 export default class ErrorBoundary extends Component<Props, State> {
   state: State = { hasError: false };

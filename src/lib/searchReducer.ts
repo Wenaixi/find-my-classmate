@@ -69,7 +69,7 @@ export function errorMessage(cause: unknown): string {
   return COPY.error;
 }
 
-// statusText 派生（含 F36 纯年段/班级提示分支）。
+// statusText 派生（含纯年段/班级提示分支）。
 // hasName 由调用方（App.tsx）用 hasNameCondition(submitted) 计算后传入，reducer 保持纯状态机。
 export function statusTextFor(state: SearchState, total: number, hasName: boolean): string {
   if (state === "duplicate" && total >= PAGE_SIZE) {

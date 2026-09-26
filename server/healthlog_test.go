@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// F45：healthcheck 探针请求不应产生 access 日志行（减少 2880 条/天噪音）
+// healthcheck 探针请求不应产生 access 日志行（减少 2880 条/天噪音）
 func TestAccessLogSkipsHealthProbe(t *testing.T) {
 	var buf bytes.Buffer
 	oldOut := log.Writer()

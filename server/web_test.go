@@ -104,7 +104,7 @@ func TestFrontendPathTraversalRejected(t *testing.T) {
 	}
 }
 
-// F26：Accept-Encoding: gzip 时静态资源应返回 gzip 压缩（Content-Encoding: gzip）
+// Accept-Encoding: gzip 时静态资源应返回 gzip 压缩（Content-Encoding: gzip）
 func TestFrontendAssetsGzip(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/assets/app.js", nil)
 	req.Header.Set("Accept-Encoding", "gzip")
@@ -128,7 +128,7 @@ func TestFrontendAssetsGzip(t *testing.T) {
 	}
 }
 
-// F55：静态资源应带 ETag，且 If-None-Match 命中时返回 304
+// 静态资源应带 ETag，且 If-None-Match 命中时返回 304
 func TestFrontendAssetsETagAnd304(t *testing.T) {
 	rec := httptest.NewRecorder()
 	frontendHandlerWithFS(testFrontendFS()).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/assets/app.js", nil))
@@ -146,7 +146,7 @@ func TestFrontendAssetsETagAnd304(t *testing.T) {
 	}
 }
 
-// F26 关联：首页（/）不应被 gzip（保持 no-store 语义，且小页面不值得压缩）
+// 首页（/）不应被 gzip（保持 no-store 语义，且小页面不值得压缩）
 func TestFrontendIndexNotGzipped(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Accept-Encoding", "gzip")

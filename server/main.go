@@ -11,7 +11,7 @@ import (
 )
 
 // 响应直接序列化 SearchResponse：Student 的 json tag 保证隐私红线（只输出 name/grade/class）。
-// 契约由类型声明单点保证（toResponse 双实现已于 F61 移除）。
+// 契约由类型声明单点保证（toResponse 双实现已移除）。
 
 func resolveDataDir() string {
 	if value := os.Getenv("FMC_DATA_DIR"); value != "" {
@@ -142,7 +142,7 @@ func buildServer(addr string, handler http.Handler) *http.Server {
 // 隐私红线：不记录查询参数与响应内容，IP 只保留前两段。
 func accessLog(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// F45：healthcheck 探针每 30s 一次，不产生访问日志（避免 2880 条/天噪音）
+		// healthcheck 探针每 30s 一次，不产生访问日志（避免 2880 条/天噪音）
 		if r.URL.Path == "/api/health" {
 			next.ServeHTTP(w, r)
 			return

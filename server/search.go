@@ -64,7 +64,7 @@ type Query struct {
 var querySeparators = strings.NewReplacer("，", " ", ",", " ", "、", " ", "+", " ")
 
 
-// gradeClassToken 匹配年级+班级连写（"高二三班"/"高二1班"/"高一十八班"），F71。
+// gradeClassToken 匹配年级+班级连写（"高二三班"/"高二1班"/"高一十八班"）。
 var gradeClassToken = regexp.MustCompile("^(高一|高二|高三|高1|高2|高3)([0-9]+|[一二三四五六七八九十]+)班?$")
 
 
@@ -114,7 +114,7 @@ func parseQuery(raw string) Query {
 	normalized := querySeparators.Replace(strings.TrimSpace(raw))
 	query := Query{}
 	for _, token := range strings.Fields(normalized) {
-		// F71：年级+班级连写（"高二三班"）优先于年级子串，精确解析为年段+班级
+		// 年级+班级连写（"高二三班"）优先于年级子串，精确解析为年段+班级
 		if match := gradeClassToken.FindStringSubmatch(token); match != nil {
 			classNo := classNumber(match[2])
 			if classNo < 0 {
@@ -171,7 +171,7 @@ func Search(students []Student, raw string, limit, offset int) (SearchResponse, 
 			matches = append(matches, item)
 		}
 	}
-	// 排序热路径只做整数比较与子串计分，不再调用正则（F73）
+	// 排序热路径只做整数比较与子串计分，不再调用正则
 	slices.SortStableFunc(matches, func(a, b Student) int {
 		if c := cmp.Compare(nameScoreSum(a.NameKey, query.NameTokens), nameScoreSum(b.NameKey, query.NameTokens)); c != 0 {
 			return c

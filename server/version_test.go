@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// F48：/api/health 应携带版本号（ldflags 注入），便于运维溯源
+// /api/health 应携带版本号（ldflags 注入），便于运维溯源
 func TestHealthIncludesVersion(t *testing.T) {
 	store := newTestStore(t, map[string]string{"高一.json": validGradeOne, "高二.json": validGradeTwo})
 	mux := buildMux(store, "dev")

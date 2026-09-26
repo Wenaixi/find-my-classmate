@@ -8,7 +8,7 @@ export default function StatusOrb({ state }: { state: SearchState }) {
       state="searching"
       size={64}
       theme="dark"
-      // F8：paused 参数在库内从不被消费（死参数），移除
+      // paused 参数在库内从不被消费（死参数），移除
     />
   );
 }

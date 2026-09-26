@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// F30：二次 WriteHeader 不应覆盖已记录的状态码
+// 二次 WriteHeader 不应覆盖已记录的状态码
 func TestStatusRecorderIgnoresSecondWriteHeader(t *testing.T) {
 	rec := httptest.NewRecorder()
 	sr := &statusRecorder{ResponseWriter: rec, status: http.StatusOK}
@@ -19,7 +19,7 @@ func TestStatusRecorderIgnoresSecondWriteHeader(t *testing.T) {
 	}
 }
 
-// F30：裸 Write 后状态应记录为 200
+// 裸 Write 后状态应记录为 200
 func TestStatusRecorderWriteDefaults200(t *testing.T) {
 	rec := httptest.NewRecorder()
 	sr := &statusRecorder{ResponseWriter: rec, status: http.StatusOK}
@@ -29,7 +29,7 @@ func TestStatusRecorderWriteDefaults200(t *testing.T) {
 	}
 }
 
-// F30：handler 调用 Flush 时，透传必须真实到达下游 writer，且状态落账 200。
+// handler 调用 Flush 时，透传必须真实到达下游 writer，且状态落账 200。
 // 这取代"仅断言 statusRecorder 满足 http.Flusher"的形状测试：
 // 形状断言在 Flush 实现体被改坏时不会失败，透传断言会。
 func TestStatusRecorderFlushPassesThrough(t *testing.T) {
@@ -54,7 +54,7 @@ func TestStatusRecorderFlushPassesThrough(t *testing.T) {
 	}
 }
 
-// F30：handler 通过 ReadFrom 搬运正文时，字节应完整到达下游且状态落账 200。
+// handler 通过 ReadFrom 搬运正文时，字节应完整到达下游且状态落账 200。
 // ReadFrom 存在是为了保住 FileServer 的 sendfile 路径，真实字节搬运才是它的职责。
 func TestStatusRecorderReadFromTransportsBytes(t *testing.T) {
 	payload := "0123456789"
@@ -79,7 +79,7 @@ func TestStatusRecorderReadFromTransportsBytes(t *testing.T) {
 	}
 }
 
-// F30：accessLog 中间件在 404 时应记录 404
+// accessLog 中间件在 404 时应记录 404
 func TestAccessLogRecords404(t *testing.T) {
 	handler := accessLog(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)

@@ -90,8 +90,6 @@ func TestRateLimitSeparatesIPs(t *testing.T) {
 	}
 }
 
-// --- 新测试：F20 时钟回拨 / F17 429 JSON ---
-
 func TestRateLimitClockRollbackDoesNotStarve(t *testing.T) {
 	clock := &fakeClock{current: time.Unix(0, 0)}
 	limiter := newRateLimiter(60, time.Second)

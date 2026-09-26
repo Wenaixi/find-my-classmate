@@ -14,7 +14,7 @@ import (
 const validGradeOne = `{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"王皓轩"},{"姓名":"张三"}]}}`
 const validGradeTwo = `{"标题":"福清一中2025级高二编班名单","名单":{"2班":[{"姓名":"李四"}]}}`
 
-// F18：health 应反映数据可用性——数据损坏时返回 503
+// health 应反映数据可用性——数据损坏时返回 503
 func TestHealthReflectsDataAvailability(t *testing.T) {
 	dir := t.TempDir()
 	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(validGradeOne), 0o644)
@@ -56,7 +56,7 @@ func TestHealthReflectsDataAvailability(t *testing.T) {
 	}
 }
 
-// F19：未知 /api/* 路径应返回 JSON 404（not_found），而非 text/plain
+// 未知 /api/* 路径应返回 JSON 404（not_found），而非 text/plain
 func TestUnknownAPIJSON404(t *testing.T) {
 	store := newTestStore(t, map[string]string{"高一.json": validGradeOne, "高二.json": validGradeTwo})
 	mux := buildMux(store, "dev")
@@ -77,7 +77,7 @@ func TestUnknownAPIJSON404(t *testing.T) {
 	}
 }
 
-// F27+F61：/api/search 响应键集合必须只含 name/grade/class（无 NameKey）
+// /api/search 响应键集合必须只含 name/grade/class（无 NameKey）
 func TestSearchResponseKeys(t *testing.T) {
 	store := newTestStore(t, map[string]string{"高一.json": validGradeOne, "高二.json": validGradeTwo})
 	mux := buildMux(store, "dev")
@@ -105,7 +105,7 @@ func TestSearchResponseKeys(t *testing.T) {
 	}
 }
 
-// F18 关联：数据损坏时 /api/search 应 500 data_unavailable
+// 数据损坏时 /api/search 应 500 data_unavailable
 func TestSearchDataUnavailable(t *testing.T) {
 	store := newTestStore(t, map[string]string{"高一.json": validGradeOne, "高二.json": validGradeTwo})
 	mux := buildMux(store, "dev")
@@ -122,7 +122,7 @@ func TestSearchDataUnavailable(t *testing.T) {
 	}
 }
 
-// F30：/api/search 非 GET 应返回 405 且带 Allow: GET
+// /api/search 非 GET 应返回 405 且带 Allow: GET
 func TestSearchMethodNotAllowed(t *testing.T) {
 	store := newTestStore(t, map[string]string{"高一.json": validGradeOne, "高二.json": validGradeTwo})
 	mux := buildMux(store, "dev")
