@@ -91,7 +91,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   data:
-    name: 数据契约 · 名单 JSON 校验
+    name: 数据边界守卫 · 真实名单零数据检测
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

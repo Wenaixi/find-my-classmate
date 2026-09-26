@@ -2,6 +2,29 @@
 
 本文件记录 FindMyClassmate 的版本变更。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [v0.10.3] - 2026-09-26
+
+### 修复
+
+- **年段扩展路径断裂**：`data.go` 的名单标题校验反过来依赖 `parseGrade`，而 `parseGrade` 与 `gradeClassToken` 各自硬编码年段字面量（前端 `query.ts` 另有两处）。实测：往 `knownGrades` 追加新年段后，运维提示正确列出该文件、排序正确排位，但 `loadStudents` 报「文件名与年级标题不一致」拒绝加载合法名单，查询返回 0 条且与真不存在的年段结果完全一致。跨语言对拍无法发现——两端一致地不认识新年段，对拍语料必须先有该年段样本。现年段规范名与书写别名统一从 `knownGrades` 派生，加载侧与查询侧共用同一份值域。
+- **`gradeClassToken` 编译结果的分配退化**：首版实现改为每次调用重新编译正则，整年段查询分配次数从 6 涨到 117（实测），被 `TestSearchAllocsBudget` 当场拦下。现缓存编译结果并提供 `rebuildGradePattern` 供扩展后重建，分配次数回到 6/7/8 基线。
+
+### 架构深化
+
+- **wire 参数契约进入受测接缝**：`api.go` 的 limit / offset / query 长度三条 400 路径此前零承重——把三条判定改成恒假后全仓后端测试仍全绿。新增用例经 `buildMux` 真实接缝驱动，并配「合法边界不被误伤」的对照片段，防止「一律拒绝」这类同样能过测试的错误实现。
+- **展示派生收进 `present` 单点**：`App.tsx` 此前必须同时 import `resultSectionOf` / `shouldScrollToResults` / `deriveStatusHint` 三个派生并另调 `useSearchController` 取 state，界面知识横跨两个 module；既有测试分别打三个函数，无任何断言锁住它们对同一状态给出一致的组合。现收成一次派生，一致性从「同一次调用」这一接缝可验证。
+
+### 清理
+
+- 内联一行实现的 `newStaticCache`（唯一调用点、零测试），修正 `web.go` 指向错误行号的 Vary 引用，删除 `src/**.tsx` 中零引用的 `.result-card.no-anim` 规则。
+- 工作流步骤名「安装 Node.js 20」与实际 `node-version: 24` 不符，已改正；CI 的「名单 JSON 校验」job 名与架构文档描述的校验能力与实现不符（实际只做零数据守卫），已改为陈述实际能力。
+
+### 测试
+
+- 前端 135 → **142 用例**（新增 `present` 三条、`gradeDomain` 三条、别名连写对拍语料一条）；后端新增年段扩展性回归锁与三条 wire 参数用例。
+- 变异实验六次：Go 端 `parseGrade` 跳过 `knownGrades` 循环、正则退回硬编码，前端 `parseGrade` 跳过规范名循环、`present` 的滚动与提示色各自改坏，api 三条参数判定改恒假——全部精确翻红。
+- 诚实记录一次未翻红：前端把 `gradeClassToken` 退回硬编码正则时 54 条用例全绿——对已声明年段而言派生与硬编码行为等价，契约语料无法区分。故补充 `gradeDomain` 一组断言锁「声明本身完整且自洽」，而非试图锁「正则长什么样」。
+
 ## [v0.9.3] - 2026-09-26
 
 ### 修复

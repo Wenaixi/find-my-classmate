@@ -43,8 +43,6 @@ type cachedAsset struct {
 	gzipped []byte
 }
 
-func newStaticCache() *staticCache { return &staticCache{} }
-
 // frontendHandlerWithFS 服务页面与静态资源。
 // /assets/ 与 /fonts/ 为构建产物（哈希命名或构建后不再变更）：
 //   - Cache-Control: public, max-age=31536000, immutable（长缓存）
@@ -55,7 +53,7 @@ func newStaticCache() *staticCache { return &staticCache{} }
 func frontendHandlerWithFS(fsys fs.FS) http.Handler {
 	fileServer := http.FileServer(http.FS(fsys))
 	// 缓存与本 handler 所服务的来源绑定：不同来源不会互相复用条目
-	cache := newStaticCache()
+	cache := &staticCache{}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
 			page, readErr := fs.ReadFile(fsys, "index.html")
@@ -87,7 +85,7 @@ func frontendHandlerWithFS(fsys fs.FS) http.Handler {
 
 // acceptsGzip 判定客户端是否接受 gzip 表示。
 //
-// 响应已声明 Vary: Accept-Encoding（web.go:127），即向共享缓存声明了「本响应随
+// 响应已声明 Vary: Accept-Encoding（serveCachedStatic 内的 Set("Vary", …)），即向共享缓存声明了「本响应随
 // Accept-Encoding 变化」；协商本身却曾用子串匹配实现，把 gzip;q=0（客户端明确
 // 拒绝压缩）判为接受。声明了协商维度却不严格协商，是接入 CDN 或共享缓存后最难
 // 排查的一类问题——缓存会忠实地复用错误的表示。
@@ -119,7 +117,7 @@ func acceptsGzip(header string) bool {
 	}
 	return false
 }
-//
+
 // 协商事实一致性：同一资源可能以 raw 或 gzip 返回，因此 200 与 304 都必须
 // 声明 Vary: Accept-Encoding——否则共享缓存会把某一种表示复用到另一种请求上。
 // 304 不声明 Content-Length / Content-Encoding，避免与实际表示不符的长度。

@@ -247,7 +247,7 @@ loading 判定、styles.css 的 data-state 镜像），且**零测试覆盖**—
 - 纯逻辑测试默认 node 环境，需要 DOM 的测试用文件头 `@vitest-environment jsdom` 单独声明；挂载测试须置 `IS_REACT_ACT_ENVIRONMENT=true`，否则 `act()` 的更新不会 flush，会读到旧快照产生假阴性
 - 后端：go test——查询执行与数据加载（search_test.go）；限流回补的极端值由纯函数 `fillTokens` 直测（时钟回拨、容量钳制、连续量不取整）
 - **变异测试作为断言有效性的判据**：破坏实现后测试必须翻红，否则该测试不承重。已用此法剔除过零承重的推测性防御（`useSearchInput` 的本地 composing ref）
-- CI 数据契约 job：校验名单 JSON 结构、字段白名单（仅"姓名"）、去重
+- CI 数据边界守卫：校验真实名单不随仓库分发（`data/*.json` 零数据检查）。名单结构、字段白名单与去重的校验由 `server/data_test.go` 在部署环境执行，CI 不重复——仓库内本就不存在名单数据，无可校验
 - 查询改动：解析规则先改测试再同步前后端；匹配/排序/分页只改后端
 
 ## 12. 演进原则
