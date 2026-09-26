@@ -107,9 +107,9 @@ func TestSearchResponseKeys(t *testing.T) {
 
 // 数据损坏时 /api/search 应 500 data_unavailable
 func TestSearchDataUnavailable(t *testing.T) {
-	store := newTestStore(t, map[string]string{"高一.json": validGradeOne, "高二.json": validGradeTwo})
+	store, dir := newTestStoreWithDir(t, map[string]string{"高一.json": validGradeOne, "高二.json": validGradeTwo}, time.Now)
 	mux := buildMux(store, "dev")
-	_ = os.WriteFile(filepath.Join(store.dir, "高二.json"), []byte("{"+"bad"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "高二.json"), []byte("{"+"bad"), 0o644)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/search?q=李", nil))
 	if rec.Code != http.StatusInternalServerError {

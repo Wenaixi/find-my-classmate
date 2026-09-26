@@ -25,16 +25,16 @@ func writeTestFiles(t *testing.T, dir string) {
 }
 
 // newTestStore 构造指向临时目录的 studentStore，是数据层 fixture 的唯一入口。
-// 供 API、请求链与版本测试复用：学生数据的构造与断言归属数据模块，
-// 各调用方只提供自己关心的名单文件。
+// 供不需要修改源文件的测试复用：学生数据的构造与断言归属数据模块，各调用方只提供自己关心的名单文件。
 func newTestStore(t *testing.T, files map[string]string) *studentStore {
 	t.Helper()
-	return newTestStoreWithClock(t, files, time.Now)
+	store, _ := newTestStoreWithDir(t, files, time.Now)
+	return store
 }
 
-// newTestStoreWithClock 构造可注入时钟的 studentStore：
-// 探测节流与失败冷却的测试沿同一条时间线推进，不再从外部改写可写字段。
-func newTestStoreWithClock(t *testing.T, files map[string]string, now func() time.Time) *studentStore {
+// newTestStoreWithDir 在需要模拟文件变化的测试中同时返回 fixture 目录。
+// 目录是测试场景的显式事实，调用方不应从 studentStore 私有字段反向取出它。
+func newTestStoreWithDir(t *testing.T, files map[string]string, now func() time.Time) (*studentStore, string) {
 	t.Helper()
 	dir := t.TempDir()
 	for name, content := range files {
@@ -46,6 +46,14 @@ func newTestStoreWithClock(t *testing.T, files map[string]string, now func() tim
 	if err != nil {
 		t.Fatalf("newStudentStore: %v", err)
 	}
+	return store, dir
+}
+
+// newTestStoreWithClock 构造可注入时钟的 studentStore：
+// 探测节流与失败冷却的测试沿同一条时间线推进，不再从外部改写可写字段。
+func newTestStoreWithClock(t *testing.T, files map[string]string, now func() time.Time) *studentStore {
+	t.Helper()
+	store, _ := newTestStoreWithDir(t, files, now)
 	return store
 }
 
