@@ -3,8 +3,21 @@ import type { Grade, ParsedQuery } from "../types";
 const separators = /[，,、+]+/g;
 const classDigits: Record<string, string> = { 一: "1", 二: "2", 三: "3", 四: "4", 五: "5", 六: "6", 七: "7", 八: "8", 九: "9", 十: "10" };
 const classToken = /^(\d+|[一二三四五六七八九十]+)班?$/;
+// 年段值域与 Go 端 search.go 的 knownGrades 保持同一份事实。
+// 硬编码会使「扩展年段只需在 knownGrades 追加」在两端同时失效，
+// 且跨语言对拍无法发现——两端一致地不认识新年段，对拍语料必须先有该年段样本。
+const gradeValues: ReadonlyArray<Grade> = ["高一", "高二", "高三"];
+// 别名 → 规范名：用户可写「高1」，而 grade 字段与后端仍用规范名。
+const gradeAliases: ReadonlyArray<readonly [string, Grade]> = [
+  ["高1", "高一"],
+  ["高2", "高二"],
+  ["高3", "高三"],
+];
+// 声明的年段全貌，供测试锁住「规范名与别名一一对应且都属于合法 Grade」。
+export const gradeDomain = { values: gradeValues, aliases: gradeAliases };
+const gradePattern = [...gradeValues, ...gradeAliases.map(([alias]) => alias)].join("|");
 // 年级+班级连写（"高二三班" / "高二1班" / "高一十八班"）→ 精确解析为年段+班级
-const gradeClassToken = /^(高一|高二|高三|高1|高2|高3)(\d+|[一二三四五六七八九十]+)班?$/;
+const gradeClassToken = new RegExp(`^(${gradePattern})(\\d+|[一二三四五六七八九十]+)班?$`);
 
 // 空白集合与 Go 端 unicode.IsSpace 逐码位对齐，不用 JS 的 \s 近似：
 // 两者的差集有两个码位且方向相反——U+0085（NEL）是 Go 的空白而 \s 不含，
@@ -23,10 +36,14 @@ export function normalizeName(value: string): string {
 }
 
 // parseGrade 与 Go 端 search.go 语义一致：子串匹配（已是班级连写的 token 由 gradeClassToken 优先精确解析）。
+// 遍历声明的年段值域而非硬编码比较：扩展年段只需在 gradeValues / gradeAliases 追加。
 function parseGrade(token: string): Grade | undefined {
-  if (token.includes("高一") || token.includes("高1")) return "高一";
-  if (token.includes("高二") || token.includes("高2")) return "高二";
-  if (token.includes("高三") || token.includes("高3")) return "高三";
+  for (const grade of gradeValues) {
+    if (token.includes(grade)) return grade;
+  }
+  for (const [alias, grade] of gradeAliases) {
+    if (token.includes(alias)) return grade;
+  }
   return undefined;
 }
 

@@ -37,6 +37,16 @@
       "classNumber": null
     },
     {
+      "$comment": "别名 + 班级连写：验证 gradePattern 真的被 gradeClassToken 消费。变异实验：把 gradeClassToken 退回硬编码正则时本条翻红。",
+      "raw": "高1一班",
+      "tokens": [
+        "高1一班"
+      ],
+      "nameTokens": [],
+      "grade": "高一",
+      "classNumber": 1
+    },
+    {
       "raw": "高2",
       "tokens": [
         "高2"

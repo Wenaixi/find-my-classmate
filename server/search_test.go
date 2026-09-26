@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"unsafe"
 )
@@ -324,5 +326,52 @@ func TestNormalizeNameReusesCleanInput(t *testing.T) {
 	// 通过 unsafe 比较字符串头确认复用（同包测试可直接访问）
 	if !sameStringData(normalizeName(clean), clean) {
 		t.Error("已归一化姓名应复用原串底层数组，实际发生了拷贝")
+	}
+}
+
+// TestGradeValueDomainFollowsKnownGrades 验证年段值域从 knownGrades 派生。
+// 变异事实（2026-09-26 第六轮探针实测）：把新年段只追加到 knownGrades 后，
+// 运维提示正确列出该文件、gradeOrder 正确排位，但 loadStudents 报
+// 「文件名与年级标题不一致」拒绝加载合法名单，Search 返回 total=0 且与
+// 真不存在的年段结果完全一致——四处硬编码使扩展路径彻底失效，
+// 而跨语言对拍因两端同时缺失而无法发现。
+func TestGradeValueDomainFollowsKnownGrades(t *testing.T) {
+	original := knownGrades
+	knownGrades = append(append([]Grade{}, original...), Grade("高四"))
+	// 正则按 knownGrades 缓存编译，追加年段后必须重建才能覆盖到它。
+	// 生产中 knownGrades 不可变，首次求值即正确；此处显式重建以验证派生逻辑。
+	gradeClassToken = rebuildGradePattern()
+	t.Cleanup(func() {
+		knownGrades = original
+		gradeClassToken = rebuildGradePattern()
+	})
+
+	// 查询解释：子串匹配必须认识新年段
+	if got := parseGrade("福清一中2025级高四编班名单"); got != Grade("高四") {
+		t.Errorf("parseGrade(高四标题) = %q，期望 高四", got)
+	}
+
+	// 年级+班级连写正则必须认识新年段
+	if !gradeClassToken.MatchString("高四一班") {
+		t.Error("gradeClassToken 不认识 高四一班，年段+班级连写将退化为姓名条件")
+	}
+
+	// 加载侧：标题校验经 parseGrade，必须放行合法的新年段名单
+	dir := t.TempDir()
+	body := `{"标题":"福清一中2025级高四编班名单","名单":{"1班":[{"姓名":"探测同学"}]}}`
+	if err := os.WriteFile(filepath.Join(dir, "高四.json"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	students, err := loadStudents(dir)
+	if err != nil {
+		t.Fatalf("追加高四后 loadStudents 失败 = %v，期望加载成功", err)
+	}
+	if len(students) != 1 || students[0].Grade != Grade("高四") {
+		t.Fatalf("加载结果 = %+v，期望 1 名高四学生", students)
+	}
+
+	// 用户可见行为：查询该年段必须命中
+	if got := Search(students, "高四", 10, 0).Total; got != 1 {
+		t.Errorf("Search(高四).Total = %d，期望 1", got)
 	}
 }

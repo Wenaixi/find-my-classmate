@@ -20,6 +20,39 @@ const (
 // loadStudents 与 dataStamps 按此列表探测数据目录，存在哪个文件就加载哪个。
 var knownGrades = []Grade{GradeOne, GradeTwo, GradeThree}
 
+// gradeAliases 是年段的书写别名，与 knownGrades 同步维护。
+// 别名让用户可以写「高1」，而文件命名、排序与存储仍用规范名「高一」。
+// 扩展年段时只需在 knownGrades 追加规范名、在此处追加其别名。
+var gradeAliases = []struct {
+	name  string
+	grade Grade
+}{
+	{"高1", GradeOne},
+	{"高2", GradeTwo},
+	{"高3", GradeThree},
+}
+
+// gradePattern 由 knownGrades 与 gradeAliases 生成年段匹配源串。
+// 每次调用重新生成而非包级 var：包级变量在初始化时即固定，
+// 而 knownGrades 是可声明的包级变量，预先求值会让之后追加的年段在正则中缺席。
+//
+// 为什么必须派生：data.go 的名单标题校验反过来依赖 parseGrade，
+// 而 parseGrade 与 gradeClassToken 此前各自硬编码年段字面量。
+// 变异事实（2026-09-26 第六轮探针实测）：把新年段只追加到 knownGrades 后，
+// 运维提示正确列出该文件、gradeOrder 正确排位，但 loadStudents 报
+// 「文件名与年级标题不一致」拒绝加载合法名单，查询返回 total=0 且与
+// 真不存在的年段结果完全一致。跨语言对拍无法发现——两端一致地不认识新年段。
+func gradePattern() string {
+	parts := make([]string, 0, len(knownGrades)+len(gradeAliases))
+	for _, g := range knownGrades {
+		parts = append(parts, regexp.QuoteMeta(string(g)))
+	}
+	for _, a := range gradeAliases {
+		parts = append(parts, regexp.QuoteMeta(a.name))
+	}
+	return strings.Join(parts, "|")
+}
+
 // Student 对外 JSON 契约：只输出 name/grade/class（隐私红线，派生字段与 NameKey 永不出现在任何序列化中）。
 type Student struct {
 	Name      string `json:"name"`
@@ -80,7 +113,17 @@ func tokenize(raw string) []string {
 }
 
 // gradeClassToken 匹配年级+班级连写（"高二三班"/"高二1班"/"高一十八班"）。
-var gradeClassToken = regexp.MustCompile("^(高一|高二|高三|高1|高2|高3)([0-9]+|[一二三四五六七八九十]+)班?$")
+// 年段部分由 knownGrades 派生，扩展年段无需改动此处。
+// 编译结果必须缓存：调用点在 token 循环内，每次重新编译会让整年段查询的
+// 分配次数从 6 涨到 117（实测 2026-09-26），是不可接受的零分配热路径退化。
+// knownGrades 在生产中不可变，扩展它（如测试构造新年段）后须调用 rebuildGradePattern。
+var gradeClassToken = rebuildGradePattern()
+
+// rebuildGradePattern 按当前 knownGrades 重新编译年段+班级连写正则。
+// 运行时初始化走包级 var 的首次求值，无需显式调用。
+func rebuildGradePattern() *regexp.Regexp {
+	return regexp.MustCompile("^(" + gradePattern() + ")([0-9]+|[一二三四五六七八九十]+)班?$")
+}
 
 // needsNormalize 判定是否真的需要归一化处理。
 // 绝大多数中文姓名既无空白也无小写字母，此时可原样返回，省去一次字符串分配。
@@ -111,15 +154,19 @@ func normalizeName(value string) string {
 	return builder.String()
 }
 
+// parseGrade 按规范名与别名做子串匹配，与 knownGrades 声明的年段保持一致。
+// 不得回退为硬编码比较：data.go 的名单标题校验依赖本函数，
+// 漏认识新年段会让合法名单文件被判为「文件名与年级标题不一致」而拒绝加载。
 func parseGrade(title string) Grade {
-	if strings.Contains(title, "高一") || strings.Contains(title, "高1") {
-		return GradeOne
+	for _, g := range knownGrades {
+		if strings.Contains(title, string(g)) {
+			return g
+		}
 	}
-	if strings.Contains(title, "高二") || strings.Contains(title, "高2") {
-		return GradeTwo
-	}
-	if strings.Contains(title, "高三") || strings.Contains(title, "高3") {
-		return GradeThree
+	for _, a := range gradeAliases {
+		if strings.Contains(title, a.name) {
+			return a.grade
+		}
 	}
 	return ""
 }

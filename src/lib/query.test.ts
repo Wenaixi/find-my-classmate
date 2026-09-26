@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasNameCondition, normalizeName, parseQuery } from "./query";
+import { gradeDomain, hasNameCondition, normalizeName, parseQuery } from "./query";
 import contract from "../../docs/query-contract.json";
 
 // 前端只保留查询解释语义：解析查询串、判断是否含姓名条件。
@@ -79,5 +79,32 @@ describe("hasNameCondition", () => {
 
   it("true for mixed name + class", () => {
     expect(hasNameCondition("张三，18班")).toBe(true);
+  });
+});
+
+// 年段值域声明的不变量。
+//
+// 这组断言的存在理由：把 gradeClassToken 退回硬编码正则后，
+// 全部 54 条用例仍然通过——对已声明年段而言，派生与硬编码行为等价，
+// 契约语料无法区分二者。真正值得锁的不是「正则长什么样」，
+// 而是「声明本身完整且自洽」：别名必须映射回已声明的规范名，
+// 否则 parseGrade 会返回一个不在 Grade 值域内的年段。
+describe("gradeDomain", () => {
+  it("每个别名都映射回已声明的规范年段", () => {
+    for (const [alias, grade] of gradeDomain.aliases) {
+      expect(gradeDomain.values).toContain(grade);
+      expect(parseQuery(alias).grade).toBe(grade);
+    }
+  });
+
+  it("规范年段无重复", () => {
+    expect(gradeDomain.values.length).toBe(new Set(gradeDomain.values).size);
+  });
+
+  it("别名与规范名不重合：别名存在正是为了另一种书写", () => {
+    const aliases = gradeDomain.aliases.map(([alias]) => alias);
+    for (const alias of aliases) {
+      expect(gradeDomain.values).not.toContain(alias);
+    }
   });
 });
