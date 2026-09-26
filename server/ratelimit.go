@@ -114,5 +114,5 @@ func writeRateLimited(w http.ResponseWriter, wait time.Duration) {
 		seconds = 1
 	}
 	w.Header().Set("Retry-After", strconv.Itoa(seconds))
-	writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": errCodeRateLimited})
+	writeError(w, errCodeRateLimited)
 }
