@@ -115,12 +115,26 @@ describe("searchReducer", () => {
     expect(searchReducer(initialState, { type: "submit-success", items: [], total: 0, hasMore: false, query: "查无此人" }).state).toBe("empty");
   });
 
-  it("appends on load-more-append", () => {
-    const base = { ...initialState, items: [{ name: "A", grade: "高一" as const, className: "1班" }], state: "duplicate" as SearchState };
-    const s = searchReducer(base, { type: "load-more-append", items: [{ name: "B", grade: "高一" as const, className: "1班" }], total: 2, hasMore: false });
+  it("load-more-result ok appends items and resets loadingMore", () => {
+    const base = { ...initialState, items: [{ name: "A", grade: "高一" as const, className: "1班" }], state: "duplicate" as SearchState, loadingMore: true };
+    const s = searchReducer(base, { type: "load-more-result", result: { ok: true, response: { items: [{ name: "B", grade: "高一" as const, className: "1班" }], total: 2, limit: 10, offset: 1, hasMore: false } } });
     expect(s.items.map((i) => i.name)).toEqual(["A", "B"]);
     expect(s.loadingMore).toBe(false);
     expect(s.hasMore).toBe(false);
+  });
+
+  it("load-more-result error sets loadMoreError and resets loadingMore", () => {
+    const s = searchReducer({ ...initialState, loadingMore: true }, { type: "load-more-result", result: { ok: false, reason: "error", cause: new Error("boom") } });
+    expect(s.loadMoreError).toBe(true);
+    expect(s.loadingMore).toBe(false);
+  });
+
+  it("load-more-result stale silently resets loadingMore", () => {
+    // 回归锁：stale 复位此前依赖 App 无条件 dispatch settle 兜底；
+    // 收成单 action 后，静默复位必须在 reducer 内显式完成，否则删除 settle 后 stale 会卡死 loadingMore。
+    const s = searchReducer({ ...initialState, loadingMore: true }, { type: "load-more-result", result: { ok: false, reason: "stale" } });
+    expect(s.loadingMore).toBe(false);
+    expect(s.loadMoreError).toBe(false);
   });
 
   it("resets on clear", () => {

@@ -59,13 +59,8 @@ export function App() {
     if (!submitted || !hasMore || loadingMore || state === "loading") return;
     dispatch({ type: "load-more-start" });
     const result = await session.current!.loadMore(submitted, PAGE_SIZE, items.length);
-    if (!result.ok) {
-      // 过期/中止显式判别为 stale；真实错误走 load-more-error
-      if (result.reason === "error") dispatch({ type: "load-more-error" });
-    } else {
-      dispatch({ type: "load-more-append", items: result.response.items, total: result.response.total, hasMore: result.response.hasMore });
-    }
-    dispatch({ type: "load-more-settle" });
+    // 判别联合直接交给 reducer：ok 追加、error 置错、stale 静默复位（单 action 收编）
+    dispatch({ type: "load-more-result", result });
   }
 
   function clear() {

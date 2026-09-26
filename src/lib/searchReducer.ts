@@ -1,6 +1,7 @@
 import type { SearchState, Student } from "../types";
 import { ApiError } from "./api";
 import { hasNameCondition } from "./query";
+import type { SearchResult } from "./searchSession";
 import { MAX_QUERY_LENGTH, PAGE_SIZE } from "../config";
 
 // 搜索区状态机的唯一事实来源（原 App.tsx 内联的 9 个 state 集合）。
@@ -22,9 +23,7 @@ export type SearchAction =
   | { type: "submit-success"; items: Student[]; total: number; hasMore: boolean; query: string }
   | { type: "submit-error"; cause: unknown }
   | { type: "load-more-start" }
-  | { type: "load-more-append"; items: Student[]; total: number; hasMore: boolean }
-  | { type: "load-more-error" }
-  | { type: "load-more-settle" }
+  | { type: "load-more-result"; result: SearchResult }
   | { type: "clear" }
   | { type: "composition-start" }
   | { type: "composition-end" };
@@ -114,12 +113,18 @@ export function searchReducer(state: SearchControllerState, action: SearchAction
       return { ...state, items: [], state: "error", statusText: errorMessage(action.cause) };
     case "load-more-start":
       return { ...state, loadingMore: true, loadMoreError: false };
-    case "load-more-append":
-      return { ...state, items: [...state.items, ...action.items], total: action.total, hasMore: action.hasMore, loadingMore: false };
-    case "load-more-error":
-      return { ...state, loadMoreError: true, loadingMore: false };
-    case "load-more-settle":
-      return { ...state, loadingMore: false };
+    case "load-more-result": {
+      // 单 action 收编三分支：ok 追加、error 置错、stale 静默复位。
+      // stale 的 loadingMore 复位必须在 reducer 内显式完成（原由 App 无条件 settle 兜底）。
+      const r = action.result;
+      if (r.ok) {
+        return { ...state, items: [...state.items, ...r.response.items], total: r.response.total, hasMore: r.response.hasMore, loadingMore: false };
+      }
+      if (r.reason === "error") {
+        return { ...state, loadMoreError: true, loadingMore: false };
+      }
+      return { ...state, loadingMore: false }; // stale：静默复位，不进入业务错误路径
+    }
     case "clear":
       // 新引用而非 initialState 本身：React useReducer 对同引用跳过重渲染
       return { ...initialState };
