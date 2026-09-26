@@ -321,7 +321,6 @@ func TestLoadStudentsEmptyDirFails(t *testing.T) {
 	}
 }
 
-
 func TestStoreProbeThrottle(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFiles(t, dir)

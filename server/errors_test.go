@@ -12,13 +12,13 @@ import (
 
 func TestErrStatusMapping(t *testing.T) {
 	want := map[string]int{
-		errCodeNotFound:          http.StatusNotFound,
-		errCodeMethodNotAllowed:  http.StatusMethodNotAllowed,
-		errCodeInvalidLimit:      http.StatusBadRequest,
-		errCodeInvalidOffset:     http.StatusBadRequest,
-		errCodeInvalidQuery:      http.StatusBadRequest,
-		errCodeDataUnavailable:   http.StatusInternalServerError,
-		errCodeRateLimited:       http.StatusTooManyRequests,
+		errCodeNotFound:         http.StatusNotFound,
+		errCodeMethodNotAllowed: http.StatusMethodNotAllowed,
+		errCodeInvalidLimit:     http.StatusBadRequest,
+		errCodeInvalidOffset:    http.StatusBadRequest,
+		errCodeInvalidQuery:     http.StatusBadRequest,
+		errCodeDataUnavailable:  http.StatusInternalServerError,
+		errCodeRateLimited:      http.StatusTooManyRequests,
 	}
 	for code, status := range want {
 		if got := errStatus[code]; got != status {

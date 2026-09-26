@@ -39,7 +39,10 @@ func TestContractConstantsMatchFrontend(t *testing.T) {
 		return n
 	}
 
-	pairs := []struct{ frontend, backend string; want int }{
+	pairs := []struct {
+		frontend, backend string
+		want              int
+	}{
 		{"PAGE_SIZE", "defaultLimit", defaultLimit},
 		{"MAX_QUERY_LENGTH", "maxQueryRunes", maxQueryRunes},
 		{"MAX_LIMIT", "maxLimit", maxLimit},

@@ -39,19 +39,19 @@ const probeInterval = time.Second
 const reloadCooldown = 2 * time.Second
 
 type studentStore struct {
-	dir                 string
-	mu                  sync.RWMutex
-	reloadMu            sync.Mutex
-	items               []Student
-	stamps              map[string]fileStamp
-	lastProbe           atomic.Int64         // 上次文件指纹探测的 Unix 毫秒（节流基准）
-	lastFailAt          atomic.Int64         // 上次重载失败的 Unix 毫秒（与 lastProbe 共用同一时钟）
-	lastFailStamps      map[string]fileStamp // 失败时的文件指纹：文件未变则冷却，变化则立即重试
-	lastFailStampKnown  bool                  // 失败是否发生在指纹采集阶段（dataStamps 失败时为 false）：
+	dir                string
+	mu                 sync.RWMutex
+	reloadMu           sync.Mutex
+	items              []Student
+	stamps             map[string]fileStamp
+	lastProbe          atomic.Int64         // 上次文件指纹探测的 Unix 毫秒（节流基准）
+	lastFailAt         atomic.Int64         // 上次重载失败的 Unix 毫秒（与 lastProbe 共用同一时钟）
+	lastFailStamps     map[string]fileStamp // 失败时的文件指纹：文件未变则冷却，变化则立即重试
+	lastFailStampKnown bool                 // 失败是否发生在指纹采集阶段（dataStamps 失败时为 false）：
 	// 显式区分"失败且指纹未知"与"失败且指纹已知"，避免 lastFailStamps 为 nil
 	// 同时表示"目录缺失"与"空指纹"两种情形导致冷却判定失效。
-	lastFailErr         error     // 上次失败的原始错误：冷却期对外保留根因，不退化为无信息量的哨兵
-	now                 func() time.Time // 构造注入的时钟，供测试确定性推进探测与冷却
+	lastFailErr error            // 上次失败的原始错误：冷却期对外保留根因，不退化为无信息量的哨兵
+	now         func() time.Time // 构造注入的时钟，供测试确定性推进探测与冷却
 }
 
 func loadStudents(dir string) ([]Student, error) {
@@ -106,8 +106,8 @@ func loadStudents(dir string) ([]Student, error) {
 				}
 				seen[key] = struct{}{}
 				students = append(students, student)
+			}
 		}
-	}
 	}
 	if !found {
 		return nil, errNoRoster()
