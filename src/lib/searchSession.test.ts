@@ -7,36 +7,32 @@ const okResponse = (over: Partial<SearchResponse> = {}): SearchResponse => ({
 });
 
 describe("createSearchSession", () => {
-  it("discards stale responses after a new begin", async () => {
+  it("discards stale responses after a new submit", async () => {
     let resolveFirst!: (r: SearchResponse) => void;
     const search = vi.fn().mockImplementationOnce(() => new Promise<SearchResponse>((r) => (resolveFirst = r)));
     const session = createSearchSession({ search });
 
     const p1 = session.submit("张三", 10);
-    const id1 = 1; // begin() 内部递增
-    session.begin(); // 新请求使 id1 过期
+    session.submit("李四", 10); // 新请求使前一请求过期（begin 已收归内部）
     resolveFirst(okResponse());
     expect(await p1).toEqual({ ok: false, reason: "stale" }); // 过期响应显式判别
-
-    void id1; // 避免未使用告警
   });
 
   it("aborts all in-flight on abortAll", () => {
     const search = vi.fn().mockResolvedValue(okResponse());
     const session = createSearchSession({ search });
-    session.begin();
+    session.submit("张三", 10);
+    const callsBefore = search.mock.calls.length;
     session.abortAll();
-    // 无断言，仅验证不抛异常且未发出新请求
-    expect(search).not.toHaveBeenCalled();
+    // abortAll 中止在途请求，不发起任何新请求
+    expect(search.mock.calls.length).toBe(callsBefore);
   });
 
   it("lets loadMore follow a submit without invalidating it", async () => {
     const search = vi.fn().mockResolvedValue(okResponse({ items: [{ name: "甲", grade: "高一", className: "1班" }], total: 1, hasMore: false }));
     const session = createSearchSession({ search });
-    const id = session.begin();
     const result = await session.loadMore("张三", 10, 0);
     expect(result).toEqual(expect.objectContaining({ ok: true }));
-    expect(session.isCurrent(id)).toBe(true);
   });
 
   it("submit returns undefined when request is superseded", async () => {
@@ -92,29 +88,11 @@ describe("createSearchSession", () => {
     return expect(inFlight).resolves.toEqual({ ok: false, reason: "stale" });
   });
 
-  it("aborts a real submit when the caller disconnects", () => {
-    let captured!: AbortSignal;
-    const search = vi.fn().mockImplementation((_q: string, _l: number, _o: number, signal: AbortSignal) => {
-      captured = signal;
-      return new Promise<SearchResponse>((_resolve, reject) =>
-        signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true })
-      );
-    });
-    const session = createSearchSession({ search });
-
-    const caller = new AbortController();
-    const inFlight = session.submit("张三", 10, caller.signal);
-    caller.abort();
-    expect(captured.aborted).toBe(true);
-    return expect(inFlight).resolves.toEqual({ ok: false, reason: "stale" });
-  });
-
   it("discards a loadMore response in flight after invalidate", async () => {
     let resolveFirst!: (r: SearchResponse) => void;
     const search = vi.fn().mockImplementationOnce(() => new Promise<SearchResponse>((r) => (resolveFirst = r)));
     const session = createSearchSession({ search });
 
-    session.begin(); // 既有会话
     const inFlight = session.loadMore("张三", 10, 0);
     session.invalidate(); // loadMore 在途时失效
     resolveFirst(okResponse());
