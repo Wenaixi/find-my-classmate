@@ -43,7 +43,7 @@ func TestSearchRules(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _ := Search(testStudents(), tt.query, 10, 0)
+			got := Search(testStudents(), tt.query, 10, 0)
 			if len(got.Items) != tt.want {
 				t.Fatalf("got %d want %d", len(got.Items), tt.want)
 			}
@@ -53,8 +53,8 @@ func TestSearchRules(t *testing.T) {
 
 func TestSearchPagination(t *testing.T) {
 	students := append(testStudents(), testStudents()...)
-	first, _ := Search(students, "示例", 2, 0)
-	second, _ := Search(students, "示例", 2, 2)
+	first := Search(students, "示例", 2, 0)
+	second := Search(students, "示例", 2, 2)
 	if first.Total != 4 || len(first.Items) != 2 || !first.HasMore {
 		t.Fatalf("unexpected first page: total=%d items=%d hasMore=%v", first.Total, len(first.Items), first.HasMore)
 	}
@@ -64,7 +64,7 @@ func TestSearchPagination(t *testing.T) {
 	if second.Items[0].Name == first.Items[0].Name || second.Items[1].Name == first.Items[1].Name {
 		t.Fatal("pagination repeated an item")
 	}
-	last, _ := Search(students, "示例", 2, 999999999999)
+	last := Search(students, "示例", 2, 999999999999)
 	if last.Offset != 4 || len(last.Items) != 0 || last.HasMore {
 		t.Fatalf("unexpected out-of-range page: offset=%d items=%d hasMore=%v", last.Offset, len(last.Items), last.HasMore)
 	}
@@ -75,11 +75,11 @@ func TestSearchPagination(t *testing.T) {
 // panic（slice bounds out of range）。把不变量收进接口，调用者无需记忆。
 func TestSearchNegativeOffsetTreatedAsFirstPage(t *testing.T) {
 	students := append(testStudents(), testStudents()...)
-	got, _ := Search(students, "示例", 2, -3)
+	got := Search(students, "示例", 2, -3)
 	if got.Offset != 0 {
 		t.Fatalf("负 offset 应归一到 0，实际 %d", got.Offset)
 	}
-	first, _ := Search(students, "示例", 2, 0)
+	first := Search(students, "示例", 2, 0)
 	if len(got.Items) != len(first.Items) {
 		t.Fatalf("负 offset 与 offset=0 结果条目数应一致：%d vs %d", len(got.Items), len(first.Items))
 	}
@@ -118,7 +118,7 @@ func TestClassNumberChineseMultiDigit(t *testing.T) {
 // 查询 "十一班" 应命中 11 班而不是全校
 func TestSearchChineseMultiDigitClass(t *testing.T) {
 	// fixture 中 11 班有 EXAMPLE STUDENT（1 条）；18 班与 6 班不应命中
-	got, _ := Search(testStudents(), "十一班", 10, 0)
+	got := Search(testStudents(), "十一班", 10, 0)
 	if len(got.Items) != 1 {
 		t.Fatalf("查询十一班应精确命中 1 条（11 班），实际 %d", len(got.Items))
 	}
@@ -138,7 +138,7 @@ func TestClassNumberOverflowSafe(t *testing.T) {
 		t.Fatalf("classNumber 薄包装溢出应返回 0（与非法同值），实际 %d", got)
 	}
 	// 查询超长数字不应 panic；按姓名处理（姓名不含数字）应返回空结果
-	got, _ := Search(testStudents(), "99999999999999999999", 10, 0)
+	got := Search(testStudents(), "99999999999999999999", 10, 0)
 	if len(got.Items) != 0 {
 		t.Fatalf("超长数字查询应返回空，实际 %d", len(got.Items))
 	}
@@ -150,10 +150,10 @@ func TestNameTokensNotMisparsed(t *testing.T) {
 		newStudent("高翔", GradeOne, "1班", parseClassName("1班")),
 		newStudent("班长", GradeTwo, "2班", parseClassName("2班")),
 	}
-	if got, _ := Search(students, "高翔", 10, 0); len(got.Items) != 1 {
+	if got := Search(students, "高翔", 10, 0); len(got.Items) != 1 {
 		t.Errorf("查询高翔应命中 1 条（作为姓名），实际 %d", len(got.Items))
 	}
-	if got, _ := Search(students, "班长", 10, 0); len(got.Items) != 1 {
+	if got := Search(students, "班长", 10, 0); len(got.Items) != 1 {
 		t.Errorf("查询班长应命中 1 条（作为姓名），实际 %d", len(got.Items))
 	}
 }
@@ -161,7 +161,8 @@ func TestNameTokensNotMisparsed(t *testing.T) {
 // 年级+班级连写输入（"高三三班"）精确解析为年段+班级：
 // 旧语义按年级子串处理返回全年级，现改为精确班级筛选（用户报告缺陷）。
 func TestGradeSubstringBehavior(t *testing.T) {
-	got, q := Search(testStudents(), "高三三班", 10, 0)
+	// C5：解析语义独立暴露——Search 不再返回 Query，断言直接走 parseQuery
+	q := parseQuery("高三三班")
 	if q.Grade != GradeThree {
 		t.Errorf("高三三班 应解析为年级=高三，实际 %q", q.Grade)
 	}
@@ -169,6 +170,7 @@ func TestGradeSubstringBehavior(t *testing.T) {
 		t.Errorf("高三三班 应解析出班级=3，实际 %d", q.ClassNo)
 	}
 	// fixture 中高三只有 18 班，三班应精确命中 0 条（不再返回整个高三年段）
+	got := Search(testStudents(), "高三三班", 10, 0)
 	if len(got.Items) != 0 {
 		t.Errorf("高三三班 应精确命中 0 条（fixture 高三无三班），实际 %d", len(got.Items))
 	}
@@ -194,13 +196,15 @@ func TestGradeClassCompoundPrecise(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.query, func(t *testing.T) {
-			got, q := Search(students, c.query, 10, 0)
+			// C5：解析语义独立暴露——Search 不再返回 Query，断言直接走 parseQuery
+			q := parseQuery(c.query)
 			if c.query == "高一1班" && q.Grade != GradeOne {
 				t.Fatalf("%s 年级 = %q，期望 高一", c.query, q.Grade)
 			}
 			if c.query != "高一1班" && q.Grade != GradeTwo {
 				t.Fatalf("%s 年级 = %q，期望 高二", c.query, q.Grade)
 			}
+			got := Search(students, c.query, 10, 0)
 			if len(got.Items) != 1 || got.Items[0].Name != c.want {
 				t.Fatalf("%s 应精确命中 %s，实际 %+v", c.query, c.want, got.Items)
 			}
@@ -240,7 +244,7 @@ func TestGradeOrderAcrossGrades(t *testing.T) {
 		newStudent("林宇", GradeTwo, "1班", parseClassName("1班")),
 		newStudent("林宇", GradeOne, "1班", parseClassName("1班")),
 	}
-	got, _ := Search(students, "林宇", 10, 0)
+	got := Search(students, "林宇", 10, 0)
 	if len(got.Items) != 3 {
 		t.Fatalf("应 3 条，实际 %d", len(got.Items))
 	}

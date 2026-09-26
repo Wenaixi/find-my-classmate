@@ -152,11 +152,10 @@ func parseQuery(raw string) Query {
 	}
 	return query
 }
-
-func Search(students []Student, raw string, limit, offset int) (SearchResponse, Query) {
+func Search(students []Student, raw string, limit, offset int) SearchResponse {
 	query := parseQuery(raw)
 	if strings.TrimSpace(raw) == "" {
-		return SearchResponse{Items: []Student{}, Limit: limit, Offset: offset}, query
+		return SearchResponse{Items: []Student{}, Limit: limit, Offset: offset}
 	}
 	// 预分配匹配结果，避免增长到上千条时反复扩容
 	matches := make([]Student, 0, min(len(students), 256))
@@ -202,7 +201,7 @@ func Search(students []Student, raw string, limit, offset int) (SearchResponse, 
 		end = offset + limit
 	}
 	items := matches[offset:end]
-	return SearchResponse{Items: items, Total: len(matches), Limit: limit, Offset: offset, HasMore: end < len(matches)}, query
+	return SearchResponse{Items: items, Total: len(matches), Limit: limit, Offset: offset, HasMore: end < len(matches)}
 }
 
 func nameScore(nameKey, token string) int {

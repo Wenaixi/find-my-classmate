@@ -69,7 +69,7 @@ func searchHandler(store *studentStore) http.HandlerFunc {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": errCodeDataUnavailable})
 			return
 		}
-		response, _ := Search(students, queryText, limit, offset)
+		response := Search(students, queryText, limit, offset)
 		writeJSON(w, http.StatusOK, response)
 	}
 }

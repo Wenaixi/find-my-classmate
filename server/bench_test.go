@@ -31,7 +31,7 @@ func BenchmarkSearchByName(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = Search(students, "张伟", 10, 0)
+		_ = Search(students, "张伟", 10, 0)
 	}
 }
 
@@ -40,7 +40,7 @@ func BenchmarkSearchByGrade(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = Search(students, "高一", 10, 0)
+		_ = Search(students, "高一", 10, 0)
 	}
 }
 
@@ -49,7 +49,7 @@ func BenchmarkSearchCombined(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = Search(students, "高二, 张, 3班", 10, 0)
+		_ = Search(students, "高二, 张, 3班", 10, 0)
 	}
 }
 
@@ -87,7 +87,7 @@ func TestSearchAllocsBudget(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			allocs := testing.AllocsPerRun(100, func() { _, _ = Search(students, tt.query, 10, 0) })
+			allocs := testing.AllocsPerRun(100, func() { _ = Search(students, tt.query, 10, 0) })
 			if allocs > tt.budget {
 				t.Fatalf("分配次数退化：实测 %.1f，预算 %.0f", allocs, tt.budget)
 			}
