@@ -174,7 +174,14 @@ func Search(students []Student, raw string, limit, offset int) SearchResponse {
 		offset = 0
 	}
 	query := parseQuery(raw)
-	if strings.TrimSpace(raw) == "" {
+	// 判空依据是「解析后是否存在任何条件」，而非「原始串剥空白后是否为空」。
+	// 两处归一化原本不一致：querySeparators 已把中英文逗号、顿号、加号换成空格，
+	// 而此处只剥空白，导致纯分隔符输入（如「、」）既不算空查询、也不产生任何条件——
+	// 三个筛选条件全部不约束，Search 退化成与输入无关的全校检索。
+	// 修复前实测：输入「、」「+++」返回全校 2112 条（2112 为 benchStudents 规模）。
+	// 与 v0.9.1 修过的「无法解析/溢出的班级 token 不得静默丢弃」同源：
+	// 任何让全部条件落空的输入都必须退化为空结果，而不是全校。
+	if len(query.NameTokens) == 0 && query.Grade == "" && query.ClassNo == 0 {
 		return SearchResponse{Items: []Student{}, Limit: limit, Offset: offset}
 	}
 	// 预分配匹配结果，避免增长到上千条时反复扩容

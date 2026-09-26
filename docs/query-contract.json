@@ -264,6 +264,20 @@
       "grade": null,
       "classNumber": null,
       "$comment": "U+FEFF 前缀使整个 token 无法匹配班级语法。前端唯一消费的 hasName 布尔在此与 Go 分叉，是跨端分歧的可观察出口：Go 判为姓名条件，TS 曾判为纯班级。"
-    }
+    },
+    {
+      "raw": "、",
+      "nameTokens": [],
+      "grade": null,
+      "classNumber": null,
+      "$comment": "纯分隔符输入不产生任何查询条件：分隔符在归一化阶段被替换为空白，Fields 切分后零个 token。Go 侧 Search 据此判空（返回空结果集），前端 hasNameCondition 同样返回 false——两端必须同时认为「无姓名条件」，否则前端会为一次零条件查询显示「已匹配整个年段/班级」。"
+    },
+    {
+      "raw": "，,、+",
+      "nameTokens": [],
+      "grade": null,
+      "classNumber": null,
+      "$comment": "四种分隔符混合，同样产出零条件。修复前 Go 的空查询守卫只剥空白、不剥分隔符，此输入既非空查询又无任何条件，Search 退化为全校检索（实测 2112 条全量返回）。本条锁住「解析层不产生条件」这一事实，判空职责在 Search 而非解析层。"
+     }
   ]
 }
