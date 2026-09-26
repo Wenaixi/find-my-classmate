@@ -78,7 +78,8 @@ func loadStudents(dir string) ([]Student, error) {
 		}
 		classes := make([]string, 0, len(document.Roster))
 		for className := range document.Roster {
-			if classNumber(className) == 0 {
+			// C3：三态校验——旧实现只检 classNumber==0，溢出（-1）静默放行并流入排序
+			if !parseClassName(className).Valid {
 				return nil, errors.New("班级格式异常")
 			}
 			classes = append(classes, className)

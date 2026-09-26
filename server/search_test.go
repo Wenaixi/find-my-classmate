@@ -127,10 +127,15 @@ func TestSearchChineseMultiDigitClass(t *testing.T) {
 	}
 }
 
-// 超长数字班级串应被安全处理（不 panic、按姓名处理返回空）
+// 超长数字班级串应被安全处理（不 panic、按姓名处理返回空）。
+// C3 三态化：classNumber 不再返回 -1 哨兵，溢出由 parseClassName().Overflow 显式表达。
 func TestClassNumberOverflowSafe(t *testing.T) {
-	if got := classNumber("99999999999999999999班"); got != -1 {
-		t.Fatalf("超长数字应解析为 -1（无效班级标记），实际 %d", got)
+	parsed := parseClassName("99999999999999999999班")
+	if parsed.Valid || !parsed.Overflow {
+		t.Fatalf("超长数字应 Overflow=true, Valid=false，实际 %+v", parsed)
+	}
+	if got := classNumber("99999999999999999999班"); got != 0 {
+		t.Fatalf("classNumber 薄包装溢出应返回 0（与非法同值），实际 %d", got)
 	}
 	// 查询超长数字不应 panic；按姓名处理（姓名不含数字）应返回空结果
 	got, _ := Search(testStudents(), "99999999999999999999", 10, 0)

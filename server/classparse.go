@@ -43,22 +43,36 @@ func chineseNumberToInt(value string) int {
 	return tens*10 + ones
 }
 
-// classNumber 解析班级名为班号。
-// 返回 0 表示班级格式非法；-1 表示数字溢出（由查询解析决定按姓名处理）。
-func classNumber(value string) int {
+// ClassParseResult 班级名解析的显式三态结果。
+// 旧实现用 0/-1 两个哨兵返回码，语义靠调用点各自记住（0=非法 / -1=溢出），
+// 数据路径只检 ==0 导致 -1 静默流入 Student.ClassNo 参与排序。三态化后
+// Valid/Overflow 语义由类型强制，-1 不可能再漏进派生字段。
+type ClassParseResult struct {
+	ClassNo  int
+	Valid    bool
+	Overflow bool
+}
+
+// parseClassName 解析班级名为三态结果：合法（含班号）/ 非法格式 / 数字溢出。
+// 溢出指格式合法（全数字）但超出 int 范围；由数据路径拒绝、查询路径按姓名处理。
+func parseClassName(value string) ClassParseResult {
 	match := classToken.FindStringSubmatch(strings.TrimSpace(value))
 	if match == nil {
-		return 0
+		return ClassParseResult{}
 	}
 	if number, err := strconv.Atoi(match[1]); err == nil {
-		return number
+		return ClassParseResult{ClassNo: number, Valid: true}
 	}
-	// 数字溢出（Atoi 失败，如超长数字串）：返回 -1 标记"无效班级"，
-	// 由 parseQuery 决定按姓名处理，避免静默变成"不筛选返回全部"。
 	if isAllDigits(match[1]) {
-		return -1
+		return ClassParseResult{Overflow: true} // 数字溢出：格式合法但超出 int
 	}
-	return chineseNumberToInt(match[1])
+	return ClassParseResult{ClassNo: chineseNumberToInt(match[1]), Valid: true}
+}
+
+// classNumber 保留为薄包装（返回班号；0 表示非法或溢出），供查询路径过渡使用。
+// 数据路径应改用 parseClassName 获取完整三态语义。
+func classNumber(value string) int {
+	return parseClassName(value).ClassNo
 }
 
 // isAllDigits 判定字符串是否全为阿拉伯数字。

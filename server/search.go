@@ -35,12 +35,17 @@ type Student struct {
 // newStudent 构造 Student 并填充派生字段。
 // 所有 Student 必须经此构造：排序比较直接读派生字段，绕过构造会导致排序静默错乱。
 func newStudent(name string, grade Grade, className string) Student {
+	parsed := parseClassName(className)
+	classNo := 0
+	if parsed.Valid {
+		classNo = parsed.ClassNo
+	}
 	return Student{
 		Name:      name,
 		NameKey:   normalizeName(name),
 		Grade:     grade,
 		ClassName: className,
-		ClassNo:   classNumber(className),
+		ClassNo:   classNo,
 		GradeIdx:  gradeOrder(grade),
 	}
 }
@@ -116,25 +121,27 @@ func parseQuery(raw string) Query {
 	for _, token := range strings.Fields(normalized) {
 		// 年级+班级连写（"高二三班"）优先于年级子串，精确解析为年段+班级
 		if match := gradeClassToken.FindStringSubmatch(token); match != nil {
-			classNo := classNumber(match[2])
-			if classNo < 0 {
+			parsed := parseClassName(match[2])
+			if parsed.Overflow {
 				query.NameTokens = append(query.NameTokens, normalizeName(token))
 				continue
 			}
 			query.Grade = parseGrade(match[1])
-			if classNo > 0 {
-				query.ClassNo = classNo
+			if parsed.Valid && parsed.ClassNo > 0 {
+				query.ClassNo = parsed.ClassNo
 			}
 			continue
 		}
 		if match := classToken.FindStringSubmatch(token); match != nil {
-			classNo := classNumber(token)
-			if classNo < 0 {
+			parsed := parseClassName(token)
+			if parsed.Overflow {
 				// 无效班级（如超长数字）：按姓名处理，避免"返回全部"的静默错误
 				query.NameTokens = append(query.NameTokens, normalizeName(token))
 				continue
 			}
-			query.ClassNo = classNo
+			if parsed.Valid {
+				query.ClassNo = parsed.ClassNo
+			}
 			continue
 		}
 		if grade := parseGrade(token); grade != "" {
