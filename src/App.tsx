@@ -7,6 +7,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import siteConfig from "./site.config";
 import { MAX_QUERY_LENGTH, PAGE_SIZE } from "./config";
 import { deriveResultSummary } from "./lib/resultSummary";
+import { resultSectionOf, shouldScrollToResults } from "./lib/searchReducer";
 
 const ResultList = lazy(() => import("./components/ResultList"));
 const StatusOrb = lazy(() => import("./components/StatusOrb"));
@@ -35,7 +36,8 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (!shouldScrollRef.current || (uiState !== "success" && uiState !== "duplicate" && uiState !== "empty" && uiState !== "error")) return;
+    // 滚动时机由 shouldScrollToResults 单点判定（与结果区显隐同源）。
+    if (!shouldScrollRef.current || !shouldScrollToResults(uiState)) return;
     shouldScrollRef.current = false;
     const frame = window.requestAnimationFrame(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     return () => window.cancelAnimationFrame(frame);
@@ -60,17 +62,26 @@ export function App() {
 
 
   function renderResultBody() {
-    if (uiState === "loading") return <div className="result-loading" role="status"><span>扫描名单索引</span><span className="loading-pulse" aria-hidden="true" /></div>;
-    if (uiState === "success" || uiState === "duplicate") {
-      const summary = deriveResultSummary(items.length, total, hasMore);
-      return <ResultList items={items} summary={summary} hasMore={hasMore} loadingMore={loadingMore} loadMoreError={loadMoreError} onLoadMore={() => void loadMore()} />;
+    // 状态到区段的映射由 resultSectionOf 单点持有，组件只按返回值选择 JSX。
+    // 此前四个 if 依次判定内联在此处，与滚动、显隐构成同一知识的四份判断，
+    // 且零测试覆盖（改坏 duplicate 分支后 121 条用例全绿）。
+    switch (resultSectionOf(uiState)) {
+      case "loading":
+        return <div className="result-loading" role="status"><span>扫描名单索引</span><span className="loading-pulse" aria-hidden="true" /></div>;
+      case "list": {
+        const summary = deriveResultSummary(items.length, total, hasMore);
+        return <ResultList items={items} summary={summary} hasMore={hasMore} loadingMore={loadingMore} loadMoreError={loadMoreError} onLoadMore={() => void loadMore()} />;
+      }
+      case "empty":
+        return <div className="result-message" data-od-id="empty-state"><strong>查无此人</strong><p>换个写法试试。可以只输入姓氏，或补充年段 / 班级缩小范围。</p><button className="text-action" onClick={() => document.getElementById("query")?.focus()}>继续输入 <span aria-hidden="true">↗</span></button></div>;
+      case "error":
+        return <div className="result-message" data-od-id="error-state"><strong>查询没有完成</strong><p>{statusText}</p><button className="text-action" data-od-id="retry-cta" onClick={() => void submit()}>重新查询 <span aria-hidden="true">↗</span></button></div>;
+      default:
+        return null;
     }
-    if (uiState === "empty") return <div className="result-message" data-od-id="empty-state"><strong>查无此人</strong><p>换个写法试试。可以只输入姓氏，或补充年段 / 班级缩小范围。</p><button className="text-action" onClick={() => document.getElementById("query")?.focus()}>继续输入 <span aria-hidden="true">↗</span></button></div>;
-    if (uiState === "error") return <div className="result-message" data-od-id="error-state"><strong>查询没有完成</strong><p>{statusText}</p><button className="text-action" data-od-id="retry-cta" onClick={() => void submit()}>重新查询 <span aria-hidden="true">↗</span></button></div>;
-    return null;
   }
 
-  const hasResultSection = uiState !== "idle" && uiState !== "editing";
+  const hasResultSection = resultSectionOf(uiState) !== null;
   return (
     <div className="app-shell" data-od-id="app-shell">
       <div className="ambient-line ambient-line-one" aria-hidden="true" /><div className="ambient-line ambient-line-two" aria-hidden="true" />

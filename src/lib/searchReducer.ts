@@ -79,6 +79,34 @@ export function statusTextFor(state: SearchState, total: number, hasName: boolea
   return COPY[state];
 }
 
+// 结果区段：查询状态到「该渲染哪一块界面结构」的映射。
+// 此前这张映射表内联在 App.tsx 的 renderResultBody 里，由四个 if 依次判定，
+// 与「结果区是否渲染」「是否滚动定位」构成同一知识的四份独立判断，且零测试覆盖：
+// 把 duplicate 分支改坏（多结果时不渲染列表）后 121 条用例仍全绿。
+// 抽出后成为可脱离 React 直接测试的纯函数，App.tsx 只按返回值 switch。
+export type ResultSection = "list" | "loading" | "empty" | "error";
+
+// resultSectionOf 判定查询状态对应的结果区段。
+// null 表示不渲染结果区（idle 与 editing：尚无查询或正在编辑）。
+// "list" 同时覆盖 success 与 duplicate——两者界面结构相同，仅数据量不同。
+export function resultSectionOf(state: SearchState): ResultSection | null {
+  if (state === "loading") return "loading";
+  if (state === "success" || state === "duplicate") return "list";
+  if (state === "empty") return "empty";
+  if (state === "error") return "error";
+  return null;
+}
+
+// shouldScrollToResults 判定查询结束后是否滚动定位到结果区。
+// 与 resultSectionOf 派生自同一处：两者判定的是「本次状态变化是否产生了一个
+// 可供阅读的结果」，此前散在 App.tsx 的滚动 effect 与结果区显隐两处，
+// 且两者的状态集合在 7 值全集上恰好互补——新增查询状态时只改一处不会报错，
+// 只会让滚动与显隐静默错位。
+export function shouldScrollToResults(state: SearchState): boolean {
+  const section = resultSectionOf(state);
+  return section !== null && section !== "loading";
+}
+
 export function searchReducer(state: SearchControllerState, action: SearchAction): SearchControllerState {
   switch (action.type) {
     case "input-change":

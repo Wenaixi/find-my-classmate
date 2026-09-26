@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getState, errorMessage, initialState, searchReducer, statusTextFor } from "./searchReducer";
+import { getState, errorMessage, initialState, searchReducer, statusTextFor, resultSectionOf, shouldScrollToResults } from "./searchReducer";
 import { ApiError } from "./api";
 import type { SearchState, Student } from "../types";
 
@@ -25,6 +25,63 @@ describe("errorMessage", () => {
 
   it("falls back to generic error", () => {
     expect(errorMessage(new Error("boom"))).toContain("查询没有完成");
+  });
+});
+
+describe("resultSectionOf", () => {
+  it("maps every query state to exactly one section", () => {
+    // 穷尽性断言：7 个状态必须全部有归属。
+    // 此前映射表内联在组件里，新增查询状态时无任何测试会提醒补映射，
+    // 未覆盖的状态会静默落进「不渲染结果区」。
+    const all: SearchState[] = ["idle", "editing", "loading", "success", "duplicate", "empty", "error"];
+    const mapped = all.map(resultSectionOf);
+    expect(mapped).toEqual([null, null, "loading", "list", "list", "empty", "error"]);
+    // 7 个状态恰好收敛为 5 种区段归属（success 与 duplicate 同为 list）。
+    // 用 Record 统计而非 Set：键是有限的静态字面量。
+    const distinct: Record<string, number> = {};
+    for (const section of mapped) {
+      const key = String(section);
+      distinct[key] = (distinct[key] ?? 0) + 1;
+    }
+    expect(Object.keys(distinct).sort()).toEqual(["empty", "error", "list", "loading", "null"]);
+  });
+
+  it("renders the list for both single and multiple matches", () => {
+    // 变异回归锁：曾把 duplicate 从列表分支移除（只认 success），
+    // 重名同学的结果列表完全不渲染，而 121 条用例全部通过。
+    expect(resultSectionOf("success")).toBe("list");
+    expect(resultSectionOf("duplicate")).toBe("list");
+  });
+
+  it("renders no section before a query has run", () => {
+    expect(resultSectionOf("idle")).toBeNull();
+    expect(resultSectionOf("editing")).toBeNull();
+  });
+});
+
+describe("shouldScrollToResults", () => {
+  it("scrolls only after a query settles", () => {
+    // loading 期间不滚动：结果尚未返回，滚过去是空白。
+    expect(shouldScrollToResults("loading")).toBe(false);
+    expect(shouldScrollToResults("success")).toBe(true);
+    expect(shouldScrollToResults("duplicate")).toBe(true);
+    expect(shouldScrollToResults("empty")).toBe(true);
+    expect(shouldScrollToResults("error")).toBe(true);
+  });
+
+  it("never scrolls before a query has run", () => {
+    expect(shouldScrollToResults("idle")).toBe(false);
+    expect(shouldScrollToResults("editing")).toBe(false);
+  });
+
+  it("stays consistent with the section mapping", () => {
+    // 滚动集合与区段集合派生自同一处，不可能出现「滚到了但不显示」
+    // 或「显示了但不滚动」的错位。此前两者在 App.tsx 里各写一份。
+    const all: SearchState[] = ["idle", "editing", "loading", "success", "duplicate", "empty", "error"];
+    for (const state of all) {
+      const section = resultSectionOf(state);
+      expect(shouldScrollToResults(state)).toBe(section !== null && section !== "loading");
+    }
   });
 });
 
