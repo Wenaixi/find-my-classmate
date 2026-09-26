@@ -13,12 +13,14 @@ import (
 )
 
 // newTestChain 组装可注入时钟的 production 请求链。
-// 顺序与 newHandlerChain 同构（securityHeaders → rateLimit → accessLog → mux）：
-// 安全头居最外覆盖所有响应（含 429），限流在 accessLog 之外短路。
+// 委托 newHandlerChainWith 而非重写嵌套：链的顺序（securityHeaders → rateLimit
+// → accessLog → mux）只定义在 production 一处，测试只替换限流器以注入假时钟。
+// 此前此处复制了一遍嵌套字面量，改动生产链顺序时四个组合政策测试仍会全绿，
+// 却测的是另一条链——那四个已验证有效的行为断言并未真正覆盖生产装配。
 func newTestChain(clock *fakeClock, capacity float64, mux http.Handler) http.Handler {
 	limiter := newRateLimiter(capacity, time.Second)
 	limiter.now = clock.Now
-	return securityHeaders(rateLimitWith(limiter, accessLog(mux)))
+	return newHandlerChainWith(mux, limiter)
 }
 
 // captureLogs 把标准日志输出重定向到缓冲区，测试结束后恢复。

@@ -123,7 +123,15 @@ func main() {
 // 429 因位于 securityHeaders 内侧，响应头由外层统一设置，writeRateLimited
 // 无需手工重放。
 func newHandlerChain(mux http.Handler) http.Handler {
-	return securityHeaders(rateLimit(accessLog(mux), rateCapacity, rateInterval))
+	return newHandlerChainWith(mux, newRateLimiter(rateCapacity, rateInterval))
+}
+
+// newHandlerChainWith 是链装配的唯一实现：只替换限流器本身，链的顺序与
+// 其余中间件行为全部走 production 代码路径，调用方（含测试）无需复制嵌套。
+// 委托关系取代此前测试侧重写一遍嵌套的做法——链顺序改错时测试会跟着错，
+// 平行实现会让四个组合政策测试在测另一条链却依然全绿。
+func newHandlerChainWith(mux http.Handler, limiter *rateLimiter) http.Handler {
+	return securityHeaders(rateLimitWith(limiter, accessLog(mux)))
 }
 
 // buildServer 组装带超时配置的 http.Server：防止慢速攻击挂起连接。
