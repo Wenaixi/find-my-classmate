@@ -181,3 +181,35 @@ func TestFillTokensMultipleIntervals(t *testing.T) {
 		t.Fatalf("5s 按 2s 间隔应回补 2.5 个到 4.5，实际 %v", bucket.tokens)
 	}
 }
+
+// 令牌桶集合必须自驱动清理长期不活跃的条目，否则生产环境每来一个新 IP 就会
+// 永久留下一个桶，构成内存泄漏。本用例此前住在 data_test.go（名单模块的测试
+// 文件）——它构造 newRateLimiter、不触碰任何名单符号，归属错误让改限流器的人
+// 要去名单测试文件里找。
+//
+// 直读 limiter.buckets 并手动加锁是刻意的：桶的淘汰没有外部可观测面，淘汰动作
+// 发生在下一次放行的路径内，且新桶创建会让任何基于请求计数的断言失真。这是全仓
+// 唯一一处测试操作生产锁的地方，因此连同上面的归属修正一并记在此处。
+func TestRateLimitAutomaticSweep(t *testing.T) {
+	clock := &fakeClock{current: time.Unix(0, 0)}
+	limiter := newRateLimiter(60, time.Second, clock.Now)
+	_, _ = limiter.allow("1.2.3.4")
+	_, _ = limiter.allow("5.6.7.8")
+
+	// 时钟前进 15 分钟，新 IP 发起访问，应自驱动清理超过 10 分钟未活跃的旧桶
+	clock.current = clock.current.Add(15 * time.Minute)
+	_, _ = limiter.allow("9.9.9.9")
+
+	limiter.mu.Lock()
+	_, hasOld1 := limiter.buckets["1.2.3.4"]
+	_, hasOld2 := limiter.buckets["5.6.7.8"]
+	_, hasNew := limiter.buckets["9.9.9.9"]
+	limiter.mu.Unlock()
+
+	if hasOld1 || hasOld2 {
+		t.Fatalf("超过空闲时间的旧桶应被自动淘汰，实际仍在: 1.2.3.4=%v, 5.6.7.8=%v", hasOld1, hasOld2)
+	}
+	if !hasNew {
+		t.Fatal("新访问的 IP 桶应正常存在")
+	}
+}

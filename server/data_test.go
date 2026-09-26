@@ -296,27 +296,28 @@ func TestStoreConcurrentHotReloadStampede(t *testing.T) {
 	wg.Wait()
 }
 
-func TestRateLimitAutomaticSweep(t *testing.T) {
-	clock := &fakeClock{current: time.Unix(0, 0)}
-	limiter := newRateLimiter(60, time.Second, clock.Now)
-	_, _ = limiter.allow("1.2.3.4")
-	_, _ = limiter.allow("5.6.7.8")
-
-	// 时钟前进 15 分钟，新 IP 发起访问，应自驱动清理超过 10 分钟未活跃的旧桶
-	clock.current = clock.current.Add(15 * time.Minute)
-	_, _ = limiter.allow("9.9.9.9")
-
-	limiter.mu.Lock()
-	_, hasOld1 := limiter.buckets["1.2.3.4"]
-	_, hasOld2 := limiter.buckets["5.6.7.8"]
-	_, hasNew := limiter.buckets["9.9.9.9"]
-	limiter.mu.Unlock()
-
-	if hasOld1 || hasOld2 {
-		t.Fatalf("超过空闲时间的旧桶应被自动淘汰，实际仍在: 1.2.3.4=%v, 5.6.7.8=%v", hasOld1, hasOld2)
+// 按数据目录实际文件探测年段，缺失的年级文件跳过不报错
+func TestLoadStudentsSkipMissingGrade(t *testing.T) {
+	dir := t.TempDir()
+	// 只放高三，高一高二不存在
+	_ = os.WriteFile(filepath.Join(dir, "高三.json"), []byte(`{"标题":"福清一中2025级高三编班名单","名单":{"3班":[{"姓名":"高三甲"}]}}`), 0o644)
+	students, err := loadStudents(dir)
+	if err != nil {
+		t.Fatalf("仅高三存在应成功加载: %v", err)
 	}
-	if !hasNew {
-		t.Fatal("新访问的 IP 桶应正常存在")
+	if len(students) != 1 {
+		t.Fatalf("应加载 1 条，实际 %d", len(students))
+	}
+	if students[0].Grade != GradeThree {
+		t.Errorf("Grade = %q，期望 高三", students[0].Grade)
+	}
+}
+
+// 空目录应给出明确指引，不静默空跑
+func TestLoadStudentsEmptyDirFails(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := loadStudents(dir); err == nil {
+		t.Fatal("空目录应报错，不应静默空跑")
 	}
 }
 

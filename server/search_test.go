@@ -1,8 +1,6 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 	"unsafe"
 )
@@ -251,31 +249,6 @@ func TestGradeClassCompoundPrecise(t *testing.T) {
 				t.Fatalf("%s 应精确命中 %s，实际 %+v", c.query, c.want, got.Items)
 			}
 		})
-	}
-}
-
-// 按数据目录实际文件探测年段，缺失的年级文件跳过不报错
-func TestLoadStudentsSkipMissingGrade(t *testing.T) {
-	dir := t.TempDir()
-	// 只放高三，高一高二不存在
-	_ = os.WriteFile(filepath.Join(dir, "高三.json"), []byte(`{"标题":"福清一中2025级高三编班名单","名单":{"3班":[{"姓名":"高三甲"}]}}`), 0o644)
-	students, err := loadStudents(dir)
-	if err != nil {
-		t.Fatalf("仅高三存在应成功加载: %v", err)
-	}
-	if len(students) != 1 {
-		t.Fatalf("应加载 1 条，实际 %d", len(students))
-	}
-	if students[0].Grade != GradeThree {
-		t.Errorf("Grade = %q，期望 高三", students[0].Grade)
-	}
-}
-
-// 空目录应给出明确指引，不静默空跑
-func TestLoadStudentsEmptyDirFails(t *testing.T) {
-	dir := t.TempDir()
-	if _, err := loadStudents(dir); err == nil {
-		t.Fatal("空目录应报错，不应静默空跑")
 	}
 }
 
