@@ -220,3 +220,78 @@ func TestFrontendIndexNotGzipped(t *testing.T) {
 		t.Errorf("首页内容异常: %q", rec.Body.String())
 	}
 }
+
+// 协商规则必须能区分「接受」与「明确拒绝」：响应已声明 Vary: Accept-Encoding，
+// 共享缓存会按该维度复用表示，把 gzip;q=0 误判为接受会让明确拒绝压缩的客户端
+// 收到它无法解码的表示。子串匹配实现下本组用例全部通过（变异实验：把判定改成
+// == "gzip" 后 132 条后端用例无一翻红）。
+func TestAcceptsGzipNegotiation(t *testing.T) {
+	cases := []struct {
+		header string
+		want   bool
+		why    string
+	}{
+		{"gzip", true, "裸 gzip 应接受"},
+		{"gzip, deflate, br", true, "多候选中的 gzip 应接受"},
+		{"deflate, gzip", true, "非首位候选也应识别"},
+		{"gzip;q=0", false, "q=0 是明确拒绝"},
+		{"gzip;q=0.0", false, "q=0.0 同样是拒绝"},
+		{"deflate, gzip;q=0", false, "候选列表中的 q=0 必须被识别"},
+		{"gzip;q=0, deflate;q=1", false, "gzip 被拒时不得因 deflate 可用而放行"},
+		{"gzip;q=1.0", true, "显式 q=1 等价于缺省"},
+		{"gzip;q=0.5", true, "q=0.5 表示可接受"},
+		{"deflate", false, "不含 gzip 则不压缩"},
+		{"", false, "无 Accept-Encoding 则不压缩"},
+		{"GZIP", true, "编码名大小写不敏感"},
+		{"gzip;q=abc", false, "q 值不可解析时按拒绝处理"},
+	}
+	for _, c := range cases {
+		if got := acceptsGzip(c.header); got != c.want {
+			t.Errorf("acceptsGzip(%q) = %v，期望 %v（%s）", c.header, got, c.want, c.why)
+		}
+	}
+}
+
+// q=0 的客户端必须拿到未压缩表示：这是用户可见行为，不只是纯函数返回值。
+func TestFrontendAssetsGzipQZeroServesRaw(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/assets/app.js", nil)
+	req.Header.Set("Accept-Encoding", "gzip;q=0")
+	rec := httptest.NewRecorder()
+	frontendHandlerWithFS(testFrontendFS()).ServeHTTP(rec, req)
+
+	if ce := rec.Header().Get("Content-Encoding"); ce != "" {
+		t.Fatalf("明确拒绝 gzip 的客户端不应收到压缩表示，实际 Content-Encoding = %q", ce)
+	}
+	if rec.Body.String() != "console.log(1)" {
+		t.Errorf("应返回原始内容，实际 = %q", rec.Body.String())
+	}
+	// 协商维度仍必须声明：本次是 raw，但同一资源也可能是 gzip 表示。
+	if v := rec.Header().Get("Vary"); v != "Accept-Encoding" {
+		t.Errorf("Vary = %q，期望 Accept-Encoding", v)
+	}
+}
+
+// 多候选编码列表同样必须正确协商：裸相等判断会把 "gzip, deflate, br" 与
+// "deflate, gzip" 一起判为不接受，而浏览器实际发送的正是后者这种形式。
+// 断言走 HTTP 接口而非直接调用 acceptsGzip：直接测纯函数只能锁住实现，
+// 实现被换掉时断言不会翻红，而用户可见行为才是真正要保护的东西。
+func TestFrontendAssetsGzipInCandidateList(t *testing.T) {
+	for _, header := range []string{"gzip, deflate, br", "deflate, gzip", "br, gzip;q=0.5"} {
+		req := httptest.NewRequest(http.MethodGet, "/assets/app.js", nil)
+		req.Header.Set("Accept-Encoding", header)
+		rec := httptest.NewRecorder()
+		frontendHandlerWithFS(testFrontendFS()).ServeHTTP(rec, req)
+
+		if ce := rec.Header().Get("Content-Encoding"); ce != "gzip" {
+			t.Errorf("Accept-Encoding %q 应协商为 gzip，实际 Content-Encoding = %q", header, ce)
+		}
+		reader, err := gzip.NewReader(rec.Body)
+		if err != nil {
+			t.Fatalf("Accept-Encoding %q：gzip 解压失败: %v", header, err)
+		}
+		body, _ := io.ReadAll(reader)
+		if string(body) != "console.log(1)" {
+			t.Errorf("Accept-Encoding %q：解压内容 = %q", header, string(body))
+		}
+	}
+}

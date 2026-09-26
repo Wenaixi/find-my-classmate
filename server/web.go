@@ -11,6 +11,7 @@ import (
 	"mime"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -83,6 +84,41 @@ func frontendHandlerWithFS(fsys fs.FS) http.Handler {
 // 存在性判定与内容读取合为一次来源访问：缓存命中即证明资源存在（不再预检），
 // 缓存未命中时读盘一次，读不到即 404。immutable 缓存头只在此处确认资源存在后设置，
 // 缺失资源因此不会继承一年长缓存。
+
+// acceptsGzip 判定客户端是否接受 gzip 表示。
+//
+// 响应已声明 Vary: Accept-Encoding（web.go:127），即向共享缓存声明了「本响应随
+// Accept-Encoding 变化」；协商本身却曾用子串匹配实现，把 gzip;q=0（客户端明确
+// 拒绝压缩）判为接受。声明了协商维度却不严格协商，是接入 CDN 或共享缓存后最难
+// 排查的一类问题——缓存会忠实地复用错误的表示。
+//
+// 规则：逐个候选编码解析 q 值，gzip 出现且 q>0 才算接受；q=0 显式拒绝。
+// 缺省 q 为 1。不解析整串（deflate;q=0.5, gzip;q=0 这类组合是合法的）。
+func acceptsGzip(header string) bool {
+	for _, part := range strings.Split(header, ",") {
+		fields := strings.Split(strings.TrimSpace(part), ";")
+		coding := strings.TrimSpace(fields[0])
+		if !strings.EqualFold(coding, "gzip") {
+			continue
+		}
+		quality := 1.0
+		for _, param := range fields[1:] {
+			key, value, found := strings.Cut(param, "=")
+			if !found || !strings.EqualFold(strings.TrimSpace(key), "q") {
+				continue
+			}
+			parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+			if err != nil {
+				// q 值不可解析时按拒绝处理：宁可少压缩，不可把明确拒绝的客户端
+				// 喂给它无法解码的表示。
+				return false
+			}
+			quality = parsed
+		}
+		return quality > 0
+	}
+	return false
+}
 //
 // 协商事实一致性：同一资源可能以 raw 或 gzip 返回，因此 200 与 304 都必须
 // 声明 Vary: Accept-Encoding——否则共享缓存会把某一种表示复用到另一种请求上。
@@ -129,7 +165,7 @@ func serveCachedStatic(w http.ResponseWriter, r *http.Request, fsys fs.FS, cache
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
-	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+	if acceptsGzip(r.Header.Get("Accept-Encoding")) {
 		w.Header().Set("Content-Encoding", "gzip")
 		w.Header().Set("Content-Length", fmt.Sprint(len(asset.gzipped)))
 		_, _ = io.Copy(w, bytes.NewReader(asset.gzipped))
