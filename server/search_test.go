@@ -109,6 +109,19 @@ func TestSearchNegativeLimitDoesNotPanic(t *testing.T) {
 	}
 }
 
+// 空查询路径此前在两个钳制之前提前返回，使「Search 自守分页前置约定」
+// 只在非空路径成立：负 limit/offset 会原样回显到响应里。调用方读响应的
+// offset 字段就必须知道这个保证是有条件的，接口因此不是自守的。
+func TestSearchBlankQueryClampsPagination(t *testing.T) {
+	got := Search(testStudents(), "", -3, -5)
+	if got.Limit != 0 {
+		t.Errorf("空查询的负 limit 应归一到 0，实际 %d", got.Limit)
+	}
+	if got.Offset != 0 {
+		t.Errorf("空查询的负 offset 应归一到 0，实际 %d", got.Offset)
+	}
+}
+
 // 汉字多位班级号（十一~九十九）应解析为数值
 func TestClassNumberChineseMultiDigit(t *testing.T) {
 	cases := []struct {

@@ -164,6 +164,15 @@ func parseQuery(raw string) Query {
 	return query
 }
 func Search(students []Student, raw string, limit, offset int) SearchResponse {
+	// 分页钳制必须先于任何提前返回完成，否则「Search 自守分页前置约定」
+	// 只在非空查询路径成立：空查询会把负 limit/offset 原样回显进响应。
+	// offset 的上界钳制依赖匹配结果长度，留在匹配循环之后。
+	if limit < 0 {
+		limit = 0
+	}
+	if offset < 0 {
+		offset = 0
+	}
 	query := parseQuery(raw)
 	if strings.TrimSpace(raw) == "" {
 		return SearchResponse{Items: []Student{}, Limit: limit, Offset: offset}
@@ -198,19 +207,10 @@ func Search(students []Student, raw string, limit, offset int) SearchResponse {
 		}
 		return cmp.Compare(a.ClassNo, b.ClassNo)
 	})
-	// 分页区间钳制到合法域，使 Search 自守分页前置约定，不依赖调用方先行校验。
-	// offset 与 limit 两侧都必须归一：负 offset 会让切片下界为负而 panic，
-	// 负 limit 会让 end 变为负下界同样 panic（slice bounds out of range）。
-	if offset < 0 {
-		offset = 0
-	}
+	// offset 上界钳制到匹配条数，越界时取最近有效边界。负向钳制已在函数
+	// 开头完成（必须先于空查询的提前返回），此处只处理依赖匹配结果的部分。
 	if offset > len(matches) {
 		offset = len(matches)
-	}
-	// 负 limit 归一为零条：调用方传入非法页大小时返回空页而非崩溃，
-	// 语义与「该页确实没有记录」一致，调用者无需区分二者。
-	if limit < 0 {
-		limit = 0
 	}
 	end := len(matches)
 	if limit < len(matches)-offset {
