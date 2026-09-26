@@ -19,3 +19,10 @@ go.work
 release-body.md
 .vscode
 .idea
+
+# 测试文件不参与镜像构建。tsconfig.app.json 的 include 是 ["src"]，
+# 会把 *.test.ts 一并纳入类型检查，而 query.test.ts 依赖被上方排除的
+# docs/query-contract.json，导致容器内 npm run build 失败（TS2307）。
+# 本地 npm run typecheck 仍全量检查测试——类型覆盖不因镜像构建而减少。
+src/**/*.test.ts
+src/**/*.test.tsx
