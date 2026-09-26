@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -18,22 +19,24 @@ func TestContractConstantsMatchFrontend(t *testing.T) {
 	}
 	src := string(configTS)
 
-	// 提取前端常量数值：逐行解析 export const NAME = value;
+	// 提取前端常量数值。契约要锁定的是「值」，不是 TypeScript 的书写形式：
+	// 识别时容忍空白、类型标注与尾随逗号，纯排版或格式器改动不应让对拍失败。
+	// 数字分隔符（10_000）属于字面量本身，解析时按 Go 侧习惯去掉下划线。
 	extract := func(name string) int {
-		for _, line := range strings.Split(src, "\n") {
-			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "export const "+name+" = ") {
-				value := strings.TrimSuffix(strings.TrimPrefix(line, "export const "+name+" = "), ";")
-				value = strings.ReplaceAll(value, "_", "")
-				n, err := strconv.Atoi(value)
-				if err != nil {
-					t.Fatalf("解析 %s = %q 失败: %v", name, value, err)
-				}
-				return n
-			}
+		pattern := regexp.MustCompile(`(?m)^\s*export\s+const\s+` + regexp.QuoteMeta(name) + `\s*(?::[^=]+)?=\s*(.+?)\s*,?\s*$`)
+		match := pattern.FindStringSubmatch(src)
+		if match == nil {
+			t.Fatalf("前端常量 %s 未在 src/config.ts 中找到（对拍读取的是常量声明行）", name)
 		}
-		t.Fatalf("前端常量 %s 未找到", name)
-		return 0
+		// 去掉行尾注释、尾随分号/逗号与数字分隔符，剩下裸字面量再解析。
+		literal := strings.TrimSpace(strings.SplitN(match[1], "//", 2)[0])
+		literal = strings.TrimRight(literal, " \t,;")
+		literal = strings.ReplaceAll(literal, "_", "")
+		n, err := strconv.Atoi(literal)
+		if err != nil {
+			t.Fatalf("前端常量 %s 存在但字面量无法解析: %q（对拍只接受十进制整数字面量）", name, literal)
+		}
+		return n
 	}
 
 	pairs := []struct{ frontend, backend string; want int }{
