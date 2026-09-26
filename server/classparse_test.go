@@ -134,3 +134,50 @@ func TestLoadStudentsRejectsZeroClass(t *testing.T) {
 		t.Fatal("0 班类名应被数据校验拒绝，当前静默放行")
 	}
 }
+
+// 跨接缝不变量：「Valid ⇒ ClassNo > 0」目前由 parseClassName 内部强制，
+// classCondition 只检查 Valid、不复查 ClassNo。这条不变量正是 v0.10.1 修复
+// 「高一0班」放大为整年段全量的根因，而它的执行点在下游消费侧零独立承重——
+// 变异实验（把 Search 的匹配条件从 ClassNo > 0 改成 != 0）全部用例仍绿，
+// 删掉 newStudent 的 Valid 守卫同样全部仍绿。
+// 一旦未来新增班级写入点、或 classCondition 被重构绕开 parseClassName，
+// 没有断言会拦住 0 重新流回下游。
+func TestValidImpliesPositiveClassNo(t *testing.T) {
+	// 1. 生产路径能产出的每一个 Valid 结果都必须是正数班号。
+	//    这条断言在 classCondition 这道接缝上生效，而不是只依赖 parseClassName 内部。
+	for _, className := range []string{"1班", "18班", "十班", "六班", "九九班", "0班", "0", "00班", "未知", "99999999999999999999班"} {
+		classNo, asName := classCondition(className, className)
+		if asName != "" {
+			continue // 已降级为姓名条件，班级条件不适用
+		}
+		if classNo <= 0 {
+			t.Errorf("classCondition(%q) 产出班级条件 %d：降级路径已排除，剩余路径必须为正数", className, classNo)
+		}
+	}
+
+	// 2. Student 构造路径：非法班级必须产出 ClassNo=0 而非把零值当成班号。
+	//    newStudent 的 Valid 守卫此前无独立断言（search_test.go 的断言锁的是
+	//    结果值恰好为 0，而不是"经守卫产出 0"这条语义）。
+	bad := newStudent("李四", GradeOne, "未知", parseClassName("未知"))
+	if bad.ClassNo != 0 {
+		t.Errorf("非法班级经 newStudent 应产出 ClassNo=0，实际 %d", bad.ClassNo)
+	}
+	// 对照：合法班级必须透传真实班号，防止守卫退化为"一律清零"。
+	ok := newStudent("张三", GradeOne, "18班", parseClassName("18班"))
+	if ok.ClassNo != 18 {
+		t.Errorf("合法班级经 newStudent 应透传 18，实际 %d", ok.ClassNo)
+	}
+
+	// 溢出是 Valid 守卫唯一可被区分的输入：parseClassName 对超大班号返回
+	// {Overflow: true, Valid: false, ClassNo: 0}，与「非法班级」的零值在数值上
+	// 同形。若 newStudent 去掉 Valid 守卫而无条件采用 parsed.ClassNo，两种输入
+	// 结果同为 0，守卫无从体现——这说明该守卫对零值场景不可观测，但它同时
+	// 锁住「溢出不得被当作合法班号写进派生字段」这条语义。
+	overflow := parseClassName("99999999999999999999班")
+	if !overflow.Overflow || overflow.Valid {
+		t.Fatalf("超大班号应判为溢出而非合法，实际 %+v", overflow)
+	}
+	if got := newStudent("王五", GradeOne, "99999999999999999999班", overflow); got.ClassNo != 0 {
+		t.Errorf("溢出班级经 newStudent 应产出 ClassNo=0 而非把零值当班号，实际 %d", got.ClassNo)
+	}
+}
