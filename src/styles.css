@@ -84,8 +84,11 @@ h1 em { color: #fff; font-style: normal; }
 .search-hint { margin-top: 13px; }
 .search-hint span:last-child { color: var(--faint); text-align: right; letter-spacing: .8px; }
 .status-line { min-height: 30px; align-items: center; justify-content: flex-start; gap: 9px; margin-top: 20px; }
-.status-line[data-state="success"], .status-line[data-state="duplicate"] { color: var(--ink); }
-.status-line[data-state="error"] { color: #d1d1cc; }
+/* 提示色由 searchReducer 的 deriveStatusHint 单点派生，组件只输出 data-tone。
+   此前此处镜像 SearchState 字面量（[data-state="success"]/[data-state="error"]），
+   与组件里的原始状态比较构成同一事实的第四、第五份副本，新增状态时不会同步。 */
+.status-line[data-tone="ink"] { color: var(--ink); }
+.status-line[data-tone="dim"] { color: #d1d1cc; }
 .results-section { width: min(var(--max), calc(100% - var(--gutter))); margin: auto; padding: 48px 0 104px; border-top: 1px solid var(--line-strong); animation: reveal .6s var(--ease-move) both; scroll-margin-top: 24px; }
 .results-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 22px; }
 .results-head h2 { margin: 8px 0 0; color: var(--ink); font: 700 36px/1 var(--display); letter-spacing: -.03em; }

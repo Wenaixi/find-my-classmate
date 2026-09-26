@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getState, errorMessage, initialState, searchReducer, statusTextFor, resultSectionOf, shouldScrollToResults } from "./searchReducer";
+import { getState, errorMessage, initialState, searchReducer, statusTextFor, resultSectionOf, shouldScrollToResults, deriveStatusHint } from "./searchReducer";
 import { ApiError } from "./api";
 import type { SearchState, Student } from "../types";
 
@@ -240,5 +240,41 @@ describe("orchestration inside the reducer", () => {
     const next = searchReducer(s, { type: "submit-error", cause: new ApiError("x", 429, "rate_limited") });
     expect(next.state).toBe("error");
     expect(next.statusText).toBe("请求过于频繁，请稍候再试");
+  });
+});
+
+describe("deriveStatusHint", () => {
+  // 这组断言锁的是「界面提示只由查询状态派生」，此前三条支路改坏都不会有任何用例翻红：
+  // 把 App.tsx 的 disabled 改成 false、把 data-state 硬编码、让 StatusOrb 对任何状态都渲染，
+  // 132 条用例全部通过。断言必须锁住派生值本身，野生支路才无法复活。
+  const all: SearchState[] = ["idle", "editing", "loading", "success", "duplicate", "empty", "error"];
+
+  it("只有 loading 状态禁用提交并渲染加载指示", () => {
+    for (const state of all) {
+      const hint = deriveStatusHint(state);
+      expect(hint.busy).toBe(state === "loading");
+      expect(hint.showOrb).toBe(state === "loading");
+      expect(hint.sendLabel).toBe(state === "loading" ? "正在检索" : "开始搜索");
+    }
+  });
+
+  it("提示色按命中与出错分档", () => {
+    expect(deriveStatusHint("success").tone).toBe("ink");
+    expect(deriveStatusHint("duplicate").tone).toBe("ink");
+    expect(deriveStatusHint("error").tone).toBe("dim");
+    for (const state of ["idle", "editing", "loading", "empty"] as SearchState[]) {
+      expect(deriveStatusHint(state).tone).toBe("muted");
+    }
+  });
+
+  it("提交禁用与滚动时机各自独立，新增忙碌态时两处不会错位", () => {
+    // 忙碌期间不滚动但禁用提交；查询落定后两者同时放开。
+    // 这两条此前分处组件与模块，若只改一处不会报错——这里锁住它们的一致性。
+    expect(deriveStatusHint("loading").busy).toBe(true);
+    expect(shouldScrollToResults("loading")).toBe(false);
+    for (const state of ["success", "duplicate", "empty", "error"] as SearchState[]) {
+      expect(deriveStatusHint(state).busy).toBe(false);
+      expect(shouldScrollToResults(state)).toBe(true);
+    }
   });
 });

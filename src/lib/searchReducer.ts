@@ -107,6 +107,38 @@ export function shouldScrollToResults(state: SearchState): boolean {
   return section !== null && section !== "loading";
 }
 
+// 界面提示派生：查询状态到「这条状态该禁用提交 / 显示哪种提示色 / 是否渲染加载指示」的映射。
+// 此前这三项各自绕开 resultSectionOf 直读状态字面量：App.tsx:102 直比 "loading" 取禁用态，
+// App.tsx:108 把原始枚举喂给 data-state 与 StatusOrb，StatusOrb.tsx:5 再直比一次，
+// styles.css:87-88 第四、第五次镜像同一批字面量。
+// 变异实验（2026-09-26 架构评审第四轮）证明这三条支路零承重：
+// 把 App.tsx 的 disabled 改成 false、把 data-state 与 orb 状态硬编码、
+// 让 StatusOrb 对任何状态都渲染，132 条用例全部仍然通过。
+// 新增一个查询状态时，编译器会因 Record 穷尽性强制在此补齐，
+// 而不再依赖改开发者记得同步四个位置的字面量。
+export type StatusTone = "muted" | "ink" | "dim";
+
+export interface StatusHint {
+  /** 查询进行中：提交按钮禁用，按钮标签切换为"正在检索" */
+  busy: boolean;
+  /** 提交按钮的无障碍标签 */
+  sendLabel: string;
+  /** 状态行提示色：muted 常态 / ink 已命中 / dim 出错 */
+  tone: StatusTone;
+  /** 是否渲染加载指示（此前由 StatusOrb 直比状态字面量决定） */
+  showOrb: boolean;
+}
+
+export function deriveStatusHint(state: SearchState): StatusHint {
+  const busy = state === "loading";
+  return {
+    busy,
+    sendLabel: busy ? "正在检索" : "开始搜索",
+    tone: state === "success" || state === "duplicate" ? "ink" : state === "error" ? "dim" : "muted",
+    showOrb: busy,
+  };
+}
+
 export function searchReducer(state: SearchControllerState, action: SearchAction): SearchControllerState {
   switch (action.type) {
     case "input-change":
