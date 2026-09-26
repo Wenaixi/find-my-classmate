@@ -482,3 +482,42 @@ func TestCoolingHoldsWhenStampsUnknown(t *testing.T) {
 		t.Error("超过冷却窗口后应允许重试（cooling 应为 false）")
 	}
 }
+
+// TestErrNoRosterMessage 锁定「数据目录无任何年段文件」这条运维指引。
+//
+// 该文案此前在 loadStudents 与 dataStamps 两处逐字复制；收敛为 errNoRoster
+// 单点时首版实现把「或」交给 strings.Join 处理，产出「高二.json、 或 高三.json」，
+// 比原句多一个顿号——运维看到的是一条格式错乱的指引。本测试锁住逐字不变。
+func TestErrNoRosterMessage(t *testing.T) {
+	want := "数据文件缺失，请将 高一.json、高二.json 或 高三.json 之一放入数据目录"
+	if got := errNoRoster().Error(); got != want {
+		t.Fatalf("运维指引文案漂移\n实际 = %q\n期望 = %q", got, want)
+	}
+}
+
+// TestErrNoRosterFollowsKnownGrades 验证指引随 knownGrades 自动扩展。
+//
+// 这是把文案从硬编码改为生成的真正理由：扩展年段只需在 knownGrades 追加，
+// 运维提示自动跟随，不会继续提示放置一个已不被支持的文件名。
+func TestErrNoRosterFollowsKnownGrades(t *testing.T) {
+	original := knownGrades
+	t.Cleanup(func() { knownGrades = original })
+
+	knownGrades = []Grade{GradeOne, GradeTwo, GradeThree, "高四"}
+	got := errNoRoster().Error()
+	if !strings.Contains(got, "高四.json") {
+		t.Fatalf("新增年段后指引应包含 高四.json，实际 = %q", got)
+	}
+	if !strings.HasSuffix(got, "高三.json 或 高四.json 之一放入数据目录") {
+		t.Fatalf("末两项之间应为「或」，实际 = %q", got)
+	}
+
+	// 单个年段时不应出现悬空的「或」
+	knownGrades = []Grade{GradeOne}
+	if single := errNoRoster().Error(); !strings.Contains(single, "请将 高一.json 之一") {
+		t.Fatalf("单年段时不应有多余连接符，实际 = %q", single)
+	}
+	// 空目录也不应 panic
+	knownGrades = nil
+	_ = errNoRoster()
+}

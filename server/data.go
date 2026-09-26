@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -109,8 +110,7 @@ func loadStudents(dir string) ([]Student, error) {
 	}
 	}
 	if !found {
-		return nil, fmt.Errorf("数据文件缺失，请将 %s、%s 或 %s 之一放入数据目录",
-			GradeOne+".json", GradeTwo+".json", GradeThree+".json")
+		return nil, errNoRoster()
 	}
 	return students, nil
 }
@@ -160,6 +160,31 @@ func (s *studentStore) probeThrottled() bool {
 // errDataUnavailable 表示名单当前不可用：启动时数据目录无有效名单，或已观察到的
 // 名单变更在重载时失败。共享哨兵值，避免每次读取为同一原因分配新错误对象。
 var errDataUnavailable = errors.New("数据不可用")
+
+// errNoRoster 构造「数据目录中一个年段文件都没有」的错误。
+// 单一事实源：loadStudents 与 dataStamps 各自独立判定这一事实，此前两处
+// 逐字复制同一句指引。改为从 knownGrades 生成年段清单，使指引不再硬编码
+// 高一/高二/高三三个——扩展年段只需在 knownGrades 追加，运维提示自动跟随，
+// 不会在新增年段后继续提示放一个已不被支持的文件名。
+func errNoRoster() error {
+	names := make([]string, 0, len(knownGrades))
+	for _, grade := range knownGrades {
+		names = append(names, string(grade)+".json")
+	}
+	// 前 n-1 项用顿号连接，末项前用「或」——「或」不能交给 Join 处理，
+	// 否则 Join 会在「或 高三.json」前再补一个顿号，产出「高二.json、 或 高三.json」。
+	switch len(names) {
+	case 0:
+		// knownGrades 为空：无可提示的文件名。仍返回错误而非静默成功——
+		// 数据可用性判定不能在无年段配置时退化为「有数据」。
+		return errors.New("数据文件缺失：系统未配置任何年段")
+	case 1:
+		return fmt.Errorf("数据文件缺失，请将 %s 之一放入数据目录", names[0])
+	default:
+		return fmt.Errorf("数据文件缺失，请将 %s 之一放入数据目录",
+			strings.Join(names[:len(names)-1], "、")+" 或 "+names[len(names)-1])
+	}
+}
 
 // view 返回当前可用的名单只读视图（零拷贝），数据不可用时返回错误。
 // 可用性判定完全由 reload 承担：探测、串行重载、失败冷却与恢复都在 reload 内闭环，
@@ -301,8 +326,7 @@ func dataStamps(dir string) (map[string]fileStamp, error) {
 	}
 	// 空目录守卫：至少一个年段文件必须存在，避免静默空跑
 	if len(stamps) == 0 {
-		return nil, fmt.Errorf("数据文件缺失，请将 %s、%s 或 %s 之一放入数据目录",
-			GradeOne+".json", GradeTwo+".json", GradeThree+".json")
+		return nil, errNoRoster()
 	}
 	return stamps, nil
 }
