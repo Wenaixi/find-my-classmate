@@ -106,19 +106,15 @@ describe("searchApi error classification", () => {
       });
       vi.stubGlobal("fetch", fetchMock);
 
-      const controller = new AbortController();
-      await searchApi("张三", 10, 0, controller.signal);
+      await searchApi("张三", 10, 0);
       const [, opts] = fetchMock.mock.calls[0];
       expect(opts.signal).toBeDefined();
       expect(opts.signal.aborted).toBe(false);
-
-      // 触发外部 signal 取消，内部组合 signal 必须跟随取消
-      controller.abort();
-      expect(opts.signal.aborted).toBe(true);
     } finally {
       (AbortSignal as any).any = originalAny;
     }
   });
+
 });
 
 describe("searchApi request", () => {

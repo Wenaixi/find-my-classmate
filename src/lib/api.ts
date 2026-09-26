@@ -39,6 +39,10 @@ export class ApiError extends Error {
   }
 }
 
+// 组合中断源：timeout 与调用方 signal 任一中止，都真实终止在途请求。
+// searchApi 已无 caller signal（请求竞态由 searchSession 内部 controller 负责），
+// 直接使用 AbortSignal.timeout；fetchVersion 仍有调用方取消语义（App 卸载时 abort），
+// 需经本组合器合并两个信号。AbortSignal.any 不可用（Safari < 17.4）时手动桥接。
 function combineSignals(a?: AbortSignal, b?: AbortSignal): AbortSignal | undefined {
   if (!a) return b;
   if (!b) return a;
@@ -46,10 +50,7 @@ function combineSignals(a?: AbortSignal, b?: AbortSignal): AbortSignal | undefin
     return AbortSignal.any([a, b]);
   }
   const controller = new AbortController();
-  if (a.aborted || b.aborted) {
-    controller.abort();
-    return controller.signal;
-  }
+  if (a.aborted || b.aborted) controller.abort();
   const onAbort = () => controller.abort();
   a.addEventListener("abort", onAbort, { once: true });
   b.addEventListener("abort", onAbort, { once: true });
@@ -74,15 +75,14 @@ export async function fetchVersion(signal?: AbortSignal): Promise<string> {
   return body.version;
 }
 
-export async function searchApi(query: string, limit = 10, offset = 0, signal?: AbortSignal): Promise<SearchResponse> {
+export async function searchApi(query: string, limit = 10, offset = 0): Promise<SearchResponse> {
   const params = new URLSearchParams({ q: query, limit: String(limit), offset: String(offset) });
-  const timeoutSignal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
-  const combined = combineSignals(signal, timeoutSignal);
+  const combined = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
   let response: Response;
   try {
     response = await fetch("/api/search?" + params, { signal: combined });
   } catch (cause) {
-    if (signal?.aborted) throw cause; // 用户主动取消：原样抛出
+    // 超时或网络失败统一归为 network（caller 取消语义已由 session 内部 abort 承担）
     throw new ApiError("request-timeout-or-network", undefined, "network");
   }
   if (!response.ok) {
