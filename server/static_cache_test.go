@@ -10,8 +10,10 @@ import (
 
 // TestStaticCacheDoesNotLeakAcrossSources 锁定缓存来源隔离不变式：
 // 缓存条目绝不能跨 fs.FS 来源观察或复用另一个来源的内容与 ETag。
-// 现状 staticCache 以 URL path 为唯一键，来源身份不参与缓存身份，
-// 因此两个来源放同路径不同内容时后者会拿到前者的缓存。
+// 缓存键包含来源身份（staticCache 为 frontendHandlerWithFS 的实例级变量），
+// 因此两个来源放同路径不同内容时各自命中自己的条目。
+// 本测试在修复前是失败的：当时缓存以 URL path 为唯一键，第二个来源会拿到
+// 第一个来源的内容与 ETag。断言保留为期望隔离，防止该缺陷回归。
 func TestStaticCacheDoesNotLeakAcrossSources(t *testing.T) {
 	first := fstest.MapFS{
 		"assets/app.js": &fstest.MapFile{Data: []byte("FIRST-SOURCE-CONTENT")},

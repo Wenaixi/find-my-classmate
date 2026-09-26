@@ -34,6 +34,10 @@ var logLevel = parseLogLevel(os.Getenv("FMC_LOG_LEVEL"))
 
 type level int
 
+// 日志级别：数值越大越啰嗦，logf 在 logLevel < min 时跳过。
+// levelWarn 当前没有输出点（无生产代码发出 warn 级日志），但级别本身保留：
+// FMC_LOG_LEVEL=warn 是对外环境契约，运维可能已在用，删掉会让该配置静默失效。
+// 新增 warn 级日志时基础设施已就位，无需改动级别解析。
 const (
 	levelError level = iota
 	levelWarn
@@ -59,7 +63,6 @@ func logf(min level, format string, args ...any) {
 }
 
 func logInfof(format string, args ...any)  { logf(levelInfo, format, args...) }
-func logWarnf(format string, args ...any)  { logf(levelWarn, format, args...) }
 func logErrorf(format string, args ...any) { logf(levelError, format, args...) }
 
 // resolveLogDir 优先使用 FMC_LOG_DIR 环境变量；未设置时沿用数据目录下的 log 子目录。
