@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -132,5 +133,78 @@ func TestSearchMethodNotAllowed(t *testing.T) {
 	}
 	if allow := rec.Header().Get("Allow"); allow != "GET" {
 		t.Errorf("Allow = %q，期望 GET", allow)
+	}
+}
+
+// TestSearchRejectsOutOfRangeParameters 覆盖 api.go 的参数解析 400 路径。
+//
+// 变异事实（2026-09-26 第六轮）：把这三条判定改成恒假（parseErr != nil && false）
+// 后全仓后端测试仍全绿。errors_test.go 虽锁住了错误码到 HTTP 状态的映射表，
+// 但不经由参数解析——「用户传 ?limit=abc」这类最典型的畸形输入此前零覆盖。
+func TestSearchRejectsOutOfRangeParameters(t *testing.T) {
+	cases := []struct {
+		name  string
+		query string
+		code  string
+	}{
+		{"limit 越界", "?q=%E7%8E%8B&limit=999", errCodeInvalidLimit},
+		{"limit 非数字", "?q=%E7%8E%8B&limit=abc", errCodeInvalidLimit},
+		{"offset 为负", "?q=%E7%8E%8B&offset=-1", errCodeInvalidOffset},
+		{"offset 非数字", "?q=%E7%8E%8B&offset=xyz", errCodeInvalidOffset},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := newTestStore(t, map[string]string{"高一.json": validGradeOne})
+			req := httptest.NewRequest(http.MethodGet, "/api/search"+tc.query, nil)
+			rec := httptest.NewRecorder()
+			buildMux(store, "test").ServeHTTP(rec, req)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("状态 = %d，期望 400", rec.Code)
+			}
+			var body struct{ Error string }
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if body.Error != tc.code {
+				t.Errorf("错误码 = %q，期望 %q", body.Error, tc.code)
+			}
+		})
+	}
+}
+
+// TestSearchRejectsOverlongQuery 覆盖 query 长度上限的 400 路径。
+// 输入按 rune 计数而非字节：上限本身以 rune 判定，用多字节中文才测得到边界。
+func TestSearchRejectsOverlongQuery(t *testing.T) {
+	store := newTestStore(t, map[string]string{"高一.json": validGradeOne})
+	overlong := strings.Repeat("王", maxQueryRunes+1)
+	req := httptest.NewRequest(http.MethodGet, "/api/search", nil)
+	req.URL.RawQuery = "q=" + overlong
+	rec := httptest.NewRecorder()
+	buildMux(store, "test").ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("状态 = %d，期望 400", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), errCodeInvalidQuery) {
+		t.Errorf("响应体 = %q，期望含 %q", rec.Body.String(), errCodeInvalidQuery)
+	}
+}
+
+// TestSearchAcceptsBoundaryParameters 锁住合法边界不被误伤：
+// limit=1、limit=maxLimit、offset=0 必须正常返回 200。
+// 与上面的拒绝用例成对，防止「一律拒绝」这种同样能过测试的错误实现。
+func TestSearchAcceptsBoundaryParameters(t *testing.T) {
+	queries := []string{
+		"?q=%E7%8E%8B&limit=1",
+		"?q=%E7%8E%8B&limit=" + strconv.Itoa(maxLimit),
+		"?q=%E7%8E%8B&offset=0",
+	}
+	for _, query := range queries {
+		store := newTestStore(t, map[string]string{"高一.json": validGradeOne})
+		req := httptest.NewRequest(http.MethodGet, "/api/search"+query, nil)
+		rec := httptest.NewRecorder()
+		buildMux(store, "test").ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Errorf("合法参数 %s 状态 = %d，期望 200", query, rec.Code)
+		}
 	}
 }
