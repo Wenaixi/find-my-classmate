@@ -36,6 +36,8 @@
     { "raw": "99999999999999999999", "nameTokens": ["99999999999999999999"], "grade": null, "classNumber": null },
     { "raw": "1000001", "nameTokens": [], "grade": null, "classNumber": 1000001 },
     { "raw": "1000001班", "nameTokens": [], "grade": null, "classNumber": 1000001 },
-    { "raw": "张\u0085三", "nameTokens": ["张"], "grade": null, "classNumber": 3 }
+    { "raw": "张\u0085三", "nameTokens": ["张"], "grade": null, "classNumber": 3 },
+    { "raw": "一一班", "nameTokens": ["一一班"], "grade": null, "classNumber": null, "$comment": "汉字数字查表未命中（无 0 班号）：与溢出同策略按姓名处理。旧实现静默丢弃该 token 使条件全部落空，Search 退化成与输入无关的全校检索——普通用户借此可枚举全校。" },
+    { "raw": "高一一一班", "nameTokens": ["高一一一班"], "grade": "高一", "classNumber": null, "$comment": "年级可解析而班级不可解析（「一一」查表未命中）：整个 token 按姓名处理并保留年级条件。不降级为纯年级（会放大成整个年段全量结果），也不静默丢弃（会退化成全校检索）。" }
   ]
 }

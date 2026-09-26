@@ -126,10 +126,16 @@ func parseQuery(raw string) Query {
 				query.NameTokens = append(query.NameTokens, normalizeName(token))
 				continue
 			}
-			query.Grade = parseGrade(match[1])
-			if parsed.Valid && parsed.ClassNo > 0 {
-				query.ClassNo = parsed.ClassNo
+			if !parsed.Valid {
+				// 年级可解析而班级不可解析：整个 token 按姓名处理并保留年级条件。
+				// 不降级为「纯年级」——那会把一次精确查询放大成整个年段的全量结果，
+				// 与溢出分支同属要防的「返回全部」静默错误。
+				query.Grade = parseGrade(match[1])
+				query.NameTokens = append(query.NameTokens, normalizeName(token))
+				continue
 			}
+			query.Grade = parseGrade(match[1])
+			query.ClassNo = parsed.ClassNo
 			continue
 		}
 		if match := classToken.FindStringSubmatch(token); match != nil {
@@ -139,9 +145,14 @@ func parseQuery(raw string) Query {
 				query.NameTokens = append(query.NameTokens, normalizeName(token))
 				continue
 			}
-			if parsed.Valid {
-				query.ClassNo = parsed.ClassNo
+			// 无法解析的班级（Valid=false）与溢出同策略：按姓名处理。
+			// 若在此静默丢弃该 token，条件会全部落空，Search 退化成
+			// 与用户输入无关的全校查询——这正是本分支要防的"返回全部"。
+			if !parsed.Valid {
+				query.NameTokens = append(query.NameTokens, normalizeName(token))
+				continue
 			}
+			query.ClassNo = parsed.ClassNo
 			continue
 		}
 		if grade := parseGrade(token); grade != "" {

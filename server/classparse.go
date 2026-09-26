@@ -14,10 +14,12 @@ var classToken = regexp.MustCompile("^([0-9]+|[一二三四五六七八九十]+)
 
 var classDigits = map[string]int{"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
 
-// chineseNumberToInt 解析汉字数字（支持 一~九十九 与 十~十九），解析失败返回 0。
-func chineseNumberToInt(value string) int {
+// chineseNumberToInt 解析汉字数字（支持 一~九十九 与 十~十九）。
+// 第二个返回值报告解析是否成功：classDigits 查表未命中时旧实现返回零值 0，
+// 而零值与「合法的 0 班号」不可区分，调用方会把无法解析误当成合法结果。
+func chineseNumberToInt(value string) (int, bool) {
 	if value == "" {
-		return 0
+		return 0, false
 	}
 	// 形如 "二十"：十位 * 10 + 个位；"二十一"：20 + 1；"十一"：10 + 1；"十"：10。
 	// 先取十位：若以"十"开头（十/十一）十位=1；若含"十"且前面有数字（二十）十位=该数字。
@@ -26,21 +28,30 @@ func chineseNumberToInt(value string) int {
 	if runes[0] == '十' {
 		tens = 1
 		if len(runes) > 1 {
-			ones = classDigits[string(runes[1])]
+			var ok bool
+			if ones, ok = classDigits[string(runes[1])]; !ok {
+				return 0, false
+			}
 		}
 	} else if len(runes) >= 2 && runes[1] == '十' {
-		tens = classDigits[string(runes[0])]
+		var ok bool
+		if tens, ok = classDigits[string(runes[0])]; !ok {
+			return 0, false
+		}
 		if len(runes) > 2 {
-			ones = classDigits[string(runes[2])]
+			if ones, ok = classDigits[string(runes[2])]; !ok {
+				return 0, false
+			}
 		}
 	} else {
-		// 单字一~九
-		return classDigits[value]
+		// 单字一~九：查表未命中说明该字符串不是合法汉字数字。
+		number, ok := classDigits[value]
+		return number, ok
 	}
 	if tens == 0 || ones == 0 && len(runes) > 2 {
-		return 0
+		return 0, false
 	}
-	return tens*10 + ones
+	return tens*10 + ones, true
 }
 
 // ClassParseResult 班级名解析的显式三态结果。
@@ -66,7 +77,11 @@ func parseClassName(value string) ClassParseResult {
 	if isAllDigits(match[1]) {
 		return ClassParseResult{Overflow: true} // 数字溢出：格式合法但超出 int
 	}
-	return ClassParseResult{ClassNo: chineseNumberToInt(match[1]), Valid: true}
+	if classNo, ok := chineseNumberToInt(match[1]); ok {
+		return ClassParseResult{ClassNo: classNo, Valid: true}
+	}
+	// 汉字数字无法解析：格式非法而非溢出，交由调用方按非法处理。
+	return ClassParseResult{}
 }
 
 // classNumber 保留为薄包装（返回班号；0 表示非法或溢出），供查询路径过渡使用。

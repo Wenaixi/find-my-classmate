@@ -51,7 +51,14 @@ export function parseQuery(raw: string): ParsedQuery {
         continue;
       }
       parsed.grade = parseGrade(gradeClass[1]) ?? parsed.grade;
-      if (classNo > 0) parsed.classNumber = classNo;
+      if (classNo <= 0) {
+        // 年级可解析而班级不可解析：整个 token 按姓名处理并保留年级条件。
+        // 与 Go 端 parseQuery 同策略：不降级为「纯年级」，那会把一次精确查询
+        // 放大成整个年段的全量结果；也不静默丢弃，那会退化成全校检索。
+        parsed.nameTokens.push(normalizeName(token));
+        continue;
+      }
+      parsed.classNumber = classNo;
       continue;
     }
     const classMatch = token.match(classToken);
@@ -59,6 +66,11 @@ export function parseQuery(raw: string): ParsedQuery {
       const classNo = classNumber(token);
       if (classNo < 0) {
         // 超长数字（Go 端 -1 语义）：按姓名处理，避免"返回全部"
+        parsed.nameTokens.push(normalizeName(token));
+        continue;
+      }
+      if (classNo <= 0) {
+        // 汉字数字查表未命中（0 班号不存在）：按姓名处理而非静默丢弃。
         parsed.nameTokens.push(normalizeName(token));
         continue;
       }
