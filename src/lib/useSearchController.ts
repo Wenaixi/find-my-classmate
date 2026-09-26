@@ -111,5 +111,10 @@ export function useSearchController(opts: OrchestratorOptions) {
       onCompositionEnd: wrap("onCompositionEnd"),
     };
   }, [force]);
-  return useMemo(() => ({ state: controller.getState(), controller }), [controller]);
+  // 每次渲染都直读 orchestrator 的最新 state：不能用 useMemo 缓存。
+  // controller 的引用恒定（依赖 [force]，而 force 来自 useReducer 的 dispatch，
+  // 引用永不改变），把它放进依赖数组会让 useMemo 永久命中缓存，
+  // 使组件拿到首帧 state 快照——force() 重渲染后查询状态仍停留在 idle，
+  // 整条搜索链路对用户不可用。挂载回归测试见 useSearchController.mount.test.tsx。
+  return { state: controller.getState(), controller };
 }
