@@ -47,6 +47,26 @@ export function createSearchSession(api: SearchSessionApi): SearchSession {
     sessionController?.signal.removeEventListener("abort", onAbort);
   };
 
+  // perform 是竞态骨架的唯一归属：监听会话中止 → 发起请求 → 判定当前性 → 清理监听。
+  // submit 与 loadMore 只差 id 来源（begin() 的新会话 vs 跟随 currentId）与 offset，
+  // 骨架本身不允许各自复制一份——判别联合（ok/stale/error）在此单点构造，
+  // 过期响应与中止归为 stale、仅未中止且仍当前的失败才是真实错误。
+  const perform = async (id: number, q: string, limit: number, offset: number): Promise<SearchResult> => {
+    const sessionController = controller;
+    const combined = new AbortController();
+    const onAbort = () => combined.abort();
+    listen(sessionController, onAbort);
+    try {
+      const response = await api.search(q, limit, offset, combined.signal);
+      return isCurrent(id) ? { ok: true, response } : staleResult;
+    } catch (cause) {
+      if (combined.signal.aborted || !isCurrent(id)) return staleResult;
+      return { ok: false, reason: "error", cause };
+    } finally {
+      unlisten(sessionController, onAbort);
+    }
+  };
+
   return {
     // 作废在途请求：与 begin 共享"递增 id + 中止真实 fetch"语义，但不发起新请求。
     // clear / 输入变化 / IME 组合变化时调用，使旧响应要么被 id 拦截、要么被 abort 打断。
@@ -55,43 +75,12 @@ export function createSearchSession(api: SearchSessionApi): SearchSession {
     },
     abortAll: () => controller?.abort(),
     async submit(q, limit) {
-      // submit 通过 begin 取得全新会话 id：与旧 App.tsx submit 的
-      // `const requestId = ++requestRef.current` 语义一致——新查询使旧查询的 id 过期。
-      // 若本请求期间另有新 begin/invalidate，过期响应（含过期失败）统一返回 stale 丢弃。
-      const id = begin();
-      const sessionController = controller;
-      const combined = new AbortController();
-      const onAbort = () => combined.abort();
-      listen(sessionController, onAbort);
-      try {
-        const response = await api.search(q, limit, 0, combined.signal);
-        return id === currentId ? { ok: true, response } : staleResult;
-      } catch (cause) {
-        // 中止（invalidate 或新 begin/abortAll）或过期会话的失败归为 stale；
-        // 仅在响应未被中止且会话仍当前时才是真实错误。
-        if (combined.signal.aborted || !isCurrent(id)) return staleResult;
-        return { ok: false, reason: "error", cause };
-      } finally {
-        unlisten(sessionController, onAbort);
-      }
+      // submit 通过 begin 取得全新会话 id：新查询使旧查询的 id 过期。
+      return perform(begin(), q, limit, 0);
     },
     async loadMore(q, limit, offset) {
-      // loadMore 跟随当前会话 id（不 begin）——滚动追加不该使 submit 的结果失效，
-      // 与旧 App.tsx 的 loadMore 复用 requestRef.current 语义一致。
-      const id = currentId;
-      const sessionController = controller;
-      const combined = new AbortController();
-      const onAbort = () => combined.abort();
-      listen(sessionController, onAbort);
-      try {
-        const response = await api.search(q, limit, offset, combined.signal);
-        return id === currentId ? { ok: true, response } : staleResult;
-      } catch (cause) {
-        if (combined.signal.aborted || !isCurrent(id)) return staleResult;
-        return { ok: false, reason: "error", cause };
-      } finally {
-        unlisten(sessionController, onAbort);
-      }
+      // loadMore 跟随当前会话 id（不 begin）——滚动追加不该使 submit 的结果失效。
+      return perform(currentId, q, limit, offset);
     },
   };
 }
