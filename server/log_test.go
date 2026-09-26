@@ -6,13 +6,14 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // FMC_LOG_LEVEL=error 时热重载日志不应输出（裸 log.Printf 绕过级别控制）
 func TestReloadLogRespectsLogLevel(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFiles(t, dir)
-	store, err := newStudentStore(dir)
+	store, err := newStudentStore(dir, time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}

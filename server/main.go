@@ -98,7 +98,7 @@ func main() {
 	log.SetOutput(output)
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 
-	store, err := newStudentStore(dataDir)
+	store, err := newStudentStore(dataDir, time.Now)
 	if err != nil {
 		log.Fatal(err)
 	}

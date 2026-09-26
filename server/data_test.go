@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,13 +29,20 @@ func writeTestFiles(t *testing.T, dir string) {
 // 各调用方只提供自己关心的名单文件。
 func newTestStore(t *testing.T, files map[string]string) *studentStore {
 	t.Helper()
+	return newTestStoreWithClock(t, files, time.Now)
+}
+
+// newTestStoreWithClock 构造可注入时钟的 studentStore：
+// 探测节流与失败冷却的测试沿同一条时间线推进，不再从外部改写可写字段。
+func newTestStoreWithClock(t *testing.T, files map[string]string, now func() time.Time) *studentStore {
+	t.Helper()
 	dir := t.TempDir()
 	for name, content := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
-	store, err := newStudentStore(dir)
+	store, err := newStudentStore(dir, now)
 	if err != nil {
 		t.Fatalf("newStudentStore: %v", err)
 	}
@@ -94,12 +102,11 @@ func TestLoadStudentsBadClassKey(t *testing.T) {
 func TestStoreHotReload(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFiles(t, dir)
-	store, err := newStudentStore(dir)
+	clock := &fakeClock{current: time.Now()}
+	store, err := newStudentStore(dir, clock.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	clock := &fakeClock{current: time.Now()}
-	store.now = clock.Now
 	if got, _ := store.view(); len(got) != 3 {
 		t.Fatalf("初始应 3 条，实际 %d", len(got))
 	}
@@ -120,12 +127,11 @@ func TestStoreHotReload(t *testing.T) {
 func TestStoreReloadFailureIsFailClosedThenRecovers(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFiles(t, dir)
-	store, err := newStudentStore(dir)
+	clock := &fakeClock{current: time.Now()}
+	store, err := newStudentStore(dir, clock.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	clock := &fakeClock{current: time.Now()}
-	store.now = clock.Now
 
 	// 破坏名单：应发布失败并进入不可用
 	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte("{broken"), 0o644)
@@ -160,12 +166,11 @@ func TestStoreReloadFailureIsFailClosedThenRecovers(t *testing.T) {
 func TestStoreCoolingPreservesFailureCause(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFiles(t, dir)
-	store, err := newStudentStore(dir)
+	clock := &fakeClock{current: time.Now()}
+	store, err := newStudentStore(dir, clock.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	clock := &fakeClock{current: time.Now()}
-	store.now = clock.Now
 
 	// 破坏名单，首次失败会带上解析根因
 	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte("{broken"), 0o644)
@@ -200,12 +205,11 @@ func TestStoreCoolingPreservesFailureCause(t *testing.T) {
 func TestStoreRecoveryBypassesProbeThrottle(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFiles(t, dir)
-	store, err := newStudentStore(dir)
+	clock := &fakeClock{current: time.Now()}
+	store, err := newStudentStore(dir, clock.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	clock := &fakeClock{current: time.Now()}
-	store.now = clock.Now
 
 	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte("{broken"), 0o644)
 	clock.advance(2 * time.Second)
@@ -223,7 +227,7 @@ func TestStoreRecoveryBypassesProbeThrottle(t *testing.T) {
 func TestStoreViewConcurrent(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFiles(t, dir)
-	store, err := newStudentStore(dir)
+	store, err := newStudentStore(dir, time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,12 +255,11 @@ func TestStoreViewConcurrent(t *testing.T) {
 func TestStoreConcurrentHotReloadStampede(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFiles(t, dir)
-	store, err := newStudentStore(dir)
+	clock := &fakeClock{current: time.Now()}
+	store, err := newStudentStore(dir, clock.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	clock := &fakeClock{current: time.Now()}
-	store.now = clock.Now
 	if got, _ := store.view(); len(got) != 3 {
 		t.Fatalf("初始应 3 条，实际 %d", len(got))
 	}
@@ -321,12 +324,11 @@ func TestRateLimitAutomaticSweep(t *testing.T) {
 func TestStoreProbeThrottle(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFiles(t, dir)
-	store, err := newStudentStore(dir)
+	clock := &fakeClock{current: time.Now()}
+	store, err := newStudentStore(dir, clock.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	clock := &fakeClock{current: time.Now()}
-	store.now = clock.Now
 	// 首个请求：lastProbe 为零，应需要探测
 	if store.probeThrottled() {
 		t.Fatal("首个请求应需要探测，实际被节流")
@@ -347,7 +349,7 @@ func TestStoreProbeThrottle(t *testing.T) {
 func TestStoreViewNoCopy(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFiles(t, dir)
-	store, err := newStudentStore(dir)
+	store, err := newStudentStore(dir, time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -373,7 +375,7 @@ func TestStoreViewNoCopy(t *testing.T) {
 func TestStoreSize(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFiles(t, dir)
-	store, err := newStudentStore(dir)
+	store, err := newStudentStore(dir, time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -383,5 +385,100 @@ func TestStoreSize(t *testing.T) {
 	}
 	if got := store.Size(); got != len(items) {
 		t.Errorf("Size() = %d，期望 %d（与 view 长度一致）", got, len(items))
+	}
+}
+
+// 自恢复时机是探测节流与失败冷却两条时间轴的单一判定点：
+// 两条窗口共用同一条时间线推进，调用方不再各自取样时钟。
+func TestStoreRecoveryDueSingleTimeline(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFiles(t, dir)
+	clock := &fakeClock{current: time.Now()}
+	store, err := newStudentStore(dir, clock.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// recoveryDue 是纯判定：只回答"此刻是否该探测"，不推进任何状态
+	// （推进 lastProbe 是 probeThrottled 的 CAS 职责）。
+	// 因此未探测过（lastProbe 为零）时，无论调用多少次都判定为"需探测"。
+	probe, _ := store.recoveryDue(clock.Now())
+	if !probe {
+		t.Error("未探测过时判定应为需要探测")
+	}
+	// 通过 probeThrottled 推进探测基准：首个请求应获得探测权
+	if store.probeThrottled() {
+		t.Error("首个请求应获得探测权（不被节流）")
+	}
+	// 500ms 后仍在 1 秒窗口内：应被节流
+	clock.advance(500 * time.Millisecond)
+	if !store.probeThrottled() {
+		t.Error("500ms 内应被探测节流")
+	}
+	// 推进超过 1 秒窗口：应恢复探测
+	clock.advance(600 * time.Millisecond)
+	if store.probeThrottled() {
+		t.Error("超过 1s 窗口应恢复探测权")
+	}
+}
+
+// 目录缺失（dataStamps 自身失败）时同样进入冷却：
+// 否则每个请求都重试读盘并写错误日志，冷却机制形同虚设。
+// 修复前 lastFailStamps 为 nil，sameStamps(nil, ...) 恒为 false，
+// 冷却判定因此永不成立，注释承诺与实现相反。
+func TestStoreMissingDirectoryEntersCooldown(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFiles(t, dir)
+	clock := &fakeClock{current: time.Now()}
+	store, err := newStudentStore(dir, clock.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 删除整个数据目录，使 dataStamps 的 os.Stat 失败（非 fs.ErrNotExist 之外的路径）
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.view(); err == nil {
+		t.Fatal("目录移除后 view 应报不可用")
+	}
+
+	// 冷却期内再次读取：应观察到不可用，但不应反复读盘重试——
+	// 判定入口是 lastFailAt 是否落在冷却窗口内
+	clock.advance(100 * time.Millisecond)
+	if _, retry := store.recoveryDue(clock.Now()); retry {
+		t.Error("100ms 内仍在 2s 冷却窗口，retry 应为 false")
+	}
+	// 冷却窗口过后：应允许重试
+	clock.advance(2 * time.Second)
+	if _, retry := store.recoveryDue(clock.Now()); !retry {
+		t.Error("超过 2s 冷却窗口后应允许重试")
+	}
+}
+
+// 指纹采集阶段失败时 cooling 必须成立：
+// 修复前 lastFailStamps 为 nil，sameStamps(nil, stamps) 恒为 false，
+// cooling 立即返回 false——目录缺失时每个请求都重试读盘并写错误日志，
+// 与 data.go 注释"缺失目录同样需要冷却"的承诺相反。
+func TestCoolingHoldsWhenStampsUnknown(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFiles(t, dir)
+	clock := &fakeClock{current: time.Now()}
+	store, err := newStudentStore(dir, clock.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 模拟指纹采集失败：stamps 为 nil 表示"没有可比对的指纹"
+	store.recordFailure(nil, errors.New("数据文件缺失"))
+	// cooling 返回 true 表示"当前处于冷却窗口内"
+	if !store.cooling(map[string]fileStamp{"x": {size: 1}}) {
+		t.Error("刚失败后应处于冷却窗口内（cooling 应为 true）")
+	}
+
+	// 冷却窗口过后：允许重试
+	clock.advance(3 * time.Second)
+	if store.cooling(map[string]fileStamp{"x": {size: 1}}) {
+		t.Error("超过冷却窗口后应允许重试（cooling 应为 false）")
 	}
 }

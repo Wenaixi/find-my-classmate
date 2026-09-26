@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // benchStudents 合成 2112 条名单（规模与真实数据一致；真实姓名不入库，符合隐私红线）。
@@ -59,7 +60,7 @@ func BenchmarkStoreView(b *testing.B) {
 		[]byte(`{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"张三"}]}}`), 0o644)
 	_ = os.WriteFile(filepath.Join(dir, "高二.json"),
 		[]byte(`{"标题":"福清一中2025级高二编班名单","名单":{"2班":[{"姓名":"李四"}]}}`), 0o644)
-	store, err := newStudentStore(dir)
+	store, err := newStudentStore(dir, time.Now)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -103,7 +104,7 @@ func TestStoreViewAllocsBudget(t *testing.T) {
 		[]byte(`{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"张三"}]}}`), 0o644)
 	_ = os.WriteFile(filepath.Join(dir, "高二.json"),
 		[]byte(`{"标题":"福清一中2025级高二编班名单","名单":{"2班":[{"姓名":"李四"}]}}`), 0o644)
-	store, err := newStudentStore(dir)
+	store, err := newStudentStore(dir, time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}

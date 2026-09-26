@@ -38,16 +38,19 @@ const probeInterval = time.Second
 const reloadCooldown = 2 * time.Second
 
 type studentStore struct {
-	dir            string
-	mu             sync.RWMutex
-	reloadMu       sync.Mutex
-	items          []Student
-	stamps         map[string]fileStamp
-	lastProbe      atomic.Int64         // 上次文件指纹探测的 Unix 毫秒（节流基准）
-	lastFailStamps map[string]fileStamp // 失败时的文件指纹：文件未变则冷却，变化则立即重试
-	lastFailAt     atomic.Int64         // 上次重载失败的 Unix 毫秒（与 lastProbe 共用同一时钟）
-	lastFailErr    error                // 上次失败的原始错误：冷却期对外保留根因，不退化为无信息量的哨兵
-	now            func() time.Time     // 可注入时钟，供测试确定性推进探测与冷却（默认 time.Now）
+	dir                 string
+	mu                  sync.RWMutex
+	reloadMu            sync.Mutex
+	items               []Student
+	stamps              map[string]fileStamp
+	lastProbe           atomic.Int64         // 上次文件指纹探测的 Unix 毫秒（节流基准）
+	lastFailAt          atomic.Int64         // 上次重载失败的 Unix 毫秒（与 lastProbe 共用同一时钟）
+	lastFailStamps      map[string]fileStamp // 失败时的文件指纹：文件未变则冷却，变化则立即重试
+	lastFailStampKnown  bool                  // 失败是否发生在指纹采集阶段（dataStamps 失败时为 false）：
+	// 显式区分"失败且指纹未知"与"失败且指纹已知"，避免 lastFailStamps 为 nil
+	// 同时表示"目录缺失"与"空指纹"两种情形导致冷却判定失效。
+	lastFailErr         error     // 上次失败的原始错误：冷却期对外保留根因，不退化为无信息量的哨兵
+	now                 func() time.Time // 构造注入的时钟，供测试确定性推进探测与冷却
 }
 
 func loadStudents(dir string) ([]Student, error) {
@@ -112,26 +115,44 @@ func loadStudents(dir string) ([]Student, error) {
 	return students, nil
 }
 
-func newStudentStore(dir string) (*studentStore, error) {
-	store := &studentStore{dir: dir, now: time.Now}
+// newStudentStore 构造并立即完成首次加载（force 路径）。
+// now 由构造函数注入：探测节流与失败冷却共用同一条时间线，
+// 测试通过构造参数推进时间，不从外部改写可写字段。
+func newStudentStore(dir string, now func() time.Time) (*studentStore, error) {
+	store := &studentStore{dir: dir, now: now}
 	if err := store.reload(true); err != nil {
 		return nil, err
 	}
 	return store, nil
 }
 
+// recoveryDue 是自恢复时机的单一判定点：探测节流（1 秒窗口）与失败冷却
+// （2 秒窗口）两条时间轴在此汇合，由调用方传入统一取样的 now。
+// 「同一条时间线」因此从注释承诺变成代码事实——改任一窗口不会绕开另一条轴。
+//
+// probe=true 表示应探测文件指纹（节流窗口已过，或尚无探测基准）。
+// retry=true 表示可重试失败重载（冷却窗口已过，或尚无失败基准）。
+// 失败期间的指纹变化重试由 cooling 单独判定，不在本函数职责内。
+func (s *studentStore) recoveryDue(now time.Time) (probe bool, retry bool) {
+	nowMS := now.UnixMilli()
+	lastProbe := s.lastProbe.Load()
+	probe = lastProbe == 0 || nowMS-lastProbe >= probeInterval.Milliseconds()
+	lastFail := s.lastFailAt.Load()
+	retry = lastFail == 0 || nowMS-lastFail >= reloadCooldown.Milliseconds()
+	return probe, retry
+}
+
 // probeThrottled 判定本次是否应跳过文件指纹探测。
-// 首个请求与超过 probeInterval 的请求返回 false（需要探测），其余返回 true。
-// 并发安全：使用原子 CAS 保证同一窗口内仅一个请求获得探测权，其余被节流。
+// 窗口是否已过由 recoveryDue 单点判定；此处只负责并发安全：
+// 用原子 CAS 保证同一窗口内仅一个请求获得探测权，其余被节流。
 func (s *studentStore) probeThrottled() bool {
-	nowMS := s.now().UnixMilli()
-	last := s.lastProbe.Load()
-	if last == 0 || nowMS-last >= probeInterval.Milliseconds() {
-		// 需要探测：CAS 占有本次探测权；若失败说明其他请求刚探测过，按节流处理
-		if s.lastProbe.CompareAndSwap(last, nowMS) {
-			return false
-		}
+	now := s.now()
+	if probe, _ := s.recoveryDue(now); !probe {
 		return true
+	}
+	// 需要探测：CAS 占有本次探测权；若失败说明其他请求刚探测过，按节流处理
+	if s.lastProbe.CompareAndSwap(s.lastProbe.Load(), now.UnixMilli()) {
+		return false
 	}
 	return true
 }
@@ -214,6 +235,7 @@ func (s *studentStore) reload(force bool) error {
 	s.items = items
 	s.stamps = stamps
 	s.lastFailStamps = nil
+	s.lastFailStampKnown = false
 	s.lastFailErr = nil
 	s.lastFailAt.Store(0)
 	s.mu.Unlock()
@@ -223,24 +245,29 @@ func (s *studentStore) reload(force bool) error {
 	return nil
 }
 
-// cooling 判定当前是否处于失败冷却窗口：失败指纹未变且距上次失败不足 reloadCooldown。
-// 与 probeThrottled 共用 s.now()，使探测节流与失败冷却可在测试中沿同一条时间线推进。
+// cooling 判定当前是否处于失败冷却窗口：距上次失败不足 reloadCooldown，
+// 且失败指纹未变（文件被修复则立即重试）。
+// 指纹采集阶段失败（lastFailStampKnown 为 false）时没有可比对的指纹，
+// 按"未变化"处理：仅由冷却窗口约束重试频率。修复前 lastFailStamps 为 nil 时
+// sameStamps(nil, stamps) 恒为 false，冷却判定永不成立，与注释承诺相反。
 func (s *studentStore) cooling(stamps map[string]fileStamp) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	last := s.lastFailAt.Load()
-	if last == 0 || !sameStamps(s.lastFailStamps, stamps) {
+	if s.lastFailStampKnown && !sameStamps(s.lastFailStamps, stamps) {
 		return false
 	}
-	return s.now().UnixMilli()-last < reloadCooldown.Milliseconds()
+	_, retry := s.recoveryDue(s.now())
+	return !retry
 }
 
 // recordFailure 发布失败状态：记录失败指纹、失败时间与原始错误，使后续读取在冷却
 // 窗口内继续观察到不可用，而不是把保留在内存中的旧快照误报为当前健康。
-// dataStamps 自身失败时 stamps 为 nil，此时只更新时间基准（缺失目录同样需要冷却）。
+// stamps 为 nil 表示失败发生在指纹采集阶段（dataStamps 自身失败，如目录不可读），
+// 此时 lastFailStampKnown 为 false，冷却判定不再依赖指纹比对。
 func (s *studentStore) recordFailure(stamps map[string]fileStamp, cause error) {
 	s.mu.Lock()
 	s.lastFailStamps = stamps
+	s.lastFailStampKnown = stamps != nil
 	s.lastFailErr = cause
 	s.lastFailAt.Store(s.now().UnixMilli())
 	s.mu.Unlock()

@@ -19,12 +19,11 @@ func TestHealthReflectsDataAvailability(t *testing.T) {
 	dir := t.TempDir()
 	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(validGradeOne), 0o644)
 	_ = os.WriteFile(filepath.Join(dir, "高二.json"), []byte(validGradeTwo), 0o644)
-	store, err := newStudentStore(dir)
+	clock := &fakeClock{current: time.Now()}
+	store, err := newStudentStore(dir, clock.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	clock := &fakeClock{current: time.Now()}
-	store.now = clock.Now
 	mux := buildMux(store, "dev")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/health", nil))
