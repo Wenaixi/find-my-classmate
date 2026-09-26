@@ -6,10 +6,20 @@ const classToken = /^(\d+|[一二三四五六七八九十]+)班?$/;
 // 年级+班级连写（"高二三班" / "高二1班" / "高一十八班"）→ 精确解析为年段+班级
 const gradeClassToken = /^(高一|高二|高三|高1|高2|高3)(\d+|[一二三四五六七八九十]+)班?$/;
 
-// 与 Go 端 unicode.IsSpace 对齐（含 U+0085 NEL）：JS \s 不覆盖 NEL，需显式补上。
-// 姓名匹配键必须两端删除同一集合的空白，否则 corpus 盲区会漂移（核实见 docs/query-contract.json）。
+// 空白集合与 Go 端 unicode.IsSpace 逐码位对齐，不用 JS 的 \s 近似：
+// 两者的差集有两个码位且方向相反——U+0085（NEL）是 Go 的空白而 \s 不含，
+// U+FEFF 自 Unicode 4.0.1 起不在 White_Space 内、Go 不认而 \s 认。
+// 用 \s 会在 U+FEFF 上静默与 Go 分叉：查询分词被切开、姓名匹配键被删除。
+// 下方两行逐码位枚举 Go 的集合，是这两处差集的唯一修正点。
+const goSpaceChars = "\\t\\n\\v\\f\\r \\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000";
+const goSpace = new RegExp("[" + goSpaceChars + "]", "g");
+const goSpaceSplit = new RegExp("[" + goSpaceChars + "]+");
+
+// 姓名匹配键：删除与 Go 相同的空白集合，再统一大写。
+// 用 toUpperCase 而非 toLocaleUpperCase：后者随宿主 locale 变化（tr/az 下
+// "i" 映射为 U+0130），而 Go strings.ToUpper 是 locale 无关的。
 export function normalizeName(value: string): string {
-  return value.replace(/[\s\u3000\t\u0085]/g, "").toLocaleUpperCase();
+  return value.replace(goSpace, "").toUpperCase();
 }
 
 // parseGrade 与 Go 端 search.go 语义一致：子串匹配（已是班级连写的 token 由 gradeClassToken 优先精确解析）。
@@ -36,9 +46,11 @@ function chineseNumberToInt(value: string): number {
 }
 
 export function parseQuery(raw: string): ParsedQuery {
-  // 与 Go 端 strings.Fields 对齐：Fields 按 unicode.IsSpace 切分，含 U+0085（NEL）。
-  // JS \s 不含 NEL，此处显式补上，避免两端 token 集合漂移（核实见 docs/query-contract.json）。
-  const tokens = raw.trim().replace(separators, " ").split(/[\s\u0085]+/).filter(Boolean);
+  // 与 Go 端 strings.Fields 对齐：按 goSpaceSplit 切分，而不是 JS 的 \s。
+  // 注意不能用 JS 的 trim 收尾——它会移除首尾的 U+FEFF，而 Go 的 strings.TrimSpace
+  // 不认 U+FEFF；"␣18班" 因此会在 JS 被削成 "18班"（判为班级条件）、
+  // 在 Go 整体保留为一个姓名 token。切分本身已过滤空串，无需再 trim。
+  const tokens = raw.replace(separators, " ").split(goSpaceSplit).filter(Boolean);
   const parsed: ParsedQuery = { tokens, nameTokens: [] };
 
   for (const token of tokens) {

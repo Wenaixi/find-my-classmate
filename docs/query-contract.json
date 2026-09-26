@@ -2,42 +2,268 @@
   "$comment": "跨语言查询解析契约的唯一事实源。src/lib/query.test.ts 与 server/contract_test.go 各自消费本文件；修改解析规则时必须同时更新两侧实现与本文件。执行语义（匹配/排序/分页）只属于后端，不在本文件范围内。整数上限说明：前端 classNumber 用 Number.isSafeInteger 判定溢出（上限 2^53-1），Go 端用 strconv.Atoi（上限 2^63-1），因此 2^53 到 2^63-1 之间两侧行为不同——这是刻意保留的差异，因为 JS Number 无法精确表示更大的整数，继续放行会把用户输入静默舍入成错误的班级号。语料只覆盖 2^53 以下，两侧在此区间必须完全一致；不要为了让语料全绿而放宽前端上限。",
   "$comment2": "U+0085（NEL）是 Go strings.Fields（unicode.IsSpace）切分的空白，JS \\s 不覆盖。前端 tokenizer 与 normalizeName 已显式补上 U+0085，与 Go 对齐；本用例锁住该行为。",
   "cases": [
-    { "raw": "张三", "nameTokens": ["张三"], "grade": null, "classNumber": null },
-    { "raw": "示 例", "nameTokens": ["示", "例"], "grade": null, "classNumber": null },
-    { "raw": "高1", "nameTokens": [], "grade": "高一", "classNumber": null },
-    { "raw": "高2", "nameTokens": [], "grade": "高二", "classNumber": null },
-    { "raw": "高3", "nameTokens": [], "grade": "高三", "classNumber": null },
-    { "raw": "高一", "nameTokens": [], "grade": "高一", "classNumber": null },
-    { "raw": "高二", "nameTokens": [], "grade": "高二", "classNumber": null },
-    { "raw": "高三", "nameTokens": [], "grade": "高三", "classNumber": null },
-    { "raw": "18", "nameTokens": [], "grade": null, "classNumber": 18 },
-    { "raw": "18班", "nameTokens": [], "grade": null, "classNumber": 18 },
-    { "raw": "一班", "nameTokens": [], "grade": null, "classNumber": 1 },
-    { "raw": "六班", "nameTokens": [], "grade": null, "classNumber": 6 },
-    { "raw": "十一班", "nameTokens": [], "grade": null, "classNumber": 11 },
-    { "raw": "十八班", "nameTokens": [], "grade": null, "classNumber": 18 },
-    { "raw": "二十班", "nameTokens": [], "grade": null, "classNumber": 20 },
-    { "raw": "二十一班", "nameTokens": [], "grade": null, "classNumber": 21 },
-    { "raw": "三十班", "nameTokens": [], "grade": null, "classNumber": 30 },
-    { "raw": "三十五班", "nameTokens": [], "grade": null, "classNumber": 35 },
-    { "raw": "九十九班", "nameTokens": [], "grade": null, "classNumber": 99 },
-    { "raw": "高二三班", "nameTokens": [], "grade": "高二", "classNumber": 3 },
-    { "raw": "高二1班", "nameTokens": [], "grade": "高二", "classNumber": 1 },
-    { "raw": "高一十八班", "nameTokens": [], "grade": "高一", "classNumber": 18 },
-    { "raw": "高二十二班", "nameTokens": [], "grade": "高二", "classNumber": 12 },
-    { "raw": "高二，1班", "nameTokens": [], "grade": "高二", "classNumber": 1 },
-    { "raw": "高1、六班", "nameTokens": [], "grade": "高一", "classNumber": 6 },
-    { "raw": "高三+示例同学+18班", "nameTokens": ["示例同学"], "grade": "高三", "classNumber": 18 },
-    { "raw": "示例，18班", "nameTokens": ["示例"], "grade": null, "classNumber": 18 },
-    { "raw": "223", "nameTokens": [], "grade": null, "classNumber": 223 },
-    { "raw": "高翔", "nameTokens": ["高翔"], "grade": null, "classNumber": null },
-    { "raw": "班长", "nameTokens": ["班长"], "grade": null, "classNumber": null },
-    { "raw": "高一同学", "nameTokens": [], "grade": "高一", "classNumber": null },
-    { "raw": "99999999999999999999", "nameTokens": ["99999999999999999999"], "grade": null, "classNumber": null },
-    { "raw": "1000001", "nameTokens": [], "grade": null, "classNumber": 1000001 },
-    { "raw": "1000001班", "nameTokens": [], "grade": null, "classNumber": 1000001 },
-    { "raw": "张\u0085三", "nameTokens": ["张"], "grade": null, "classNumber": 3 },
-    { "raw": "一一班", "nameTokens": ["一一班"], "grade": null, "classNumber": null, "$comment": "汉字数字查表未命中（无 0 班号）：与溢出同策略按姓名处理。旧实现静默丢弃该 token 使条件全部落空，Search 退化成与输入无关的全校检索——普通用户借此可枚举全校。" },
-    { "raw": "高一一一班", "nameTokens": ["高一一一班"], "grade": "高一", "classNumber": null, "$comment": "年级可解析而班级不可解析（「一一」查表未命中）：整个 token 按姓名处理并保留年级条件。不降级为纯年级（会放大成整个年段全量结果），也不静默丢弃（会退化成全校检索）。" }
+    {
+      "raw": "张三",
+      "nameTokens": [
+        "张三"
+      ],
+      "grade": null,
+      "classNumber": null
+    },
+    {
+      "raw": "示 例",
+      "nameTokens": [
+        "示",
+        "例"
+      ],
+      "grade": null,
+      "classNumber": null
+    },
+    {
+      "raw": "高1",
+      "nameTokens": [],
+      "grade": "高一",
+      "classNumber": null
+    },
+    {
+      "raw": "高2",
+      "nameTokens": [],
+      "grade": "高二",
+      "classNumber": null
+    },
+    {
+      "raw": "高3",
+      "nameTokens": [],
+      "grade": "高三",
+      "classNumber": null
+    },
+    {
+      "raw": "高一",
+      "nameTokens": [],
+      "grade": "高一",
+      "classNumber": null
+    },
+    {
+      "raw": "高二",
+      "nameTokens": [],
+      "grade": "高二",
+      "classNumber": null
+    },
+    {
+      "raw": "高三",
+      "nameTokens": [],
+      "grade": "高三",
+      "classNumber": null
+    },
+    {
+      "raw": "18",
+      "nameTokens": [],
+      "grade": null,
+      "classNumber": 18
+    },
+    {
+      "raw": "18班",
+      "nameTokens": [],
+      "grade": null,
+      "classNumber": 18
+    },
+    {
+      "raw": "一班",
+      "nameTokens": [],
+      "grade": null,
+      "classNumber": 1
+    },
+    {
+      "raw": "六班",
+      "nameTokens": [],
+      "grade": null,
+      "classNumber": 6
+    },
+    {
+      "raw": "十一班",
+      "nameTokens": [],
+      "grade": null,
+      "classNumber": 11
+    },
+    {
+      "raw": "十八班",
+      "nameTokens": [],
+      "grade": null,
+      "classNumber": 18
+    },
+    {
+      "raw": "二十班",
+      "nameTokens": [],
+      "grade": null,
+      "classNumber": 20
+    },
+    {
+      "raw": "二十一班",
+      "nameTokens": [],
+      "grade": null,
+      "classNumber": 21
+    },
+    {
+      "raw": "三十班",
+      "nameTokens": [],
+      "grade": null,
+      "classNumber": 30
+    },
+    {
+      "raw": "三十五班",
+      "nameTokens": [],
+      "grade": null,
+      "classNumber": 35
+    },
+    {
+      "raw": "九十九班",
+      "nameTokens": [],
+      "grade": null,
+      "classNumber": 99
+    },
+    {
+      "raw": "高二三班",
+      "nameTokens": [],
+      "grade": "高二",
+      "classNumber": 3
+    },
+    {
+      "raw": "高二1班",
+      "nameTokens": [],
+      "grade": "高二",
+      "classNumber": 1
+    },
+    {
+      "raw": "高一十八班",
+      "nameTokens": [],
+      "grade": "高一",
+      "classNumber": 18
+    },
+    {
+      "raw": "高二十二班",
+      "nameTokens": [],
+      "grade": "高二",
+      "classNumber": 12
+    },
+    {
+      "raw": "高二，1班",
+      "nameTokens": [],
+      "grade": "高二",
+      "classNumber": 1
+    },
+    {
+      "raw": "高1、六班",
+      "nameTokens": [],
+      "grade": "高一",
+      "classNumber": 6
+    },
+    {
+      "raw": "高三+示例同学+18班",
+      "nameTokens": [
+        "示例同学"
+      ],
+      "grade": "高三",
+      "classNumber": 18
+    },
+    {
+      "raw": "示例，18班",
+      "nameTokens": [
+        "示例"
+      ],
+      "grade": null,
+      "classNumber": 18
+    },
+    {
+      "raw": "223",
+      "nameTokens": [],
+      "grade": null,
+      "classNumber": 223
+    },
+    {
+      "raw": "高翔",
+      "nameTokens": [
+        "高翔"
+      ],
+      "grade": null,
+      "classNumber": null
+    },
+    {
+      "raw": "班长",
+      "nameTokens": [
+        "班长"
+      ],
+      "grade": null,
+      "classNumber": null
+    },
+    {
+      "raw": "高一同学",
+      "nameTokens": [],
+      "grade": "高一",
+      "classNumber": null
+    },
+    {
+      "raw": "99999999999999999999",
+      "nameTokens": [
+        "99999999999999999999"
+      ],
+      "grade": null,
+      "classNumber": null
+    },
+    {
+      "raw": "1000001",
+      "nameTokens": [],
+      "grade": null,
+      "classNumber": 1000001
+    },
+    {
+      "raw": "1000001班",
+      "nameTokens": [],
+      "grade": null,
+      "classNumber": 1000001
+    },
+    {
+      "raw": "张三",
+      "nameTokens": [
+        "张"
+      ],
+      "grade": null,
+      "classNumber": 3
+    },
+    {
+      "raw": "一一班",
+      "nameTokens": [
+        "一一班"
+      ],
+      "grade": null,
+      "classNumber": null,
+      "$comment": "汉字数字查表未命中（无 0 班号）：与溢出同策略按姓名处理。旧实现静默丢弃该 token 使条件全部落空，Search 退化成与输入无关的全校检索——普通用户借此可枚举全校。"
+    },
+    {
+      "raw": "高一一一班",
+      "nameTokens": [
+        "高一一一班"
+      ],
+      "grade": "高一",
+      "classNumber": null,
+      "$comment": "年级可解析而班级不可解析（「一一」查表未命中）：整个 token 按姓名处理并保留年级条件。不降级为纯年级（会放大成整个年段全量结果），也不静默丢弃（会退化成全校检索）。"
+    },
+    {
+      "raw": "张﻿三",
+      "nameTokens": [
+        "张﻿三"
+      ],
+      "grade": null,
+      "classNumber": null,
+      "$comment": "U+FEFF（零宽不换行空格）自 Unicode 4.0.1 起不在 White_Space 内，Go unicode.IsSpace 不认它，JS \\s 认。两侧必须一致按非空白处理，否则 TS 把它切开而「三」被判成班级 3。"
+    },
+    {
+      "raw": "﻿18班",
+      "nameTokens": [
+        "﻿18班"
+      ],
+      "grade": null,
+      "classNumber": null,
+      "$comment": "U+FEFF 前缀使整个 token 无法匹配班级语法。前端唯一消费的 hasName 布尔在此与 Go 分叉，是跨端分歧的可观察出口：Go 判为姓名条件，TS 曾判为纯班级。"
+    }
   ]
 }
