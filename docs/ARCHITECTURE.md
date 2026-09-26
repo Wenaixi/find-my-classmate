@@ -145,7 +145,7 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 | src/config.ts | 前端契约常量（PAGE_SIZE/MAX_QUERY_LENGTH/MAX_LIMIT/REQUEST_TIMEOUT_MS） | 无 |
 | src/lib/api.ts | 网络适配与响应结构校验（decodeItem 只认 canonical class 单字段） | types, config |
 | src/lib/query.ts | 查询解释（解析 token、hasNameCondition、姓名归一化，空白语义与 Go 对齐含 NEL），不含匹配/排序/分页 | types |
-| src/lib/searchReducer.ts | 搜索状态机纯 reducer（状态派生/错误文案/F36 提示） | types, api, config |
+| src/lib/searchReducer.ts | 搜索状态机纯 reducer（状态派生/错误文案/纯年段与班级整段命中提示） | types, api, config |
 | src/lib/searchSession.ts | 请求竞态编排（requestId + abort），submit/loadMore 返回 SearchResult 判别联合 | types |
 | src/lib/resultSummary.ts | 结果摘要单点派生（进度/计数/剩余文案） | 无 |
 | src/site.config.ts | 站点展示文案（数据来源/运营团队/数据处理方） | 无 |
@@ -173,19 +173,19 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 | ratelimit.go | 令牌桶限流（IP 提取统一走 ip.go 的 clientIP），429 响应由外层 securityHeaders 统一带头 |
 | web.go | 前端静态资源嵌入与托管（缓存按来源隔离，immutable 只给存在资源，raw/gzip/304 协商头一致） |
 
-数据热重载策略：文件指纹探测带 1 秒节流（原子 CAS 保证同窗口单请求探测权）；变化则互斥重载，并发用读写锁保护（view() 为唯一数据访问入口）；重载失败有 2 秒冷却（指纹驱动）且旧数据不对外服务（一致性优先于可用性的设计决策，F59）。
+数据热重载策略：文件指纹探测带 1 秒节流（原子 CAS 保证同窗口单请求探测权）；变化则互斥重载，并发用读写锁保护（view() 为唯一数据访问入口）；重载失败有 2 秒冷却（指纹驱动）且旧数据不对外服务（一致性优先于可用性的设计决策）。
 
 健康检查语义（/api/health）：进程存活 + 数据可用性。数据损坏/缺失时返回 503 {"status":"degraded","reason":"data"}；响应携带 version（ldflags -X main.version，本地构建为 dev）。
 
 ## 9. 部署与发布约定
 
-- **单实例边界（F49）**：限流桶与数据视图（内存名单）均为进程内状态，不支持多副本横向扩展；热重载为运维盲操作（写文件即生效），生产更新用原子替换（写临时文件 → mv）并随后请求验证。
+- **单实例边界**：限流桶与数据视图（内存名单）均为进程内状态，不支持多副本横向扩展；热重载为运维盲操作（写文件即生效），生产更新用原子替换（写临时文件 → mv）并随后请求验证。
 
 - 本地：`npm run build` → `go run ./server`，端口 3078
 - Docker：多阶段构建，单一端口映射，数据目录只读挂载（热重载仍生效）
 - CI：frontend job 完成 typecheck+test+build 并上传 `frontend-build` 产物；backend job **复用该产物**（`needs: frontend` + `download-artifact`）而非重建前端，保证测试与编译看到与 CI 验证过的相同字节；另有 gofmt/go test -race/go vet、零数据守卫与 Docker buildx 构建验证
 - 发布：tag 触发三平台交叉编译，归档只含二进制、文档与空 data 占位目录。**归档不含 server/web**——前端已嵌入二进制，保留它会形成第二个资产事实源
-- 构建产物 `server/web/` 与本地记忆文件（CLAUDE.md、.superpowers/）不入库
+- 构建产物 `server/web/` 与本地记忆、过程性规划文档（由 `.gitignore` 排除）不入库
 
 ## 10. 启动自举与日志
 

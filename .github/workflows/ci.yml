@@ -101,7 +101,7 @@ jobs:
           # 真实名单（data/*.json）不进仓库、不进发布包；仓库中不应存在任何名单数据。
           # 数据契约由 server/data_test.go 保证（校内部署放置数据后运行 go test ./... 校验）。
           if ls data/*.json >/dev/null 2>&1; then
-            echo "错误：data/ 目录包含名单数据文件，真实名单不得随仓库分发（F42 隐私红线）。" >&2
+            echo "错误：data/ 目录包含名单数据文件，真实名单不得随仓库分发（隐私红线）。" >&2
             exit 1
           fi
           echo "零数据守卫通过：仓库无名单数据文件，数据契约由 server/data_test.go 保证。"
