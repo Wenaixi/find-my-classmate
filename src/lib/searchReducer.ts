@@ -69,8 +69,8 @@ export function errorMessage(cause: unknown): string {
   return COPY.error;
 }
 
-// statusText 派生（含纯年段/班级提示分支）。
-// hasName 由调用方（App.tsx）用 hasNameCondition(submitted) 计算后传入，reducer 保持纯状态机。
+// statusText 派生（含 F36 纯年段/班级提示分支）。
+// hasName 由 reducer 内部以 hasNameCondition(action.query) 计算（批次九归位后调用方不再传入）。
 export function statusTextFor(state: SearchState, total: number, hasName: boolean): string {
   if (state === "duplicate" && total >= PAGE_SIZE) {
     const prefix = hasName ? COPY.duplicate : total >= 100 ? "已匹配整个年段/班级" : COPY.duplicate;
