@@ -2,6 +2,7 @@ import { FormEvent, Suspense, lazy, useEffect, useRef, useState } from "react";
 import { BorderBeam } from "border-beam";
 import { fetchVersion, searchApi } from "./lib/api";
 import { useSearchController } from "./lib/useSearchController";
+import { useSearchInput } from "./lib/useSearchInput";
 import ErrorBoundary from "./components/ErrorBoundary";
 import siteConfig from "./site.config";
 import { MAX_QUERY_LENGTH, PAGE_SIZE } from "./config";
@@ -15,6 +16,9 @@ export function App() {
   // 编排（守卫/判别联合/竞态）全部收进模块，组件不再理解 reducer/session。
   const { state, controller } = useSearchController({ pageSize: PAGE_SIZE, api: { search: searchApi } });
   const { query, items, total, hasMore, state: uiState, statusText, loadingMore, loadMoreError, isComposing } = state;
+  // 输入交互语义（IME 组合守卫、Enter 提交、Escape 清空）由 useSearchInput 统一收口：
+  // 组件只透传回调，不再手写组合判断——该逻辑此前内联在此处且零测试覆盖。
+  const inputHandlers = useSearchInput(controller, isComposing);
   const [version, setVersion] = useState("");
   const resultsRef = useRef<HTMLElement | null>(null);
   const searchWrapRef = useRef<HTMLFormElement | null>(null);
@@ -82,7 +86,7 @@ export function App() {
             <label className="field-label" data-od-id="search-label" htmlFor="query">查询条件 <span>NAME / CLASS / GRADE</span></label>
             <BorderBeam size="md" colorVariant="colorful" theme="dark" borderRadius={999} duration={2.2} strength={1} brightness={2} saturation={2.2} hueRange={160}>
               <div className="search-track" data-od-id="search-track">
-                <input className="search-input" id="query" type="text" autoComplete="off" spellCheck={false} maxLength={MAX_QUERY_LENGTH} value={query} onChange={(event) => controller.onInput(event.target.value)} onFocus={() => searchWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })} onCompositionStart={() => controller.onCompositionStart()} onCompositionEnd={() => controller.onCompositionEnd()} onKeyDown={(event) => { if (event.key === "Escape") clear(); if (event.key === "Enter" && !event.nativeEvent.isComposing && !isComposing) void submit(event); }} placeholder="输入姓名 / 班级 / 年段" aria-label="查询条件" aria-describedby="search-hint" />
+                <input className="search-input" id="query" type="text" autoComplete="off" spellCheck={false} maxLength={MAX_QUERY_LENGTH} value={query} onChange={(event) => inputHandlers.onChange(event.target.value)} onFocus={() => searchWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })} onCompositionStart={inputHandlers.onCompositionStart} onCompositionEnd={inputHandlers.onCompositionEnd} onKeyDown={(event) => inputHandlers.onKeyDown(event.key, event.nativeEvent.isComposing)} placeholder="输入姓名 / 班级 / 年段" aria-label="查询条件" aria-describedby="search-hint" />
                 {query.length > 0 && <button className="search-clear" data-od-id="search-clear" type="button" onClick={clear} aria-label="清空输入"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></button>}
                 <button className="search-send" data-od-id="search-cta" type="submit" disabled={uiState === "loading"} aria-label={uiState === "loading" ? "正在检索" : "开始搜索"}>
                   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></svg>
