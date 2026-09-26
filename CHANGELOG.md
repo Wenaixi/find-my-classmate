@@ -2,6 +2,17 @@
 
 本文件记录 FindMyClassmate 的版本变更。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [v0.10.4] - 2026-09-27
+
+### 修复
+
+- **名单测试接缝收口**：`TestSearchDataUnavailable` 不再从 `studentStore` 私有字段读取临时目录，改由测试 fixture 显式返回目录。生产名单视图的 `view()` 只读入口和热重载行为保持不变。
+
+### 架构核实
+
+- **名单可用性模块保持 deep**：热重载、失败冷却、fail-closed 与零拷贝快照继续集中在 `studentStore` 内部，不为拆分而拆分。
+- **日志与契约候选保持现状**：启动日志当前只有一个实现，不引入没有第二个 adapter 支撑的日志 interface；`MAX_LIMIT` 继续作为跨语言契约声明保留，`rebuildGradePattern` 继续承担生产初始化。
+
 ## [v0.10.3] - 2026-09-26
 
 ### 修复

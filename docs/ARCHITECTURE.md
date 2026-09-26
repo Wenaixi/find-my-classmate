@@ -243,15 +243,16 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 日志约定：
 
 - 双写：文件（server.log）+ stdout，容器由 docker 收集 stdout
-- 分级：FMC_LOG_LEVEL=error|warn|info（默认 info），代码内用 logInfof/logWarnf/logErrorf
+- 分级：`FMC_LOG_LEVEL=error|warn|info`（默认 info）。当前代码提供 `logInfof` 与 `logErrorf`；`warn` 级别保留为环境配置兼容值，但暂无生产日志发射点。
 - 访问日志：每个请求记录"方法 路径 状态 耗时 脱敏IP"；**查询参数永不入日志**（隐私红线）
 - 不内置轮转：交由部署层（logrotate / docker json-file）
 
 ## 11. 测试策略
 
 - 前端：Vitest——查询契约（query.test.ts）、状态机（searchReducer.test.ts）、竞态编排（searchSession.test.ts）、交互语义与接线（useSearchInput.test.tsx，7 条挂载测试）、控制器 hook 壳（useSearchController.mount.test.tsx）
-- 纯逻辑测试默认 node 环境，需要 DOM 的测试用文件头 `@vitest-environment jsdom` 单独声明；挂载测试须置 `IS_REACT_ACT_ENVIRONMENT=true`，否则 `act()` 的更新不会 flush，会读到旧快照产生假阴性
+- 纯逻辑测试默认 node 环境，需要 DOM 的测试用文件头 `@vitest-environment jsdom` 单独声明；挂载测试须置 `IS_REACT_ACT_ENVIRONMENT=true`，否则 `act()` 的更新不会 flush，会读到假阴性的旧快照
 - 后端：go test——查询执行与数据加载（search_test.go）；限流回补的极端值由纯函数 `fillTokens` 直测（时钟回拨、容量钳制、连续量不取整）
+- **测试 fixture 的外部 seam**：需要模拟名单文件变化时，测试显式持有 fixture 目录；不得从 `studentStore` 私有字段反向读取目录。生产调用继续只经 `view()` 与 `Size()` 访问名单视图。
 - **变异测试作为断言有效性的判据**：破坏实现后测试必须翻红，否则该测试不承重。已用此法剔除过零承重的推测性防御（`useSearchInput` 的本地 composing ref）
 - CI 数据边界守卫：校验真实名单不随仓库分发（`data/*.json` 零数据检查）。名单结构、字段白名单与去重的校验由 `server/data_test.go` 在部署环境执行，CI 不重复——仓库内本就不存在名单数据，无可校验
 - 查询改动：解析规则先改测试再同步前后端；匹配/排序/分页只改后端
