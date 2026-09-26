@@ -198,14 +198,19 @@ func Search(students []Student, raw string, limit, offset int) SearchResponse {
 		}
 		return cmp.Compare(a.ClassNo, b.ClassNo)
 	})
-	// 分页区间钳制到 [0, len(matches)]：越界的 offset 按最近的有效边界处理，
-	// 使 Search 自守分页前置约定，不依赖调用方先行校验。
-	// 负 offset 若不在此归一，切片下界会为负并 panic。
+	// 分页区间钳制到合法域，使 Search 自守分页前置约定，不依赖调用方先行校验。
+	// offset 与 limit 两侧都必须归一：负 offset 会让切片下界为负而 panic，
+	// 负 limit 会让 end 变为负下界同样 panic（slice bounds out of range）。
 	if offset < 0 {
 		offset = 0
 	}
 	if offset > len(matches) {
 		offset = len(matches)
+	}
+	// 负 limit 归一为零条：调用方传入非法页大小时返回空页而非崩溃，
+	// 语义与「该页确实没有记录」一致，调用者无需区分二者。
+	if limit < 0 {
+		limit = 0
 	}
 	end := len(matches)
 	if limit < len(matches)-offset {

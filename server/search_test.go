@@ -89,6 +89,26 @@ func TestSearchNegativeOffsetTreatedAsFirstPage(t *testing.T) {
 	}
 }
 
+// 与负 offset 对称：Search 声明自守分页前置约定，limit 侧必须同样自守。
+// 负 limit 会让 end = offset + limit 变为负下界，matches[offset:end] 触发
+// panic（slice bounds out of range [:-1]）。修复前只钳制了 offset，
+// 承诺只兑现了一半——调用者必须记忆「limit 不能为负」才能安全使用该接口。
+func TestSearchNegativeLimitDoesNotPanic(t *testing.T) {
+	students := append(testStudents(), testStudents()...)
+	got := Search(students, "示例", -1, 0)
+	if got.Total == 0 {
+		t.Fatalf("负 limit 不应清空结果集，total=%d", got.Total)
+	}
+	first := Search(students, "示例", defaultLimit, 0)
+	if got.Limit < 0 {
+		t.Fatalf("Limit 回显不应为负，实际 %d", got.Limit)
+	}
+	if len(got.Items) > len(first.Items) {
+		t.Fatalf("负 limit 归一后不应返回超过默认页的条目数：%d vs %d",
+			len(got.Items), len(first.Items))
+	}
+}
+
 // 汉字多位班级号（十一~九十九）应解析为数值
 func TestClassNumberChineseMultiDigit(t *testing.T) {
 	cases := []struct {
