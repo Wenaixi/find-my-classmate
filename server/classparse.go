@@ -84,6 +84,39 @@ func parseClassName(value string) ClassParseResult {
 	return ClassParseResult{}
 }
 
+// classCondition 把一个班级 token 解释为「已解释的条件片段」。
+//
+// matchPart 是正则捕获到的班级部分（用于判定班号），rawToken 是用户原始输入的
+// 整个 token（用于降级为姓名条件时的匹配键）。两者必须分开：查询「一一班」时
+// 班级部分是「一一」，而降级后的姓名匹配键必须是「一一班」——用户输入的是后者。
+// 契约语料 TestParseQueryContractCorpus/一一班 锁住这一行为。
+//
+// 降级策略与它的理由收敛到本函数。此前 parseQuery 有四段近乎逐字重复的
+// 「追加 normalizeName(token); continue」，而解释为什么必须降级、不能静默
+// 丢弃的注释只写在其中一段——其余三段靠「照抄旁边那段」维持这条安全不变量，
+// 改任一段时看不到理由，容易被当成冗余代码清理掉。
+//
+// 不变量：无法解析（!Valid）与数字溢出（Overflow）都必须降级为姓名条件，
+// 绝不丢弃 token。丢弃会让全部条件落空，Search 退化成与用户输入无关的
+// 全校检索——这不是理论风险，v0.9.1 修复前输入「一一班」曾返回全校 1047 条。
+//
+// 返回值约定：
+//   - asName 非空：token 降级为姓名条件，调用方应把 asName 追加到姓名条件；
+//   - classNo > 0：token 解析为班级条件，调用方应设为班级条件；
+//   - 两者都空：token 不是班级 token，调用方应走非班级分支。
+//
+// 溢出与无法解析同策略：两者都不是「合法班号」，都会让班级条件落空。
+func classCondition(matchPart, rawToken string) (classNo int, asName string) {
+	parsed := parseClassName(matchPart)
+	if parsed.Valid {
+		return parsed.ClassNo, ""
+	}
+	// !Valid 或 Overflow：按姓名处理。匹配键取 rawToken（用户原始输入）而非
+	// matchPart——「降级时用哪个形态参与匹配」与「降级」本身是同一个决定，
+	// 收在这里使调用方无法传错。
+	return 0, normalizeName(rawToken)
+}
+
 // isAllDigits 判定字符串是否全为阿拉伯数字。
 func isAllDigits(value string) bool {
 	for _, r := range value {

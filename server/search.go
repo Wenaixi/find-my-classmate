@@ -121,38 +121,30 @@ func parseQuery(raw string) Query {
 	for _, token := range strings.Fields(normalized) {
 		// 年级+班级连写（"高二三班"）优先于年级子串，精确解析为年段+班级
 		if match := gradeClassToken.FindStringSubmatch(token); match != nil {
-			parsed := parseClassName(match[2])
-			if parsed.Overflow {
-				query.NameTokens = append(query.NameTokens, normalizeName(token))
-				continue
-			}
-			if !parsed.Valid {
-				// 年级可解析而班级不可解析：整个 token 按姓名处理并保留年级条件。
-				// 不降级为「纯年级」——那会把一次精确查询放大成整个年段的全量结果，
-				// 与溢出分支同属要防的「返回全部」静默错误。
+			// 降级策略由 classCondition 单点承载：!Valid 与 Overflow 一律按姓名处理。
+			// 本分支额外保留年级条件——不降级为「纯年级」，那会把一次精确查询
+			// 放大成整个年段的全量结果，与静默丢弃同属要防的「返回全部」错误。
+			classNo, asName := classCondition(match[2], token)
+			if asName != "" {
+				// 整个 token（连同学级前缀）作为姓名匹配词，而非只取班级部分：
+				// 原始输入是「高一一一班」，用户要的就是这个字符串本身。
+				// 匹配键由 classCondition 产出，调用方不再自行归一化，
+				// 避免「降级用哪种形态」在两处各写一遍。
 				query.Grade = parseGrade(match[1])
-				query.NameTokens = append(query.NameTokens, normalizeName(token))
+				query.NameTokens = append(query.NameTokens, asName)
 				continue
 			}
 			query.Grade = parseGrade(match[1])
-			query.ClassNo = parsed.ClassNo
+			query.ClassNo = classNo
 			continue
 		}
 		if match := classToken.FindStringSubmatch(token); match != nil {
-			parsed := parseClassName(token)
-			if parsed.Overflow {
-				// 无效班级（如超长数字）：按姓名处理，避免"返回全部"的静默错误
-				query.NameTokens = append(query.NameTokens, normalizeName(token))
+			classNo, asName := classCondition(match[1], token)
+			if asName != "" {
+				query.NameTokens = append(query.NameTokens, asName)
 				continue
 			}
-			// 无法解析的班级（Valid=false）与溢出同策略：按姓名处理。
-			// 若在此静默丢弃该 token，条件会全部落空，Search 退化成
-			// 与用户输入无关的全校查询——这正是本分支要防的"返回全部"。
-			if !parsed.Valid {
-				query.NameTokens = append(query.NameTokens, normalizeName(token))
-				continue
-			}
-			query.ClassNo = parsed.ClassNo
+			query.ClassNo = classNo
 			continue
 		}
 		if grade := parseGrade(token); grade != "" {
