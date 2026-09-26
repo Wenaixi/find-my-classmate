@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getState, errorMessage, initialState, searchReducer, statusTextFor, resultSectionOf, shouldScrollToResults, deriveStatusHint } from "./searchReducer";
+import { getState, errorMessage, initialState, present, searchReducer, statusTextFor, resultSectionOf, shouldScrollToResults, deriveStatusHint } from "./searchReducer";
 import { ApiError } from "./api";
 import type { SearchState, Student } from "../types";
 
@@ -276,5 +276,39 @@ describe("deriveStatusHint", () => {
       expect(deriveStatusHint(state).busy).toBe(false);
       expect(shouldScrollToResults(state)).toBe(true);
     }
+  });
+});
+
+// present 把视图需要的全部展示派生收成一次调用。
+//
+// 增量在哪：既有测试分别打 resultSectionOf / shouldScrollToResults / deriveStatusHint
+// 三个函数，没有任何断言锁住它们对同一状态给出一致的组合。组件此前必须同时
+// import 三个派生并另调 controller，界面知识横跨两个 module。
+// 下列断言从「同一次派生」这一接缝验证一致性，改任一派生即翻红。
+describe("present", () => {
+  it("每个查询状态的展示派生组合都可用且自洽", () => {
+    const all: SearchState[] = ["idle", "editing", "loading", "success", "duplicate", "empty", "error"];
+    for (const state of all) {
+      const p = present({ ...initialState, state, query: "张三" });
+      expect(p.section).toBe(resultSectionOf(state));
+      expect(p.scroll).toBe(shouldScrollToResults(state));
+      expect(p.busy).toBe(state === "loading");
+      expect(p.showOrb).toBe(state === "loading");
+      expect(p.sendLabel).toBe(deriveStatusHint(state).sendLabel);
+      expect(p.tone).toBe(deriveStatusHint(state).tone);
+    }
+  });
+
+  it("有结果区段才滚动，但加载中除外", () => {
+    expect(present({ ...initialState, state: "loading" })).toMatchObject({ section: "loading", scroll: false });
+    expect(present({ ...initialState, state: "error" })).toMatchObject({ section: "error", scroll: true });
+    expect(present({ ...initialState, state: "success" })).toMatchObject({ section: "list", scroll: true });
+    expect(present({ ...initialState, state: "idle" })).toMatchObject({ section: null, scroll: false });
+  });
+
+  it("忙碌态下不滚动：正在检索时把用户送到结果区是错位的", () => {
+    const loading = present({ ...initialState, state: "loading" });
+    expect(loading.busy).toBe(true);
+    expect(loading.scroll).toBe(false);
   });
 });

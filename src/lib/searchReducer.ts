@@ -139,6 +139,39 @@ export function deriveStatusHint(state: SearchState): StatusHint {
   };
 }
 
+// Presentation 是视图需要的全部展示派生。
+//
+// 组件此前必须同时 import resultSectionOf / shouldScrollToResults / deriveStatusHint
+// 三个派生并另调 useSearchController 取 state，界面知识横跨两个 module。
+// 既有测试分别打三个函数，没有任何断言锁住它们对同一状态给出一致的组合——
+// 这里收成一次派生，让一致性从「同一次调用」这一接缝可验证。
+export interface Presentation {
+  /** 该渲染哪一块结果区；null 表示不渲染 */
+  section: ResultSection | null;
+  /** 本次状态变化是否产生可供阅读的结果 */
+  scroll: boolean;
+  /** 查询进行中：提交按钮禁用 */
+  busy: boolean;
+  /** 提交按钮的无障碍标签 */
+  sendLabel: string;
+  /** 状态行提示色 */
+  tone: StatusTone;
+  /** 是否渲染加载指示 */
+  showOrb: boolean;
+}
+
+export function present(state: SearchControllerState): Presentation {
+  const hint = deriveStatusHint(state.state);
+  return {
+    section: resultSectionOf(state.state),
+    scroll: shouldScrollToResults(state.state),
+    busy: hint.busy,
+    sendLabel: hint.sendLabel,
+    tone: hint.tone,
+    showOrb: hint.showOrb,
+  };
+}
+
 export function searchReducer(state: SearchControllerState, action: SearchAction): SearchControllerState {
   switch (action.type) {
     case "input-change":
