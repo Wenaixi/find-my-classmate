@@ -34,8 +34,8 @@ type Student struct {
 
 // newStudent 构造 Student 并填充派生字段。
 // 所有 Student 必须经此构造：排序比较直接读派生字段，绕过构造会导致排序静默错乱。
-func newStudent(name string, grade Grade, className string) Student {
-	parsed := parseClassName(className)
+// parsed 由数据加载路径解析一次后传入（C4：不再对同一类名重复正则+Atoi）。
+func newStudent(name string, grade Grade, className string, parsed ClassParseResult) Student {
 	classNo := 0
 	if parsed.Valid {
 		classNo = parsed.ClassNo

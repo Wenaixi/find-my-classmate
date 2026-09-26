@@ -77,29 +77,33 @@ func loadStudents(dir string) ([]Student, error) {
 			return nil, errors.New("名单结构异常")
 		}
 		classes := make([]string, 0, len(document.Roster))
+		classNos := make(map[string]ClassParseResult, len(document.Roster))
 		for className := range document.Roster {
+			// C4：解析一次、三处消费（校验/排序/派生），不再对同一类名重复正则+Atoi。
 			// C3：三态校验——旧实现只检 classNumber==0，溢出（-1）静默放行并流入排序
-			if !parseClassName(className).Valid {
+			parsed := parseClassName(className)
+			if !parsed.Valid {
 				return nil, errors.New("班级格式异常")
 			}
+			classNos[className] = parsed
 			classes = append(classes, className)
 		}
-		sort.Slice(classes, func(i, j int) bool { return classNumber(classes[i]) < classNumber(classes[j]) })
+		sort.Slice(classes, func(i, j int) bool { return classNos[classes[i]].ClassNo < classNos[classes[j]].ClassNo })
 		for _, className := range classes {
 			for _, item := range document.Roster[className] {
 				name := item.Name
 				if name == "" {
 					return nil, errors.New("学生记录格式异常")
 				}
-				student := newStudent(name, grade, className)
+				student := newStudent(name, grade, className, classNos[className])
 				key := string(grade) + "\x00" + className + "\x00" + student.NameKey
 				if _, exists := seen[key]; exists {
 					continue
 				}
 				seen[key] = struct{}{}
 				students = append(students, student)
-			}
 		}
+	}
 	}
 	if !found {
 		return nil, fmt.Errorf("数据文件缺失，请将 %s、%s 或 %s 之一放入数据目录",

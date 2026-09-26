@@ -19,7 +19,7 @@ func benchStudents() []Student {
 				name := surnames[(gi*7+class+k)%len(surnames)] +
 					given[(gi*13+class*3+k*5)%len(given)] +
 					given[(gi*3+class*7+k*11)%len(given)]
-				students = append(students, newStudent(name, grade, fmt.Sprintf("%d班", class)))
+				students = append(students, newStudent(name, grade, fmt.Sprintf("%d班", class), parseClassName(fmt.Sprintf("%d班", class))))
 			}
 		}
 	}
