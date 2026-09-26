@@ -54,6 +54,9 @@
 - 姓名匹配键：删除与 Go `unicode.IsSpace` 相同的空白集合（`\t\n\v\f\r`、空格、U+0085、U+00A0 及 Unicode White_Space 全体）并统一大写（normalizeName）
 - **空白集合必须逐码位对齐，不得用 JS 的 `\s` 近似**。两端差集恰为两个码位且方向相反：U+0085（NEL）是 Go 的空白而 JS `\s` 不含；U+FEFF 自 Unicode 4.0.1 起不在 White_Space 内，Go 不认而 JS `\s` 认。用 `\s` 会在 U+FEFF 上静默分叉——前端 `trim()` 还会移除首尾的 U+FEFF，使 `␣18班` 在前端被削成 `18班`（判为班级条件）而在 Go 整体保留为一个姓名 token，进而翻转前端唯一消费的「是否含姓名条件」布尔。`src/lib/query.ts` 的 `goSpaceChars` 是前端这两处差集的唯一修正点。
 - 超长数字串按姓名处理，不作为班级条件（与 Go 的 -1 语义一致）
+- **年段值域是单点事实源**：后端 `knownGrades`（规范名）与 `gradeAliases`（别名映射）声明全部年段，`parseGrade` 与 `gradeClassToken` 均从它派生；前端 `gradeValues` / `gradeAliases` 镜像同一份声明，`types.ts` 的 `Grade` 联合须与之一致（由 `ReadonlyArray<Grade>` 的类型标注免费强制）。**扩展年段只需改这三处声明，不改任何解析逻辑。**
+- 该不变量的脆弱点在依赖方向：`data.go` 的名单标题校验（`parseGrade(document.Title) != grade`）**反过来依赖查询侧的 `parseGrade`**。查询侧漏认识新年段时，合法名单文件会被判「文件名与年级标题不一致」而拒绝加载——**跨语言对拍抓不到这类裂缝**：两端一致地不认识新年段时对拍同样通过，`docs/query-contract.json` 必须先有该年段样本才表达得出来。
+- `gradeClassToken` 的编译结果必须缓存（包级 var + `rebuildGradePattern` 供扩展后重建）。曾改为每次调用重新编译，整年段查询分配从 6 涨到 117（实测），被 `TestSearchAllocsBudget` 当场拦下。
 
 后端独占的**执行**契约：
 
@@ -82,8 +85,9 @@
   两者必须一致——`querySeparators` 会把中英文逗号、顿号、加号替换为空格，
   若判空只剥空白则纯分隔符输入既非空查询也无条件可施加
 
-注意判空**不可**简化为 `len(NameTokens) == 0`：契约语料中 27 条合法查询
+注意判空**不可**简化为 `len(NameTokens) == 0`：契约语料中 30 条合法查询
 （高1 / 18班 / 六班 / 高二三班等）nameTokens 为空但带年级或班级条件。
+（该数字随语料增删会变，此处仅供定位量级；语义由语料条目本身逐条守住。）
 
 解析契约的**可执行事实源**是 `docs/query-contract.json`：`src/lib/query.test.ts` 与 `server/contract_test.go` 各自消费同一份语料，任何一侧漂移都会在两侧测试中同时失败。语料中的期望值以 Go 端实测结果为准。
 
@@ -161,7 +165,7 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 
 | 模块 | 职责 | 依赖 |
 | --- | --- | --- |
-| src/App.tsx | 页面组装 + 装配 searchReducer/searchSession | 全部 |
+| src/App.tsx | 页面组装；只消费查询控制器的 state/controller 两面与 `present` 展示派生，不理解 reducer/session、不手写组合判断 | 全部 |
 | src/config.ts | 前端契约常量（PAGE_SIZE/MAX_QUERY_LENGTH/MAX_LIMIT/REQUEST_TIMEOUT_MS） | 无 |
 | src/lib/api.ts | 网络适配与响应结构校验（decodeItem 只认 canonical class 单字段） | types, config |
 | src/lib/query.ts | 查询解释（解析 token、hasNameCondition、姓名归一化，空白语义与 Go 对齐含 NEL），不含匹配/排序/分页 | types |
@@ -173,14 +177,16 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 | src/site.config.ts | 站点展示文案（数据来源/运营团队/数据处理方） | 无 |
 | src/types.ts | 领域类型与状态枚举 | 无 |
 
-**结果区段单点派生**：`resultSectionOf(state)` 与 `shouldScrollToResults(state)`
-（`searchReducer.ts`）是查询状态到界面结构的唯一映射，回答「渲染哪一块」与「是否滚动定位」。
-`App.tsx` 只按返回值 `switch` 选择 JSX，不再自己判断状态。此前这两问散在组件里各写一份
-（结果区四个 if、滚动 effect 的四值否定链、hasResultSection 的二值否定、StatusOrb 的
-loading 判定、styles.css 的 data-state 镜像），且**零测试覆盖**——把 duplicate 从列表分支
-移除后 121 条用例全部通过。抽出后 6 条断言锁住映射，其中三条同时承重。
-两问派生自同一处判定但答案集合不同（loading 渲染区段却不滚动）；新增查询状态时
-只改一处会让二者静默错位，穷尽性断言（7 个状态全部有归属）即为此设。
+**展示派生单点（`present`）**：`present(state)` 一次性折出视图需要的全部派生——
+结果区段（`section`）、是否滚动（`scroll`）、提交禁用（`busy`）、按钮标签
+（`sendLabel`）、提示色（`tone`）、是否渲染加载指示（`showOrb`）。`App.tsx` 只按
+返回值选择 JSX 与属性，不再自己判断状态。
+
+归位前组件须分别 import `resultSectionOf` / `shouldScrollToResults` /
+`deriveStatusHint` 三个派生并另调控制器取 state，界面知识横跨两个模块；既有测试
+分别打三个函数，**没有任何断言锁住它们对同一状态给出一致的组合**。收成一次派生后，
+一致性成为该接缝上可直接断言的事实——这才是本次归位解决的真问题（不是代码重复）。
+变异验证：滚动判定改坏 3 条断言翻红，提示色恒定值 1 条翻红。
 
 **状态派生归位 reducer**：`submit-success` 载荷为 `{ items, total, hasMore, query }`，
 `submit-error` 为 `{ cause }`；`state` 与 `statusText` 由 reducer 内部依

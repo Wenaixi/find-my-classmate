@@ -24,7 +24,7 @@ FindMyClassmate 是一个面向校园场景的班级查询工具。React + TypeS
 
 ## 快速开始
 
-前置：Node.js 20+、Go 1.26+。
+前置：Node.js 24（CI 使用的版本）、Go 1.26。
 
 ```bash
 # 1. 安装前端依赖
@@ -48,11 +48,11 @@ go run ./server
 ```ts
 const siteConfig = {
   /** 页脚：数据来源说明 */
-  dataSource: "公示数据提取",
+  dataSource: "福清一中公示数据提取",
   /** 页脚：运营团队名称 */
-  team: "信息社",
+  team: "福清一中信息社",
   /** 页脚：隐私说明中的数据处理方 */
-  dataController: "信息社",
+  dataController: "福清一中信息社",
 };
 ```
 
@@ -113,9 +113,13 @@ CI（GitHub Actions）在每次 push 时自动执行以上全部检查，详见 
 打 tag 触发自动发布：
 
 ```bash
-git tag v0.5.3
-git push origin v0.5.3
+git tag v0.10.3          # 版本号须与 CHANGELOG.md 顶部条目一致
+git push origin v0.10.3
 ```
+
+> **tag 必须与 `CHANGELOG.md` 的对应版本条目精确匹配**——`release.yml` 用 `awk`
+> 按 `github.ref_name` 抽取该条目作为 Release 正文，找不到会显式失败（`exit 1`）。
+> 当前版本见 `package.json` 的 `version` 字段。
 
 `.github/workflows/release.yml` 会执行全量测试，然后：
 1. 交叉编译 Linux amd64 / macOS arm64 / Windows amd64 三平台二进制（内嵌前端页面与 API 服务），连同空 data 占位目录与文档打包成 `findmyclassmate.tar.gz` 并创建 GitHub Release。**发布包不含任何名单数据**，使用者按下方数据格式章节自行放置 `data/高一.json` 等年段名单
@@ -128,8 +132,7 @@ git push origin v0.5.3
 ```
 ├── .github/workflows/   # CI 与发布流水线
 ├── data/                # 名单数据（高一.json / 高二.json / 高三.json，按需放置）
-├── design/              # Logo 设计源文件
-├── docs/                # 实施计划与架构文档
+├── docs/                # 架构文档（ARCHITECTURE.md / adr/ / agents/ / query-contract.json）
 ├── public/              # 静态资源（favicon / logo）
 ├── server/              # Go 服务（嵌入 server/web/ 构建产物）
 ├── src/                 # React 前端源码与测试
