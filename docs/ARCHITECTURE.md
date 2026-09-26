@@ -71,6 +71,20 @@
 （否则响应会原样回显调用方传入的负值，自守保证就变成有条件的）；
 `offset` 的上界钳制依赖匹配结果长度，留在匹配循环之后完成。
 
+该约定之外还有一条**安全不变量**：任何让全部查询条件落空的输入都必须退化为空结果集，
+绝不能退化为全校检索。三个实例曾分别以不同形态出现——
+无法解析的班级 token（v0.9.1 修复「一一班」返回全校 1047 条）、溢出的班级 token、
+以及纯分隔符输入（2026-09-26 修复，实测返回全校 2091 条）。当前由两处共同保证：
+
+- 解析层：`classCondition` 收拢「无法解析/溢出 → 降级为姓名条件」的策略与理由，
+  `parseQuery` 只表达「拿到什么条件」，不复述降级理由
+- 执行层：`Search` 的判空依据是「解析后是否存在任何条件」而非「原始串剥空白后是否为空」。
+  两者必须一致——`querySeparators` 会把中英文逗号、顿号、加号替换为空格，
+  若判空只剥空白则纯分隔符输入既非空查询也无条件可施加
+
+注意判空**不可**简化为 `len(NameTokens) == 0`：契约语料中 27 条合法查询
+（高1 / 18班 / 六班 / 高二三班等）nameTokens 为空但带年级或班级条件。
+
 解析契约的**可执行事实源**是 `docs/query-contract.json`：`src/lib/query.test.ts` 与 `server/contract_test.go` 各自消费同一份语料，任何一侧漂移都会在两侧测试中同时失败。语料中的期望值以 Go 端实测结果为准。
 
 ## 4. 契约常量（双端各一份）
@@ -159,6 +173,15 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 | src/site.config.ts | 站点展示文案（数据来源/运营团队/数据处理方） | 无 |
 | src/types.ts | 领域类型与状态枚举 | 无 |
 
+**结果区段单点派生**：`resultSectionOf(state)` 与 `shouldScrollToResults(state)`
+（`searchReducer.ts`）是查询状态到界面结构的唯一映射，回答「渲染哪一块」与「是否滚动定位」。
+`App.tsx` 只按返回值 `switch` 选择 JSX，不再自己判断状态。此前这两问散在组件里各写一份
+（结果区四个 if、滚动 effect 的四值否定链、hasResultSection 的二值否定、StatusOrb 的
+loading 判定、styles.css 的 data-state 镜像），且**零测试覆盖**——把 duplicate 从列表分支
+移除后 121 条用例全部通过。抽出后 6 条断言锁住映射，其中三条同时承重。
+两问派生自同一处判定但答案集合不同（loading 渲染区段却不滚动）；新增查询状态时
+只改一处会让二者静默错位，穷尽性断言（7 个状态全部有归属）即为此设。
+
 **状态派生归位 reducer**：`submit-success` 载荷为 `{ items, total, hasMore, query }`，
 `submit-error` 为 `{ cause }`；`state` 与 `statusText` 由 reducer 内部依
 `getState`/`statusTextFor`/`hasNameCondition`/`errorMessage` 算出。调用点只提供原始事实，
@@ -180,8 +203,8 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 | api.go | API 路由与 HTTP 翻译（buildMux(store, version)/searchHandler）：参数取值、错误码映射、JSON 写出；不含查询语义 |
 | errors.go | API 错误码常量表（not_found/method_not_allowed/invalid_limit/invalid_offset/invalid_query/data_unavailable/rate_limited） |
 | config.go | 后端契约常量（端口/分页/上限/限流/缓存头），与 src/config.ts 对拍 |
-| data.go | 数据加载、规范化、去重、热重载（view 唯一只读入口 + Size 只读计数）；探测节流与失败冷却的时机判定收敛为 recoveryDue 单点 |
-| classparse.go | 班级解析基础设施（班级名 → 班号），查询与数据加载共享 |
+| data.go | 数据加载、规范化、去重、热重载（view 唯一只读入口 + Size 只读计数）；探测节流与失败冷却的时机判定收敛为 recoveryDue 单点；`errNoRoster()` 是「无任何年段文件」判定与运维指引的唯一来源，年段清单从 knownGrades 生成，扩展年段时指引自动跟随 |
+| classparse.go | 班级解析基础设施（班级名 → 班号），查询与数据加载共享；`classCondition(matchPart, rawToken)` 收拢「无法解析/溢出 → 降级为姓名条件」的策略与理由，调用方只表达拿到的条件，不复述理由 |
 | ip.go | 客户端 IP 解析唯一入口（clientIP/maskedIP） |
 | search.go | 查询执行（解析/匹配/排序/分页），运行时搜索的唯一实现；分页前置约定由其自守 |
 | ratelimit.go | 令牌桶限流（IP 提取统一走 ip.go 的 clientIP），429 响应由外层 securityHeaders 统一带头；回补逻辑由纯函数 fillTokens 承载 |
