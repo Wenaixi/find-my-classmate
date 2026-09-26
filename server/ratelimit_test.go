@@ -13,8 +13,7 @@ import (
 // 429 响应、Retry-After 与放行逻辑全部走 production rateLimitWith，
 // 测试只替换限流器的时钟，不复制任何 HTTP implementation。
 func newTestLimiter(clock *fakeClock, capacity float64, interval time.Duration) http.Handler {
-	limiter := newRateLimiter(capacity, interval)
-	limiter.now = clock.Now
+	limiter := newRateLimiter(capacity, interval, clock.Now)
 	return rateLimitWith(limiter, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -92,8 +91,7 @@ func TestRateLimitSeparatesIPs(t *testing.T) {
 
 func TestRateLimitClockRollbackDoesNotStarve(t *testing.T) {
 	clock := &fakeClock{current: time.Unix(0, 0)}
-	limiter := newRateLimiter(60, time.Second)
-	limiter.now = clock.Now
+	limiter := newRateLimiter(60, time.Second, clock.Now)
 
 	if allowed, _ := limiter.allow("1.2.3.4"); !allowed {
 		t.Fatal("首个请求应放行")
@@ -107,8 +105,7 @@ func TestRateLimitClockRollbackDoesNotStarve(t *testing.T) {
 
 func TestRateLimitClockRollbackWaitBounded(t *testing.T) {
 	clock := &fakeClock{current: time.Unix(0, 0)}
-	limiter := newRateLimiter(1, time.Second)
-	limiter.now = clock.Now
+	limiter := newRateLimiter(1, time.Second, clock.Now)
 	if allowed, _ := limiter.allow("1.2.3.4"); !allowed {
 		t.Fatal("首个请求应放行")
 	}
@@ -145,5 +142,42 @@ func TestRateLimit429JSONAndRetryAfterSeconds(t *testing.T) {
 	}
 	if ra := rec.Header().Get("Retry-After"); ra != "1" {
 		t.Errorf("Retry-After = %q，期望整数秒 1", ra)
+	}
+}
+
+// fillTokens 纯函数测试：回补逻辑不再依赖可写时钟字段，直接测极端值。
+func TestFillTokensRefillsToCapacity(t *testing.T) {
+	bucket := &rateBucket{tokens: 0, lastFill: time.Unix(0, 0)}
+	fillTokens(bucket, time.Unix(60, 0), 10, time.Second)
+	if bucket.tokens != 10 {
+		t.Fatalf("60s 后应回补到容量 10，实际 %v", bucket.tokens)
+	}
+	if !bucket.lastFill.Equal(time.Unix(60, 0)) {
+		t.Fatalf("回补后 lastFill 应推进到 now，实际 %v", bucket.lastFill)
+	}
+}
+
+func TestFillTokensClockRollbackDoesNotStarve(t *testing.T) {
+	bucket := &rateBucket{tokens: 5, lastFill: time.Unix(100, 0)}
+	fillTokens(bucket, time.Unix(50, 0), 10, time.Second)
+	if bucket.tokens != 5 {
+		t.Fatalf("时钟回拨后 tokens 应保持 5（负 elapsed 钳制为 0），实际 %v", bucket.tokens)
+	}
+}
+
+func TestFillTokensClampsToCapacity(t *testing.T) {
+	bucket := &rateBucket{tokens: 0, lastFill: time.Unix(0, 0)}
+	fillTokens(bucket, time.Unix(3600, 0), 10, 10*time.Second)
+	if bucket.tokens != 10 {
+		t.Fatalf("回补不应超过容量 10，实际 %v", bucket.tokens)
+	}
+}
+
+func TestFillTokensMultipleIntervals(t *testing.T) {
+	bucket := &rateBucket{tokens: 2, lastFill: time.Unix(0, 0)}
+	fillTokens(bucket, time.Unix(5, 0), 10, 2*time.Second)
+	if bucket.tokens != 4.5 {
+		// 令牌是连续量：5s / 2s = 2.5 个，回补不做取整
+		t.Fatalf("5s 按 2s 间隔应回补 2.5 个到 4.5，实际 %v", bucket.tokens)
 	}
 }

@@ -293,25 +293,9 @@ func TestStoreConcurrentHotReloadStampede(t *testing.T) {
 	wg.Wait()
 }
 
-func TestRateLimitSweep(t *testing.T) {
-	clock := &fakeClock{current: time.Unix(0, 0)}
-	limiter := newRateLimiter(60, time.Second)
-	limiter.now = clock.Now
-	_, _ = limiter.allow("1.2.3.4")
-	_, _ = limiter.allow("5.6.7.8")
-	limiter.sweep(clock.Now().Add(25*time.Hour), 24*time.Hour)
-	limiter.mu.Lock()
-	n := len(limiter.buckets)
-	limiter.mu.Unlock()
-	if n != 0 {
-		t.Fatalf("空闲桶应被清理，剩余 %d", n)
-	}
-}
-
 func TestRateLimitAutomaticSweep(t *testing.T) {
 	clock := &fakeClock{current: time.Unix(0, 0)}
-	limiter := newRateLimiter(60, time.Second)
-	limiter.now = clock.Now
+	limiter := newRateLimiter(60, time.Second, clock.Now)
 	_, _ = limiter.allow("1.2.3.4")
 	_, _ = limiter.allow("5.6.7.8")
 
@@ -332,6 +316,7 @@ func TestRateLimitAutomaticSweep(t *testing.T) {
 		t.Fatal("新访问的 IP 桶应正常存在")
 	}
 }
+
 
 func TestStoreProbeThrottle(t *testing.T) {
 	dir := t.TempDir()

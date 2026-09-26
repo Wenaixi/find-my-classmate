@@ -123,7 +123,7 @@ func main() {
 // 429 因位于 securityHeaders 内侧，响应头由外层统一设置，writeRateLimited
 // 无需手工重放。
 func newHandlerChain(mux http.Handler) http.Handler {
-	return newHandlerChainWith(mux, newRateLimiter(rateCapacity, rateInterval))
+	return newHandlerChainWith(mux, newRateLimiter(rateCapacity, rateInterval, time.Now))
 }
 
 // newHandlerChainWith 是链装配的唯一实现：只替换限流器本身，链的顺序与

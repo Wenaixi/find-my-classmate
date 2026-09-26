@@ -18,8 +18,7 @@ import (
 // 此前此处复制了一遍嵌套字面量，改动生产链顺序时四个组合政策测试仍会全绿，
 // 却测的是另一条链——那四个已验证有效的行为断言并未真正覆盖生产装配。
 func newTestChain(clock *fakeClock, capacity float64, mux http.Handler) http.Handler {
-	limiter := newRateLimiter(capacity, time.Second)
-	limiter.now = clock.Now
+	limiter := newRateLimiter(capacity, time.Second, clock.Now)
 	return newHandlerChainWith(mux, limiter)
 }
 
