@@ -109,7 +109,7 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 - 提交前用 AbortController 取消旧请求（防竞态）；竞态编排集中在 searchSession.ts（requestId + abort）
 - 查询响应返回即渲染（无最短展示延迟），思维球反馈在 loading 期间稳定展示
 - 首屏查询替换结果；加载更多只追加、不改变阅读位置
-- 输入法组合期间 Enter 不提交；Escape 清空
+- **输入法组合期间 Enter 不提交、Escape 清空**：由 `useSearchInput` 统一收口。组合状态取自两个来源——`onKeyDown` 事件的 `nativeEvent.isComposing` 与控制器 state 的 `isComposing`，任一为真都不得提交（组合期间的 Enter 是"确认候选词"而不是"提交查询"）。组件只透传回调，不手写组合判断。
 - **状态与提示文案必须一致**：`input-change` 切到 `editing` 时同步刷新 `statusText`，否则会显示 editing 状态配上上一轮的错误或结果文案
 - **只有查询词变化才作废在途请求**：`onChange` 触发 `invalidate()`；IME `composition-start/end` 不触发。组合开始不是"查询已过时"的信号，若在此作废请求且组合未产生输入变化，状态会卡在 loading 且提交按钮持续 disabled
 
@@ -152,7 +152,9 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 | src/lib/api.ts | 网络适配与响应结构校验（decodeItem 只认 canonical class 单字段） | types, config |
 | src/lib/query.ts | 查询解释（解析 token、hasNameCondition、姓名归一化，空白语义与 Go 对齐含 NEL），不含匹配/排序/分页 | types |
 | src/lib/searchReducer.ts | 搜索状态机纯 reducer（状态派生/错误文案/纯年段与班级整段命中提示） | types, api, config |
-| src/lib/searchSession.ts | 请求竞态编排（requestId + abort），submit/loadMore 返回 SearchResult 判别联合 | types |
+| src/lib/searchSession.ts | 请求竞态编排（requestId + abort）；竞态骨架由私有 perform 单点承载，submit/loadMore 只差 id 来源与 offset | types |
+| src/lib/useSearchController.ts | 查询控制器深模块（createSearchOrchestrator 纯逻辑 + hook 壳），state + controller 两面消费 | types, api, config |
+| src/lib/useSearchInput.ts | 交互语义（IME 组合守卫、Enter 提交、Escape 清空）；组合状态取自 nativeEvent 与控制器 state 两个来源，任一为真都不得提交 | useSearchController |
 | src/lib/resultSummary.ts | 结果摘要单点派生（进度/计数/剩余文案） | 无 |
 | src/site.config.ts | 站点展示文案（数据来源/运营团队/数据处理方） | 无 |
 | src/types.ts | 领域类型与状态枚举 | 无 |
@@ -161,6 +163,12 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 `submit-error` 为 `{ cause }`；`state` 与 `statusText` 由 reducer 内部依
 `getState`/`statusTextFor`/`hasNameCondition`/`errorMessage` 算出。调用点只提供原始事实，
 派生规则因此可被直接测试——此前把 `statusTextFor` 传错位置不会有任何测试失败。
+
+**交互语义收口**：`useSearchInput` 持有 IME 组合守卫与键盘行为，组件只透传回调。
+该逻辑此前内联在 `App.tsx` 的 JSX 事件回调里，**零测试覆盖**——它不是"测不到"，
+而是没有任何测试穿过组件私有逻辑。收进模块后，运行时行为由 7 条挂载测试锁住，
+页面接线则由 TypeScript 在编译期锁住（少传 `isComposing` 参数即报 TS2554）。
+两层职责不可混淆：挂载测试不加载 App.tsx，因此不覆盖 JSX 接线。
 
 动效依赖（border-beam / thinking-orbs / liquid-gooey）全部是表现层，不承载逻辑；若替换，禁止改变查询与状态语义。
 
@@ -172,14 +180,16 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 | api.go | API 路由与 HTTP 翻译（buildMux(store, version)/searchHandler）：参数取值、错误码映射、JSON 写出；不含查询语义 |
 | errors.go | API 错误码常量表（not_found/method_not_allowed/invalid_limit/invalid_offset/invalid_query/data_unavailable/rate_limited） |
 | config.go | 后端契约常量（端口/分页/上限/限流/缓存头），与 src/config.ts 对拍 |
-| data.go | 数据加载、规范化、去重、热重载（view 唯一只读入口 + Size 只读计数） |
+| data.go | 数据加载、规范化、去重、热重载（view 唯一只读入口 + Size 只读计数）；探测节流与失败冷却的时机判定收敛为 recoveryDue 单点 |
 | classparse.go | 班级解析基础设施（班级名 → 班号），查询与数据加载共享 |
 | ip.go | 客户端 IP 解析唯一入口（clientIP/maskedIP） |
 | search.go | 查询执行（解析/匹配/排序/分页），运行时搜索的唯一实现；分页前置约定由其自守 |
-| ratelimit.go | 令牌桶限流（IP 提取统一走 ip.go 的 clientIP），429 响应由外层 securityHeaders 统一带头 |
-| web.go | 前端静态资源嵌入与托管（缓存按来源隔离，immutable 只给存在资源，raw/gzip/304 协商头一致） |
+| ratelimit.go | 令牌桶限流（IP 提取统一走 ip.go 的 clientIP），429 响应由外层 securityHeaders 统一带头；回补逻辑由纯函数 fillTokens 承载 |
+| web.go | 前端静态资源嵌入与托管（缓存按来源隔离，存在性判定与内容读取合一，缓存命中零 FS 触碰，raw/gzip/304 协商头一致） |
 
 数据热重载策略：文件指纹探测带 1 秒节流（原子 CAS 保证同窗口单请求探测权）；变化则互斥重载，并发用读写锁保护（view() 为唯一数据访问入口）；重载失败有 2 秒冷却（指纹驱动）且旧数据不对外服务（一致性优先于可用性的设计决策）。
+
+两条时间窗口的判定收敛为 `recoveryDue(now)` 单点：探测节流与失败冷却共用同一条时间线，"同一条时间线"因此是代码事实而非注释承诺。时钟由构造函数注入（`newStudentStore(dir, now)`），不从外部改写可写字段。指纹采集阶段失败（目录缺失等）以 `lastFailStampKnown` 显式标记，不复用 `lastFailStamps` 的 nil 表达"无指纹"——后者曾使 `sameStamps(nil, ...)` 恒为假，冷却判定永不成立，目录缺失时每个请求都重试读盘并写错误日志。
 
 健康检查语义（/api/health）：进程存活 + 数据可用性。数据损坏/缺失时返回 503 {"status":"degraded","reason":"data"}；响应携带 version（ldflags -X main.version，本地构建为 dev）。
 
@@ -210,8 +220,10 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 
 ## 11. 测试策略
 
-- 前端：Vitest——查询契约（query.test.ts）、状态机（searchReducer.test.ts）、竞态编排（searchSession.test.ts）
-- 后端：go test——查询执行与数据加载（search_test.go）
+- 前端：Vitest——查询契约（query.test.ts）、状态机（searchReducer.test.ts）、竞态编排（searchSession.test.ts）、交互语义与接线（useSearchInput.test.tsx，7 条挂载测试）、控制器 hook 壳（useSearchController.mount.test.tsx）
+- 纯逻辑测试默认 node 环境，需要 DOM 的测试用文件头 `@vitest-environment jsdom` 单独声明；挂载测试须置 `IS_REACT_ACT_ENVIRONMENT=true`，否则 `act()` 的更新不会 flush，会读到旧快照产生假阴性
+- 后端：go test——查询执行与数据加载（search_test.go）；限流回补的极端值由纯函数 `fillTokens` 直测（时钟回拨、容量钳制、连续量不取整）
+- **变异测试作为断言有效性的判据**：破坏实现后测试必须翻红，否则该测试不承重。已用此法剔除过零承重的推测性防御（`useSearchInput` 的本地 composing ref）
 - CI 数据契约 job：校验名单 JSON 结构、字段白名单（仅"姓名"）、去重
 - 查询改动：解析规则先改测试再同步前后端；匹配/排序/分页只改后端
 

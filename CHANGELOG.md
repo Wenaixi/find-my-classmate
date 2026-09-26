@@ -2,6 +2,27 @@
 
 本文件记录 FindMyClassmate 的版本变更。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [v0.9.3] - 2026-09-26
+
+### 修复
+
+- **数据目录缺失时冷却机制失效**：`dataStamps` 自身失败（目录不可读等）时 `recordFailure(nil, err)` 使 `lastFailStamps` 为 nil，而 `sameStamps(nil, stamps)` 因长度不等恒为 false，导致 `cooling` 判定永不成立。结果是目录缺失场景下每个请求都重试读盘并写出错误日志——正是冷却机制要防的 IO 与日志放大。代码注释承诺「缺失目录同样需要冷却」，实现与承诺相反。现以 `lastFailStampKnown` 显式区分「指纹采集阶段失败」与「指纹已知」，冷却窗口如实生效。
+
+### 架构深化
+
+- **时钟注入窄化**：`newRateLimiter` 与 `newStudentStore` 均增加 `now` 构造参数，`now` 不再是可写字段暴露在生产 struct 上。此前测试通过直接改写 `store.now` / `limiter.now` 推进时间，共 11 处跨 3 个测试文件——测试装置泄漏进了生产结构。
+- **自恢复时机单点判定**：探测节流（1 秒窗口）与失败冷却（2 秒窗口）此前拆在 `probeThrottled` 与 `cooling` 两个方法里各自取样时钟，「同一条时间线」只是注释承诺。现收敛为 `recoveryDue(now)` 单点，两条窗口都消费它——改动一个窗口不会绕开另一条轴。
+- **限流回补改为纯函数**：新增 `fillTokens(bucket, now, capacity, interval)`，不读时间源、不加锁。回补速率、容量钳制、时钟回拨防护与「令牌是连续量不取整」全部可直接单测，无需假时钟推进。删除生产零调用点的公开 `sweep`。
+- **静态资源存在性判定与内容读取合一**：删除 `assetExists` 预检——缓存命中即证明资源存在，未命中才读盘一次。修复前每次请求都执行 `Open`+`Stat`，缓存命中时仍有 2 次文件系统调用。
+- **竞态骨架收敛**：新增私有 `perform(id, q, limit, offset)`，收敛「监听中止 → 发起请求 → 判定当前性 → 清理监听」骨架。`submit` 传新会话 id、`loadMore` 传当前会话 id，两方法体不再逐行同构（净减 11 行），判别联合构造点单点化。
+- **交互语义收口**：新增 `useSearchInput`，输入法组合守卫、Enter 提交、Escape 清空从 `App.tsx` 的 JSX 事件回调收进一处。该逻辑此前内联在组件里且零测试覆盖；现由 7 条挂载测试锁住运行时行为，页面接线由 TypeScript 在编译期锁住。
+
+### 测试
+
+- 前端从 114 增至 **121 用例**：新增 `useSearchInput.test.tsx`（6 条交互语义 + 1 条 hook 组合链路）。
+- 后端新增 `fillTokens` 四条纯函数测试、探测节流与冷却窗口的行为测试、`countingFS` 静态缓存零触碰测试。
+- **变异测试剔除零承重的推测性防御**：`useSearchInput` 初版额外加入的本地 `composing` ref 经变异验证无任何测试承重（原 `App.tsx` 也没有该装置），已删除。同批修正三处自身写错的测试断言（`recoveryDue` 是纯判定不推进状态、`retry` 布尔语义方向、`cooling` 返回值方向），均由变异验证暴露。
+
 ## [v0.7.1] - 2026-09-26
 
 ### 修复
