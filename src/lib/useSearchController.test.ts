@@ -43,6 +43,33 @@ describe("createSearchOrchestrator", () => {
     expect(orch.getState().loadingMore).toBe(false);
   });
 
+  it("loadMore appends the next page to items", async () => {
+    // 追加语义此前只有 searchReducer 层单独覆盖：编排层的 loadMore 用例
+    // 只断言 loadingMore 为 false，把 loadMore 改成永不追加也依然全绿。
+    // 本条从编排入口断言 items 真的增长，锁住「守卫放行 → 结果抵达 reducer」这段接线。
+    const first = okResponse({ items: [{ name: "甲", grade: "高一", className: "1班" }], total: 2, hasMore: true });
+    const second = okResponse({ items: [{ name: "乙", grade: "高一", className: "2班" }], total: 2, hasMore: false });
+    const api = { search: vi.fn().mockResolvedValueOnce(first).mockResolvedValueOnce(second) };
+    const orch = createSearchOrchestrator({ pageSize: 10, api });
+    orch.onInput("甲");
+    await orch.submit();
+    expect(orch.getState().items.map((s) => s.name)).toEqual(["甲"]);
+    await orch.loadMore();
+    expect(orch.getState().items.map((s) => s.name)).toEqual(["甲", "乙"]);
+  });
+
+  it("loadMore does not request when there is no next page", async () => {
+    // 守卫的另一侧：无后续页时不发起请求。此前守卫被改成无条件 return 也无人发现。
+    const api = { search: vi.fn().mockResolvedValue(okResponse({ items: [{ name: "甲", grade: "高一", className: "1班" }], total: 1, hasMore: false })) };
+    const orch = createSearchOrchestrator({ pageSize: 10, api });
+    orch.onInput("甲");
+    await orch.submit();
+    const callsAfterSubmit = api.search.mock.calls.length;
+    await orch.loadMore();
+    expect(api.search.mock.calls.length).toBe(callsAfterSubmit);
+    expect(orch.getState().items.map((s) => s.name)).toEqual(["甲"]);
+  });
+
   it("clear invalidates and resets state", async () => {
     const api = { search: vi.fn().mockResolvedValue(okResponse()) };
     const orch = createSearchOrchestrator({ pageSize: 10, api });
