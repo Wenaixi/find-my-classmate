@@ -1,6 +1,9 @@
 package main
 
-import "net/http"
+import (
+	"encoding/json"
+	"net/http"
+)
 
 // API 错误码常量表：全站 JSON 错误体的唯一事实源。
 const (
@@ -41,4 +44,17 @@ func writeError(w http.ResponseWriter, code string) {
 		status = http.StatusInternalServerError
 	}
 	writeJSON(w, status, map[string]string{"error": code})
+}
+
+// writeJSON 写出 JSON 响应：设置 Content-Type 后编码输出。
+//
+// 此前定义在 main.go（启动装配文件）而全部消费点都在 API 侧（api.go 的三处
+// 成功响应、errors.go 的错误体、ratelimit.go 间接经 writeError）。改响应写出
+// 格式要去一个只声称承担「启动自举 / 日志 / 中间件 / 装配」四个薄角色的文件里
+// 找，而那个文件自身零调用它。搬到此处与 writeError 同址：写出格式与错误码映射
+// 是同一件事的两面，main.go 只留装配。
+func writeJSON(w http.ResponseWriter, status int, value any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(value)
 }

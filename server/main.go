@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"io"
 	"log"
 	"net/http"
@@ -225,10 +224,4 @@ func setSecurityHeaders(h http.Header) {
 	h.Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Cache-Control", "no-store")
-}
-
-func writeJSON(w http.ResponseWriter, status int, value any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(value)
 }
