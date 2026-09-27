@@ -289,13 +289,30 @@ func (s *studentStore) cooling(stamps map[string]fileStamp) bool {
 // 窗口内继续观察到不可用，而不是把保留在内存中的旧快照误报为当前健康。
 // stamps 为 nil 表示失败发生在指纹采集阶段（dataStamps 自身失败，如目录不可读），
 // 此时 lastFailStampKnown 为 false，冷却判定不再依赖指纹比对。
+//
+// 失败日志在此单点记录，且只在状态发生变化时记一条——view() 返回的每一个错误
+// 都必然经过本函数（reload 的三个错误出口中有两个调用它，冷却期返回的
+// coolingError 是此前记录的同一根因），因此这里是「数据变为不可用」的唯一判定点。
+// 逐次记录不可行：健康探针每 30 秒一次，名单持续损坏时每次请求都记会刷出
+// 每天四万余条，把根因淹没在噪音里。
+//
+// 判据是「此前无失败记录」或「本次根因与上次不同」：恢复时 lastFailErr 被清空，
+// 因此故障与恢复的每次往复各留一条，运维既能看见问题出现，也能看见问题被修好。
+//
+// 按错误文本比较而非 errors.Is：loadStudents 每次都用 errors.New 或 fmt.Errorf
+// 新建错误值，errors.Is 永远不匹配。这里要的正是「同一年段的同一种解析失败」
+// 视为同一次故障。
 func (s *studentStore) recordFailure(stamps map[string]fileStamp, cause error) {
 	s.mu.Lock()
+	changed := s.lastFailErr == nil || s.lastFailErr.Error() != cause.Error()
 	s.lastFailStamps = stamps
 	s.lastFailStampKnown = stamps != nil
 	s.lastFailErr = cause
 	s.lastFailAt.Store(s.now().UnixMilli())
 	s.mu.Unlock()
+	if changed {
+		logErrorf("data unavailable: %v", cause)
+	}
 }
 
 // coolingError 返回冷却期内应对外暴露的错误：保留上次失败的原始原因，

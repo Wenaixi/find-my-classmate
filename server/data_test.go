@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"errors"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -205,6 +207,66 @@ func TestStoreCoolingPreservesFailureCause(t *testing.T) {
 	}
 	if coolingMsg := err.Error(); coolingMsg != firstMsg {
 		t.Errorf("冷却期错误应保留原始根因\n首次: %q\n冷却: %q", firstMsg, coolingMsg)
+	}
+}
+
+// 数据不可用的根因必须留痕，且只在故障状态发生变化时留一次。
+//
+// 该测试的存在理由：修复前 /api/health 用 "_" 丢弃 view 的错误、不产出任何日志，
+// 而 recordFailure 只更新状态不记录。配合 compose 的 healthcheck（每 30 秒一次）
+// 与零用户流量，表现为名单损坏、站点持续 503 degraded、运维侧日志字节数为 0。
+// 该场景是实测复现的，不是推理。
+//
+// 两个方向都断言，缺一不可：
+//   - 只断言"有记录"：逐次记录的退化实现同样通过，日志会被每天四万余条噪音淹没；
+//   - 只断言"不刷屏"：删掉记录实现后探针数为 0，日志为空，断言同样通过。
+func TestFailureCauseIsLoggedOncePerOutage(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFiles(t, dir)
+	clock := &fakeClock{current: time.Now()}
+	store, err := newStudentStore(dir, clock.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var buf bytes.Buffer
+	oldOut := log.Writer()
+	log.SetOutput(&buf)
+	defer log.SetOutput(oldOut)
+
+	// 破坏名单，随后只有探针流量（无任何用户查询）
+	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte("{broken"), 0o644)
+	const probes = 5
+	for i := range probes {
+		clock.advance(30 * time.Second)
+		if _, err := store.view(); err == nil {
+			t.Fatalf("探针 #%d：损坏名单 view 应报错", i+1)
+		}
+	}
+
+	logged := buf.String()
+	if !strings.Contains(logged, "解析") {
+		t.Errorf("数据不可用必须留下含根因的日志，实际日志 %q", logged)
+	}
+	if count := strings.Count(logged, "\n"); count != 1 {
+		t.Errorf("同一次故障的 %d 次探针应只记录 1 条，实际 %d 条：%q", probes, count, logged)
+	}
+
+	// 恢复后再次损坏属于新的一次故障，必须重新留痕。
+	// 若实现按「曾经失败过就不再记录」去重，本断言会失败。
+	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(validGradeOne), 0o644)
+	clock.advance(3 * time.Second)
+	if _, err := store.view(); err != nil {
+		t.Fatalf("修复后应恢复可用，实际 %v", err)
+	}
+	buf.Reset()
+	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte("{"+"broken"), 0o644)
+	clock.advance(3 * time.Second)
+	if _, err := store.view(); err == nil {
+		t.Fatal("再次损坏后 view 应报错")
+	}
+	if !strings.Contains(buf.String(), "解析") {
+		t.Errorf("故障往复后应重新留痕，实际日志 %q", buf.String())
 	}
 }
 

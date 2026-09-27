@@ -16,6 +16,11 @@ func buildMux(store *studentStore, buildVersion string) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.Handle("/", frontendHandler())
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
+		// 错误不再丢弃：探测存活需要的是「快照可取」这一个事实，但丢弃 error
+		// 会连带丢掉运维诊断所需的根因。这里显式忽略返回值而非用 _ 命名，
+		// 是为了让「此处不消费根因」成为读代码即可见的事实——根因由
+		// data.go 的 recordFailure 在失败发生时统一记录（与 /api/search 同一处），
+		// 探针流量因此也能让故障留痕，而不产生每次探针一条的噪音。
 		if _, err := store.view(); err != nil {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "degraded", "reason": "data", "version": buildVersion})
 			return
@@ -65,7 +70,9 @@ func searchHandler(store *studentStore) http.HandlerFunc {
 		}
 		students, loadErr := store.view()
 		if loadErr != nil {
-			logErrorf("data reload failed: %v", loadErr)
+			// 根因已由 data.go 的 recordFailure 在失败发生时单点记录，此处不再重复输出：
+			// 重复记录会让同一次故障在日志里出现两次，且与健康探针触发的记录混在一起。
+			// 冷却期返回的错误也走这条路径，记录已在首次失败时产生。
 			writeError(w, errCodeDataUnavailable)
 			return
 		}
