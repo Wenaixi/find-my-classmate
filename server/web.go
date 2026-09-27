@@ -77,12 +77,6 @@ func frontendHandlerWithFS(fsys fs.FS) http.Handler {
 	})
 }
 
-// serveCachedStatic 提供带 ETag / gzip / 304 的静态资源响应。
-//
-// 存在性判定与内容读取合为一次来源访问：缓存命中即证明资源存在（不再预检），
-// 缓存未命中时读盘一次，读不到即 404。immutable 缓存头只在此处确认资源存在后设置，
-// 缺失资源因此不会继承一年长缓存。
-
 // acceptsGzip 判定客户端是否接受 gzip 表示。
 //
 // 响应已声明 Vary: Accept-Encoding（serveCachedStatic 内的 Set("Vary", …)），即向共享缓存声明了「本响应随
@@ -118,6 +112,12 @@ func acceptsGzip(header string) bool {
 	return false
 }
 
+// serveCachedStatic 提供带 ETag / gzip / 304 的静态资源响应。
+//
+// 存在性判定与内容读取合为一次来源访问：缓存命中即证明资源存在（不再预检），
+// 缓存未命中时读盘一次，读不到即 404。immutable 缓存头只在此处确认资源存在后设置，
+// 缺失资源因此不会继承一年长缓存。
+//
 // 协商事实一致性：同一资源可能以 raw 或 gzip 返回，因此 200 与 304 都必须
 // 声明 Vary: Accept-Encoding——否则共享缓存会把某一种表示复用到另一种请求上。
 // 304 不声明 Content-Length / Content-Encoding，避免与实际表示不符的长度。

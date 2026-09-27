@@ -9,9 +9,6 @@ import (
 	"time"
 )
 
-// 响应直接序列化 SearchResponse：Student 的 json tag 保证隐私红线（只输出 name/grade/class）。
-// 契约由类型声明单点保证（toResponse 双实现已移除）。
-
 func resolveDataDir() string {
 	if value := os.Getenv("FMC_DATA_DIR"); value != "" {
 		return value
@@ -28,63 +25,6 @@ func resolveDataDir() string {
 
 // version 由发布流水线 ldflags 注入（-X main.version=<git tag>）；本地构建默认为 dev。
 var version = "dev"
-
-var logLevel = parseLogLevel(os.Getenv("FMC_LOG_LEVEL"))
-
-type level int
-
-// 日志级别：数值越大越啰嗦，logf 在 logLevel < min 时跳过。
-// levelWarn 当前没有输出点（无生产代码发出 warn 级日志），但级别本身保留：
-// FMC_LOG_LEVEL=warn 是对外环境契约，运维可能已在用，删掉会让该配置静默失效。
-// 新增 warn 级日志时基础设施已就位，无需改动级别解析。
-const (
-	levelError level = iota
-	levelWarn
-	levelInfo
-)
-
-func parseLogLevel(value string) level {
-	switch value {
-	case "error":
-		return levelError
-	case "warn":
-		return levelWarn
-	default:
-		return levelInfo
-	}
-}
-
-func logf(min level, format string, args ...any) {
-	if logLevel < min {
-		return
-	}
-	log.Printf(format, args...)
-}
-
-func logInfof(format string, args ...any)  { logf(levelInfo, format, args...) }
-func logErrorf(format string, args ...any) { logf(levelError, format, args...) }
-
-// resolveLogDir 优先使用 FMC_LOG_DIR 环境变量；未设置时沿用数据目录下的 log 子目录。
-// 容器场景数据目录通常只读挂载，日志必须写到独立可写位置。
-func resolveLogDir(dataDir string) string {
-	if value := os.Getenv("FMC_LOG_DIR"); value != "" {
-		return value
-	}
-	return filepath.Join(dataDir, "log")
-}
-
-func openLog(dataDir string) (io.Writer, *os.File, error) {
-	logDir := resolveLogDir(dataDir)
-	if err := os.MkdirAll(logDir, 0o755); err != nil {
-		return nil, nil, err
-	}
-	file, err := os.OpenFile(filepath.Join(logDir, "server.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
-	if err != nil {
-		return nil, nil, err
-	}
-	// 文件与 stdout 双写：容器场景由 docker 收集 stdout，本地场景保留文件
-	return io.MultiWriter(file, os.Stderr), file, nil
-}
 
 func main() {
 	dataDir := resolveDataDir()
