@@ -1,6 +1,7 @@
 import type { SearchState, Student } from "../types";
 import { ApiError } from "./api";
 import { hasNameCondition } from "./query";
+import { deriveResultSummary, type ResultSummary } from "./resultSummary";
 import type { SearchResult } from "./searchSession";
 import { MAX_QUERY_LENGTH, PAGE_SIZE } from "../config";
 
@@ -145,6 +146,10 @@ export function deriveStatusHint(state: SearchState): StatusHint {
 // 三个派生并另调 useSearchController 取 state，界面知识横跨两个 module。
 // 既有测试分别打三个函数，没有任何断言锁住它们对同一状态给出一致的组合——
 // 这里收成一次派生，让一致性从「同一次调用」这一接缝可验证。
+//
+// 组件此前还各自持有三处展示派生（结果摘要的喂参、清空按钮显隐、结果区计数），
+// 与本文件「视图需要的全部展示派生」的说法矛盾。这三处本就可由传入的 state 派生，
+// 现已一并归位：present 收到的 state 含 items/total/hasMore/query，无需额外接口面。
 export interface Presentation {
   /** 该渲染哪一块结果区；null 表示不渲染 */
   section: ResultSection | null;
@@ -158,6 +163,12 @@ export interface Presentation {
   tone: StatusTone;
   /** 是否渲染加载指示 */
   showOrb: boolean;
+  /** 结果区头部的匹配条数文案：零条时用占位符而非 0 */
+  countLabel: string;
+  /** 是否渲染清空按钮（此前由组件直读 query.length > 0） */
+  showClear: boolean;
+  /** 结果区摘要：进度、计数与剩余文案的唯一来源 */
+  summary: ResultSummary;
 }
 
 export function present(state: SearchControllerState): Presentation {
@@ -169,6 +180,9 @@ export function present(state: SearchControllerState): Presentation {
     sendLabel: hint.sendLabel,
     tone: hint.tone,
     showOrb: hint.showOrb,
+    countLabel: state.total ? String(state.total) : "--",
+    showClear: state.query.length > 0,
+    summary: deriveResultSummary(state.items.length, state.total, state.hasMore),
   };
 }
 

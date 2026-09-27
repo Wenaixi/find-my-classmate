@@ -3,6 +3,9 @@ import { getState, errorMessage, initialState, present, searchReducer, statusTex
 import { ApiError } from "./api";
 import type { SearchState, Student } from "../types";
 
+const makeStudents = (n: number): Student[] =>
+  Array.from({ length: n }, (_, i) => ({ name: `学生${i}`, grade: "高一" as const, className: `${(i % 5) + 1}班` }));
+
 describe("getState", () => {
   it("derives idle/empty/success/duplicate", () => {
     expect(getState([], "", 0)).toBe("idle");
@@ -310,5 +313,33 @@ describe("present", () => {
     const loading = present({ ...initialState, state: "loading" });
     expect(loading.busy).toBe(true);
     expect(loading.scroll).toBe(false);
+  });
+
+  // 以下四条断言针对「展示派生由 present 单点持有」这条声称。
+  // 修复前三处派生落在 present 之外（App.tsx 的手工喂参、query.length > 0、
+  // total || "--"），而 present 本就收到了推导它们所需的完整 state，
+  // 属于「能派生却没吸收」——组件因此持有不该持有的界面知识。
+  it("结果计数由 present 派生，零条时用占位符而非 0", () => {
+    expect(present({ ...initialState, state: "empty", total: 0 }).countLabel).toBe("--");
+    expect(present({ ...initialState, state: "success", total: 40 }).countLabel).toBe("40");
+  });
+
+  it("清空按钮的显隐由 present 派生，不再由组件直读 query", () => {
+    expect(present({ ...initialState, query: "" }).showClear).toBe(false);
+    expect(present({ ...initialState, query: "张" }).showClear).toBe(true);
+  });
+
+  it("结果摘要由 present 一次派生，三处口径同源", () => {
+    const p = present({ ...initialState, state: "success", items: makeStudents(10), total: 40, hasMore: true });
+    expect(p.summary.countLabel).toBe("显示 10 / 40 条记录");
+    expect(p.summary.remaining).toBe(30);
+    expect(p.summary.toolbarState).toBe("下方继续加载");
+  });
+
+  it("摘要与计数对同一条数据给出一致的口径：零条时摘要不谎称已全部加载", () => {
+    const p = present({ ...initialState, state: "empty", items: [], total: 0, hasMore: false });
+    expect(p.countLabel).toBe("--");
+    expect(p.summary.countLabel).toBe("显示 0 / 0 条记录");
+    expect(p.summary.progress).toBe(0);
   });
 });

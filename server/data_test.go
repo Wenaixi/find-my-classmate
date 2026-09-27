@@ -51,7 +51,6 @@ func newTestStoreWithDir(t *testing.T, files map[string]string, now func() time.
 	return store, dir
 }
 
-
 func TestLoadStudentsDedup(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFiles(t, dir)
@@ -68,6 +67,7 @@ func TestLoadStudentsDedup(t *testing.T) {
 		}
 	}
 }
+
 // TestLoadStudentsDedupAcrossClassNotations 验证「同一人」的判定落在班号上，
 // 而不是班名的书写形态上：「1班」与「一班」解析出同一个班号，是同一个班。
 //
@@ -89,7 +89,6 @@ func TestLoadStudentsDedupAcrossClassNotations(t *testing.T) {
 		t.Errorf("班号 = %d，期望 1", students[0].ClassNo)
 	}
 }
-
 
 func TestLoadStudentsBOMStripped(t *testing.T) {
 	dir := t.TempDir()
