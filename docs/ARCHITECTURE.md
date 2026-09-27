@@ -208,6 +208,7 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 | 模块 | 职责 |
 | --- | --- |
 | main.go | 启动自举、装配（newHandlerChain/newHandlerChainWith/buildServer）；链顺序的唯一实现是 `newHandlerChainWith` |
+| middleware.go | HTTP 中间件实现（accessLog/statusRecorder/securityHeaders/setSecurityHeaders）；链的相对顺序不由本文件决定，收敛在 main.go 的 newHandlerChainWith |
 | logging.go | 日志级别与写出（logInfof/logErrorf/openLog/resolveLogDir）；`FMC_LOG_LEVEL` 的解析与目录决议。横切消费方为 data.go、api.go、accessLog |
 | api.go | API 路由与 HTTP 翻译（buildMux(store, version) 注册静态资源、health 内联闭包与 searchHandler）：参数取值、错误码映射、JSON 写出；不含查询语义 |
 | errors.go | API 错误码常量表（not_found/method_not_allowed/invalid_limit/invalid_offset/invalid_query/data_unavailable/rate_limited） |
