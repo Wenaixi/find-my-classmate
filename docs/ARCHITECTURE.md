@@ -54,9 +54,9 @@
 - 姓名匹配键：删除与 Go `unicode.IsSpace` 相同的空白集合（`\t\n\v\f\r`、空格、U+0085、U+00A0 及 Unicode White_Space 全体）并统一大写（normalizeName）
 - **空白集合必须逐码位对齐，不得用 JS 的 `\s` 近似**。两端差集恰为两个码位且方向相反：U+0085（NEL）是 Go 的空白而 JS `\s` 不含；U+FEFF 自 Unicode 4.0.1 起不在 White_Space 内，Go 不认而 JS `\s` 认。用 `\s` 会在 U+FEFF 上静默分叉——前端 `trim()` 还会移除首尾的 U+FEFF，使 `␣18班` 在前端被削成 `18班`（判为班级条件）而在 Go 整体保留为一个姓名 token，进而翻转前端唯一消费的「是否含姓名条件」布尔。`src/lib/query.ts` 的 `goSpaceChars` 是前端这两处差集的唯一修正点。
 - 超长数字串按姓名处理，不作为班级条件（与 Go 的 -1 语义一致）
-- **年段值域是单点事实源**：后端 `knownGrades`（规范名）与 `gradeAliases`（别名映射）声明全部年段，`parseGrade` 与 `gradeClassToken` 均从它派生；前端 `gradeValues` / `gradeAliases` 镜像同一份声明，`types.ts` 的 `Grade` 联合须与之一致（由 `ReadonlyArray<Grade>` 的类型标注免费强制）。**扩展年段只需改这三处声明，不改任何解析逻辑。**
+- **年段值域是单点事实源**：后端 `knownGrades`（规范名）与 `gradeAliases`（别名映射）声明全部年段，`splitGradeClass`（年级+班级连写切分）与 `parseGrade`（标题/子串匹配）是仅有的两处派生 owner，改任一处都必须同步另一处；前端 `gradeValues` / `gradeAliases` 镜像同一份声明，`types.ts` 的 `Grade` 联合须与之一致（由 `ReadonlyArray<Grade>` 的类型标注免费强制）。**扩展年段只需改这三处声明，不改任何解析逻辑。**
 - 该不变量的脆弱点在依赖方向：`data.go` 的名单标题校验（`parseGrade(document.Title) != grade`）**反过来依赖查询侧的 `parseGrade`**。查询侧漏认识新年段时，合法名单文件会被判「文件名与年级标题不一致」而拒绝加载——**跨语言对拍抓不到这类裂缝**：两端一致地不认识新年段时对拍同样通过，`docs/query-contract.json` 必须先有该年段样本才表达得出来。
-- `gradeClassToken` 的编译结果必须缓存（包级 var + `rebuildGradePattern` 供扩展后重建）。曾改为每次调用重新编译，整年段查询分配从 6 涨到 117（实测），被 `TestSearchAllocsBudget` 当场拦下。
+- 分配纪律（归属已随年级+班级连写的切分实现调整，此处保留其教训）：把正则编译放进热路径会让整年段查询分配从 6 涨到 117（实测），被 `TestSearchAllocsBudget` 当场拦下。当前的 `splitGradeClass` 直接遍历 `knownGrades` 与 `gradeAliases` 做最长前缀匹配，不编译正则，因此无缓存可重建——新增解析逻辑时仍以该预算为闸门。
 
 后端独占的**执行**契约：
 
@@ -195,9 +195,11 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 
 **交互语义收口**：`useSearchInput` 持有 IME 组合守卫与键盘行为，组件只透传回调。
 该逻辑此前内联在 `App.tsx` 的 JSX 事件回调里，**零测试覆盖**——它不是"测不到"，
-而是没有任何测试穿过组件私有逻辑。收进模块后，运行时行为由 7 条挂载测试锁住，
-页面接线则由 TypeScript 在编译期锁住（少传 `isComposing` 参数即报 TS2554）。
-两层职责不可混淆：挂载测试不加载 App.tsx，因此不覆盖 JSX 接线。
+而是没有任何测试穿过组件私有逻辑。收进模块后，`useSearchInput` 的运行时行为由其挂载测试锁住，
+页面接线则由 TypeScript 在编译期锁住（少传 `isComposing` 参数即报 TS2554），
+并由 `App.mount.test.tsx` 在运行时锁住：它挂载真实的 `App`，
+其中「IME 守卫穿过 App 的接线」一条经变异实验确认承重
+（把 `App.tsx` 的 `event.nativeEvent.isComposing` 换成硬编码 false 会翻红）。
 
 动效依赖（border-beam / thinking-orbs / liquid-gooey）全部是表现层，不承载逻辑；若替换，禁止改变查询与状态语义。
 
@@ -205,8 +207,9 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 
 | 模块 | 职责 |
 | --- | --- |
-| main.go | 启动自举、日志、中间件（accessLog/securityHeaders/statusRecorder）、装配（newHandlerChain/buildServer）；buildMux 注入版本号 |
-| api.go | API 路由与 HTTP 翻译（buildMux(store, version)/searchHandler）：参数取值、错误码映射、JSON 写出；不含查询语义 |
+| main.go | 启动自举、装配（newHandlerChain/newHandlerChainWith/buildServer）；链顺序的唯一实现是 `newHandlerChainWith` |
+| logging.go | 日志级别与写出（logInfof/logErrorf/openLog/resolveLogDir）；`FMC_LOG_LEVEL` 的解析与目录决议。横切消费方为 data.go、api.go、accessLog |
+| api.go | API 路由与 HTTP 翻译（buildMux(store, version)/searchHandler/healthHandler）：参数取值、错误码映射、JSON 写出；不含查询语义 |
 | errors.go | API 错误码常量表（not_found/method_not_allowed/invalid_limit/invalid_offset/invalid_query/data_unavailable/rate_limited） |
 | config.go | 后端契约常量（端口/分页/上限/限流/缓存头），与 src/config.ts 对拍 |
 | data.go | 数据加载、规范化、去重、热重载（view 唯一只读入口 + Size 只读计数）；探测节流与失败冷却的时机判定收敛为 recoveryDue 单点；`errNoRoster()` 是「无任何年段文件」判定与运维指引的唯一来源，年段清单从 knownGrades 生成，扩展年段时指引自动跟随 |

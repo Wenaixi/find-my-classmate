@@ -85,11 +85,8 @@ describe("hasNameCondition", () => {
 
 // 年段值域声明的不变量。
 //
-// 这组断言的存在理由：把 gradeClassToken 退回硬编码正则后，
-// 全部 54 条用例仍然通过——对已声明年段而言，派生与硬编码行为等价，
-// 契约语料无法区分二者。真正值得锁的不是「正则长什么样」，
-// 而是「声明本身完整且自洽」：别名必须映射回已声明的规范名，
-// 否则 parseGrade 会返回一个不在 Grade 值域内的年段。
+// 这组断言锁的不是「切分用的正则长什么样」，而是「声明本身完整且自洽」：
+// 别名必须映射回已声明的规范名，否则 parseGrade 会返回一个不在 Grade 值域内的年段。
 describe("gradeDomain", () => {
   it("每个别名都映射回已声明的规范年段", () => {
     for (const [alias, grade] of gradeDomain.aliases) {

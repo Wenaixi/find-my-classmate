@@ -76,7 +76,7 @@ export function normalizeName(value: string): string {
   return value.replace(goSpace, "").toUpperCase();
 }
 
-// parseGrade 与 Go 端 search.go 语义一致：子串匹配（已是班级连写的 token 由 gradeClassToken 优先精确解析）。
+// parseGrade 与 Go 端 search.go 语义一致：子串匹配（已是班级连写的 token 由 splitGradeClass 优先精确解析）。
 // 遍历声明的年段值域而非硬编码比较：扩展年段只需在 gradeValues / gradeAliases 追加。
 function parseGrade(token: string): Grade | undefined {
   for (const grade of gradeValues) {
