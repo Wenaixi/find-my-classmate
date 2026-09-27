@@ -254,6 +254,40 @@ func TestGradeClassCompoundPrecise(t *testing.T) {
 	}
 }
 
+// Search 必须对任意输入顺序产出规定顺序，不依赖调用方已排好序。
+//
+// 此前无任何断言覆盖排序的第三键（班级号升序）。原因不是第三键无足轻重，
+// 而是所有既有 fixture 都恰好已按班号升序构造（loadStudents 在 data.go:95
+// 排序班名后追加学生，knownGrades 按自然序循环加载年段文件），
+// 于是 slices.SortStableFunc 对已序输入是恒等操作，第三键的缺失无从暴露。
+// 但 Search 的调用方只有 api.go 一处、传的是 store.view()，
+// 「输入已排序」这一前置性质从未作为契约写进任何地方——
+// 一旦有人调整 loadStudents 的追加顺序（如改为并发收集、或按姓名去重后重排），
+// 结果顺序会静默改变而全部测试仍然通过。
+//
+// 本用例刻意传入乱序输入，把「Search 自守排序」钉成接口事实。
+func TestSearchSortsUnorderedInput(t *testing.T) {
+	students := []Student{
+		newStudent("张甲", GradeThree, "9班", parseClassName("9班")),
+		newStudent("张乙", GradeOne, "3班", parseClassName("3班")),
+		newStudent("张丙", GradeOne, "7班", parseClassName("7班")),
+		newStudent("张丁", GradeOne, "1班", parseClassName("1班")),
+	}
+	got := Search(students, "张", 10, 0)
+	if len(got.Items) != 4 {
+		t.Fatalf("应返回 4 条，实际 %d", len(got.Items))
+	}
+	// 姓名单命中时全部同分，顺序由「年级声明序 → 班级号升序」决定。
+	wantGrades := []Grade{GradeOne, GradeOne, GradeOne, GradeThree}
+	wantClasses := []int{1, 3, 7, 9}
+	for i, s := range got.Items {
+		if s.Grade != wantGrades[i] || s.ClassNo != wantClasses[i] {
+			t.Fatalf("位置 %d 期望 %s/%d班，实际 %s/%s", i,
+				wantGrades[i], wantClasses[i], s.Grade, s.ClassName)
+		}
+	}
+}
+
 // 高三/高二的排序权重与声明序一致
 func TestGradeOrderAcrossGrades(t *testing.T) {
 	students := []Student{
