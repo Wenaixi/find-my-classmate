@@ -76,6 +76,13 @@ export function parseQuery(raw: string): ParsedQuery {
     if (gradeClass) {
       const classNo = classNumber(gradeClass[2]);
       if (classNo < 0) {
+        // 超长数字：班级不可解析，但年级部分仍然可解析。
+        // 保留年级条件并把整个 token 按姓名处理——与下方 classNo <= 0 分支同策略，
+        // 也与 Go 端 search.go 降级时先写 query.Grade 的行为一致。
+        // 修复前本分支直接 continue，parsed.grade 从未赋值：同一条规则的两个镜像
+        // 实现因此分叉（Go 判「高二」而 TS 为 undefined），且契约语料缺此形态，
+        // 分叉长期无人发现。语料「高二99999999999999999999班」锁住该行为。
+        parsed.grade = parseGrade(gradeClass[1]) ?? parsed.grade;
         parsed.nameTokens.push(normalizeName(token));
         continue;
       }
