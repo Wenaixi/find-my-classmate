@@ -123,6 +123,49 @@ func TestLoadStudentsBadClassKey(t *testing.T) {
 	}
 }
 
+// 名单结构守门：「名单」字段为 null（JSON 显式 null）时必须整份拒绝，
+// 而不是静默返回一份空名单。变异实验：移除 data.go 的 Roster == nil 检查后
+// 全量用例仍全绿，本条是它唯一的承重。
+//
+// 守门的取值域是「字段缺失或为 null」，不是「名单为空」——"名单":{} 会被解出
+// 非 nil 的空 map 而通过本检查。两条断言都写上：守卫若退化为「任何名单都报错」，
+// 反例会翻红。
+func TestLoadStudentsRejectsNullRoster(t *testing.T) {
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"标题":"福清一中2025级高一编班名单","名单":null}`), 0o644)
+	_, err := loadStudents(dir)
+	if err == nil || !strings.Contains(err.Error(), "名单结构异常") {
+		t.Fatalf("名单为 null 应报错，实际 %v", err)
+	}
+
+	// 反向：同目录补一份合法名单，守卫不得把正常数据一并拒掉。
+	// 与上面的失败样本同目录，避免「因为另一个文件坏了才报错」的歧义。
+	good := t.TempDir()
+	_ = os.WriteFile(filepath.Join(good, "高一.json"), []byte(`{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"正常同学"}]}}`), 0o644)
+	if _, err := loadStudents(good); err != nil {
+		t.Fatalf("合法名单不应被名单结构守门拦下，实际 %v", err)
+	}
+}
+
+// 学生记录守门：名单里出现空姓名时必须整份拒绝。
+// 移除后实测症状是一条姓名为空串的记录混入名单（err=nil items=1），
+// 它会出现在搜索结果里——用户看到一条无名氏。
+// 反向断言同样写上，防止守卫退化为「任何名单都报错」。
+func TestLoadStudentsRejectsEmptyStudentName(t *testing.T) {
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":""}]}}`), 0o644)
+	_, err := loadStudents(dir)
+	if err == nil || !strings.Contains(err.Error(), "学生记录格式异常") {
+		t.Fatalf("空姓名学生记录应报错，实际 %v", err)
+	}
+
+	good := t.TempDir()
+	_ = os.WriteFile(filepath.Join(good, "高一.json"), []byte(`{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"正常同学"}]}}`), 0o644)
+	if _, err := loadStudents(good); err != nil {
+		t.Fatalf("合法名单不应被学生记录守门拦下，实际 %v", err)
+	}
+}
+
 func TestStoreHotReload(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFiles(t, dir)
