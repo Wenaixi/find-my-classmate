@@ -99,9 +99,12 @@ jobs:
       - name: 数据边界守卫（真实名单不随仓库分发）
         run: |
           # 真实名单（data/*.json）不进仓库、不进发布包；仓库中不应存在任何名单数据。
-          # 数据契约由 server/data_test.go 保证（校内部署放置数据后运行 go test ./... 校验）。
+          # 数据契约由 server/data_test.go 以合成 fixture 覆盖。
+          # 真实名单形态由 TestRealRosterIsLoadable 单独把关：它读取
+          # ../data（可用 FMC_TEST_ROSTER_DIR 覆盖），无名单时跳过——
+          # 因此 CI 恒跳过，只有校内部署放置名单后该门禁才真正执行。
           if ls data/*.json >/dev/null 2>&1; then
             echo "错误：data/ 目录包含名单数据文件，真实名单不得随仓库分发（隐私红线）。" >&2
             exit 1
           fi
-          echo "零数据守卫通过：仓库无名单数据文件，数据契约由 server/data_test.go 保证。"
+          echo "零数据守卫通过：仓库无名单数据文件；名单加载契约由 server/data_test.go 覆盖。"

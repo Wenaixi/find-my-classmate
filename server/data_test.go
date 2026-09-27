@@ -529,3 +529,64 @@ func TestErrNoRosterFollowsKnownGrades(t *testing.T) {
 	knownGrades = nil
 	_ = errNoRoster()
 }
+
+// realRosterDir 返回待校验的真实名单目录，ok=false 表示该处没有名单文件。
+//
+// 默认取仓库的 data/ 目录（校内部署放置名单后的工作位置）；
+// FMC_TEST_ROSTER_DIR 可指定其他目录，便于对候选名单先行校验再投放。
+func realRosterDir() (dir string, ok bool) {
+	dir = os.Getenv("FMC_TEST_ROSTER_DIR")
+	if dir == "" {
+		dir = filepath.Join("..", "data")
+	}
+	for _, grade := range knownGrades {
+		if _, err := os.Stat(filepath.Join(dir, string(grade)+".json")); err == nil {
+			return dir, true
+		}
+	}
+	return dir, false
+}
+
+// TestRealRosterIsLoadable 真实名单形态门禁。
+//
+// 「真实名单不进 git」的决定正确，但它有个此前无人兑现的代价：
+// 全部既有测试都用 t.TempDir() 造合成 fixture，CI 永远验不到真实数据的形态。
+// 而 loadStudents 对形态漂移是 fail-closed 的——标题不含年段词、
+// 或任一姓名为空串，都会让整份文件被拒绝，服务随之 503 整站不可用，
+// 而 CI 全绿。ci.yml 的 data job 曾把这一点写成「数据契约由
+// server/data_test.go 保证」，那句话当时并不成立。
+//
+// 探针实测的接受面（2026-09-27）：班名 01班 / 无「班」字、姓名前后带空格、
+// 同班重名、跨班同名、新增未知字段均被接受，容错良好；
+// 标题不含年段词与空姓名则整份拒绝。
+//
+// 本用例把这条边界变成可执行的门禁：部署方放置名单后跑一次 go test ./...
+// 即可确认形态被接受，而不必等到服务起不来才发现。
+// CI 环境无名单文件时跳过——真实名单本就不得进仓库。
+func TestRealRosterIsLoadable(t *testing.T) {
+	dir, ok := realRosterDir()
+	if !ok {
+		t.Skip("该目录未放置名单文件（CI 环境恒如此）；校内部署放置 data/*.json 后本校验生效")
+	}
+	students, err := loadStudents(dir)
+	if err != nil {
+		t.Fatalf("真实名单被拒绝加载：%v\n"+
+			"这会让服务启动后 /api/health 返回 503 degraded、/api/search 返回 500。\n"+
+			"请核对名单形态：标题须含年段词（如「...高一编班名单」），姓名不得为空串。", err)
+	}
+	if len(students) == 0 {
+		t.Fatal("真实名单加载成功但学生数为 0")
+	}
+	// 每名学生都必须带正班号：ClassNo 非正会让「按班级筛选」永远筛不出人。
+	// loadStudents 声称已校验 parsed.Valid，此处复核该承诺在真实数据上兑现。
+	zeroClass := 0
+	for _, s := range students {
+		if s.ClassNo <= 0 {
+			zeroClass++
+		}
+	}
+	if zeroClass > 0 {
+		t.Errorf("真实名单中有 %d/%d 名学生的班号非正，按班级筛选将失效", zeroClass, len(students))
+	}
+	t.Logf("真实名单校验通过：%d 名学生", len(students))
+}
