@@ -75,6 +75,28 @@ func TestLoadStudentsDedup(t *testing.T) {
 		}
 	}
 }
+// TestLoadStudentsDedupAcrossClassNotations 验证「同一人」的判定落在班号上，
+// 而不是班名的书写形态上：「1班」与「一班」解析出同一个班号，是同一个班。
+//
+// 两种写法混用时去重键若用原始班名，同一个人会被加载两次并在响应里出现两条
+// 班名不同的记录。断言只锁条数与「班号唯一」，不锁幸存的班名——Go map 的迭代
+// 序随机，幸存者是哪一个写法不可确定（实测 200 次分布约 179:21），
+// 把它写进断言会造出偶发失败的测试。
+func TestLoadStudentsDedupAcrossClassNotations(t *testing.T) {
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"张三"}],"一班":[{"姓名":"张三"}]}}`), 0o644)
+	students, err := loadStudents(dir)
+	if err != nil {
+		t.Fatalf("混用班级写法应可加载: %v", err)
+	}
+	if len(students) != 1 {
+		t.Fatalf("两种写法指向同一班号的同一人，应只加载 1 条，实际 %d 条", len(students))
+	}
+	if students[0].ClassNo != 1 {
+		t.Errorf("班号 = %d，期望 1", students[0].ClassNo)
+	}
+}
+
 
 func TestLoadStudentsBOMStripped(t *testing.T) {
 	dir := t.TempDir()

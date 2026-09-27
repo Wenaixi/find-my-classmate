@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -100,7 +101,10 @@ func loadStudents(dir string) ([]Student, error) {
 					return nil, errors.New("学生记录格式异常")
 				}
 				student := newStudent(name, grade, className, classNos[className])
-				key := string(grade) + "\x00" + className + "\x00" + student.NameKey
+				// 去重键用班号而非班名：班名是书写形态（「1班」与「一班」都指 1 班），
+				// 班号才是领域身份。用班名会让同一个人因写法不同被加载两次，
+				// 在响应里出现两条班名不同的重复记录。
+				key := string(grade) + "\x00" + strconv.Itoa(classNos[className].ClassNo) + "\x00" + student.NameKey
 				if _, exists := seen[key]; exists {
 					continue
 				}
