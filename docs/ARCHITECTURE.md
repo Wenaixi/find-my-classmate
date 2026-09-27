@@ -54,8 +54,8 @@
 - 姓名匹配键：删除与 Go `unicode.IsSpace` 相同的空白集合（`\t\n\v\f\r`、空格、U+0085、U+00A0 及 Unicode White_Space 全体）并统一大写（normalizeName）
 - **空白集合必须逐码位对齐，不得用 JS 的 `\s` 近似**。两端差集恰为两个码位且方向相反：U+0085（NEL）是 Go 的空白而 JS `\s` 不含；U+FEFF 自 Unicode 4.0.1 起不在 White_Space 内，Go 不认而 JS `\s` 认。用 `\s` 会在 U+FEFF 上静默分叉——前端 `trim()` 还会移除首尾的 U+FEFF，使 `␣18班` 在前端被削成 `18班`（判为班级条件）而在 Go 整体保留为一个姓名 token，进而翻转前端唯一消费的「是否含姓名条件」布尔。`src/lib/query.ts` 的 `goSpaceChars` 是前端这两处差集的唯一修正点。
 - 超长数字串按姓名处理，不作为班级条件（与 Go 的 -1 语义一致）
-- **年段值域是单点事实源**：后端 `knownGrades`（规范名）与 `gradeAliases`（别名映射）声明全部年段，`splitGradeClass`（年级+班级连写切分）与 `parseGrade`（标题/子串匹配）是仅有的两处派生 owner，改任一处都必须同步另一处；前端 `gradeValues` / `gradeAliases` 镜像同一份声明，`types.ts` 的 `Grade` 联合须与之一致（由 `ReadonlyArray<Grade>` 的类型标注免费强制）。**扩展年段只需改这三处声明，不改任何解析逻辑。**
-- 该不变量的脆弱点在依赖方向：`data.go` 的名单标题校验（`parseGrade(document.Title) != grade`）**反过来依赖查询侧的 `parseGrade`**。查询侧漏认识新年段时，合法名单文件会被判「文件名与年级标题不一致」而拒绝加载——**跨语言对拍抓不到这类裂缝**：两端一致地不认识新年段时对拍同样通过，`docs/query-contract.json` 必须先有该年段样本才表达得出来。
+- **年段值域是单点事实源**：后端 `knownGrades`（规范名）与 `gradeAliases`（别名映射）声明全部年段，`splitGradeClass`（年级+班级连写切分）与 `parseGrade`（标题/子串匹配）是仅有的两处派生 owner，改任一处都必须同步另一处；前端 `gradeValues` / `gradeAliases` 镜像同一份声明。两个方向各由一处强制：正向（列表里的值必须属于 `Grade`）由 `as const satisfies readonly Grade[]` 承担，反向（`Grade` 联合里的值必须已在列表中声明）由 `query.ts` 的编译期检查承担并在报错中点名缺失年段。**扩展年段需改四处声明**（后端 `knownGrades`、前端 `types.ts` 的 `Grade`、`query.ts` 的 `gradeValues`，加别名时另改两端的 `gradeAliases`），不改任何解析逻辑。
+- 该不变量的脆弱点在依赖方向：`data.go` 的名单标题校验（`parseGrade(document.Title) != grade`）**反过来依赖查询侧的 `parseGrade`**。查询侧漏认识新年段时，合法名单文件会被判「文件名与年级标题不一致」而拒绝加载。**解析层的对拍抓不到这类裂缝**：两端一致地不认识新年段时对拍同样通过，`docs/query-contract.json` 必须先有该年段样本才表达得出来。清单本身由 `contract_grade_test.go` 单独对拍（双向集合比较，拦得住「只改了一端」）；**但两端同时缺少某个年段时该对拍同样恒通过**——这是集合比较的结构性上限，不是实现缺陷。
 - 分配纪律（归属已随年级+班级连写的切分实现调整，此处保留其教训）：把正则编译放进热路径会让整年段查询分配从 6 涨到 117（实测），被 `TestSearchAllocsBudget` 当场拦下。当前的 `splitGradeClass` 直接遍历 `knownGrades` 与 `gradeAliases` 做最长前缀匹配，不编译正则，因此无缓存可重建——新增解析逻辑时仍以该预算为闸门。
 
 后端独占的**执行**契约：
