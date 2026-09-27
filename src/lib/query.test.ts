@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { gradeDomain, hasNameCondition, normalizeName, parseQuery } from "./query";
+import type { Grade } from "../types";
 import contract from "../../docs/query-contract.json";
 
 // 前端只保留查询解释语义：解析查询串、判断是否含姓名条件。
@@ -105,6 +106,25 @@ describe("gradeDomain", () => {
     const aliases = gradeDomain.aliases.map(([alias]) => alias);
     for (const alias of aliases) {
       expect(gradeDomain.values).not.toContain(alias);
+    }
+  });
+
+  // 编译器只强制「列表里的元素属于 Grade」，拦不住「Grade 里有、列表里缺」：
+  // 把「高四」加进 Grade 联合类型却漏了 gradeValues，tsc 通过、
+  // 全部用例通过（实测），而 parseQuery("高四") 已不再识别新年段——
+  // 正是 CLAUDE.md 记录的那类「两端一致地不认识、对拍两边同样通过」的裂缝。
+  // 契约语料只在恰好含有该年段样本时才拦得住（当前 高一9/高二7/高三3 条），
+  // 因此这里不依赖语料，改为直接枚举 Grade 联合类型的全集。
+  const gradeUnion: Grade[] = ["高一", "高二", "高三"];
+  it("Grade 联合类型的每个成员都在年段值域中声明", () => {
+    for (const grade of gradeUnion) {
+      expect(gradeDomain.values).toContain(grade);
+    }
+  });
+
+  it("年段值域没有 Grade 之外的成员", () => {
+    for (const grade of gradeDomain.values) {
+      expect(gradeUnion).toContain(grade);
     }
   });
 });
