@@ -2,7 +2,17 @@ import type { Grade, ParsedQuery } from "../types";
 
 const separators = /[，,、+]+/g;
 const classDigits: Record<string, string> = { 一: "1", 二: "2", 三: "3", 四: "4", 五: "5", 六: "6", 七: "7", 八: "8", 九: "9", 十: "10" };
-const classToken = /^(\d+|[一二三四五六七八九十]+)班?$/;
+// classNumberPattern 精确编码班号的合法形态：阿拉伯数字，或汉字数字的
+// 「单字 / 十开头 / 第二字为十」三种。
+// 汉字部分此前写 [一二三四五六七八九十]+ 贪婪匹配任意长度，而
+// chineseNumberToInt 只认那三种形态，于是超长输入「匹配成功却被静默截断」。
+// 与 Go 端 classparse.go 的 classNumberPattern 保持同一份语义。
+const chineseNumberPattern = "[一二三四五六七八九]|十[一二三四五六七八九]?|[一二三四五六七八九]十[一二三四五六七八九]?";
+const classNumberPattern = "\\d+|" + chineseNumberPattern;
+const classToken = new RegExp(`^(${classNumberPattern})班?$`);
+// classNumberHead 只判「以班号字符开头」，不判整段可解析：
+// 年级+班级连写用它守门，「一一」开头像班号却解析失败，须放行到降级路径。
+const classNumberHead = /^[0-9一二三四五六七八九十]/;
 // 年段值域与 Go 端 search.go 的 knownGrades 保持同一份事实。
 // 硬编码会使「扩展年段只需在 knownGrades 追加」在两端同时失效，
 // 且跨语言对拍无法发现——两端一致地不认识新年段，对拍语料必须先有该年段样本。
@@ -15,9 +25,40 @@ const gradeAliases: ReadonlyArray<readonly [string, Grade]> = [
 ];
 // 声明的年段全貌，供测试锁住「规范名与别名一一对应且都属于合法 Grade」。
 export const gradeDomain = { values: gradeValues, aliases: gradeAliases };
-const gradePattern = [...gradeValues, ...gradeAliases.map(([alias]) => alias)].join("|");
-// 年级+班级连写（"高二三班" / "高二1班" / "高一十八班"）→ 精确解析为年段+班级
-const gradeClassToken = new RegExp(`^(${gradePattern})(\\d+|[一二三四五六七八九十]+)班?$`);
+// splitGradeClass 把「年段+班级连写」切成年段与班级两段，语义与 Go 端
+// search.go 的同名函数逐条对齐。
+//
+// 为什么不用一条正则切：年段组与班级组共享汉字字符集，引擎回溯时会把班级部分
+// 从中间切开——「高二十二班」的班级部分被切成「十二」而非「二十二」，
+// 而数据加载路径 chineseNumberToInt("二十二") 得到 22。同一串字两条路径分裂。
+// 改用「最长年段前缀 + 剩余整体交给班级解析」后，两条路径必然同源。
+// JS 的 length 与 Go 的 len 同样按 UTF-16 码元计，但最长前缀的比较在这里
+// 只用于挑选候选、不用于切片，因此与 Go 端 utf8.RuneCountInString 的差异
+// 不会显现（中文年段在两者下长度一致）。
+function splitGradeClass(token: string): { grade: Grade; classPart: string } | null {
+  let best = "";
+  let grade: Grade | undefined;
+  for (const g of gradeValues) {
+    if (token.startsWith(g) && g.length > best.length) {
+      best = g;
+      grade = g;
+    }
+  }
+  for (const [alias, canonical] of gradeAliases) {
+    if (token.startsWith(alias) && alias.length > best.length) {
+      best = alias;
+      grade = canonical;
+    }
+  }
+  if (best === "" || grade === undefined) return null;
+  const rest = token.slice(best.length);
+  if (rest === "") return null;
+  const classPart = rest.endsWith("班") ? rest.slice(0, -1) : rest;
+  // 守门只判「开头像班号」，不判整段可解析：「高一同学」是姓名而非连写，
+  // 而「一一」开头像班号却解析失败，必须放行到降级路径。
+  if (!classNumberHead.test(classPart)) return null;
+  return { grade, classPart };
+}
 
 // 空白集合与 Go 端 unicode.IsSpace 逐码位对齐，不用 JS 的 \s 近似：
 // 两者的差集有两个码位且方向相反——U+0085（NEL）是 Go 的空白而 \s 不含，
@@ -71,10 +112,12 @@ export function parseQuery(raw: string): ParsedQuery {
   const parsed: ParsedQuery = { tokens, nameTokens: [] };
 
   for (const token of tokens) {
-    // 年级+班级连写（"高二三班"）优先于年级子串，精确解析为年段+班级
-    const gradeClass = token.match(gradeClassToken);
+    // 年级+班级连写（"高二三班"）优先于年级子串，精确解析为年段+班级。
+    // 切分由 splitGradeClass 单点承担（最长年段前缀 + 剩余整体走班级解析），
+    // 与 Go 端 search.go 同名函数逐条对齐。
+    const gradeClass = splitGradeClass(token);
     if (gradeClass) {
-      const classNo = classNumber(gradeClass[2]);
+      const classNo = classNumber(gradeClass.classPart);
       if (classNo < 0) {
         // 超长数字：班级不可解析，但年级部分仍然可解析。
         // 保留年级条件并把整个 token 按姓名处理——与下方 classNo <= 0 分支同策略，
@@ -82,11 +125,11 @@ export function parseQuery(raw: string): ParsedQuery {
         // 修复前本分支直接 continue，parsed.grade 从未赋值：同一条规则的两个镜像
         // 实现因此分叉（Go 判「高二」而 TS 为 undefined），且契约语料缺此形态，
         // 分叉长期无人发现。语料「高二99999999999999999999班」锁住该行为。
-        parsed.grade = parseGrade(gradeClass[1]) ?? parsed.grade;
+        parsed.grade = gradeClass.grade;
         parsed.nameTokens.push(normalizeName(token));
         continue;
       }
-      parsed.grade = parseGrade(gradeClass[1]) ?? parsed.grade;
+      parsed.grade = gradeClass.grade;
       if (classNo <= 0) {
         // 年级可解析而班级不可解析：整个 token 按姓名处理并保留年级条件。
         // 与 Go 端 parseQuery 同策略：不降级为「纯年级」，那会把一次精确查询

@@ -10,7 +10,30 @@ import (
 // search.go 的查询解析与 data.go 的名单加载校验都依赖它，
 // 归位到独立文件后，改查询语义不会静默改变数据文件校验行为。
 
-var classToken = regexp.MustCompile("^([0-9]+|[一二三四五六七八九十]+)班?$")
+// classNumberPattern 是班号的合法形态，精确编码两种写法：
+// 阿拉伯数字（任意长度，是否溢出由 Atoi 判定）与汉字数字的
+// 「单字 / 十开头 / 第二字为十」三种形态。
+//
+// 汉字部分此前写 [一二三四五六七八九十]+ 贪婪匹配任意长度，
+// 而 chineseNumberToInt 只认上述三种形态，于是超长输入
+// 「匹配成功却被静默截断」：「九十九十九」取前三位得 99、「十十」得 20、
+// 「二十一十」得 21，且都声称 Valid=true——畸形班名因此被当成合法班号。
+// 正则的接受域必须与解析器的接受域一致，超长输入应在匹配阶段就落选。
+const (
+	chineseNumberPattern = "[一二三四五六七八九]|十[一二三四五六七八九]?|[一二三四五六七八九]十[一二三四五六七八九]?"
+	// classNumberPattern 是完整班号（阿拉伯数字或汉字数字）。
+	// 查询侧的年级+班级连写正则与数据侧的班级名正则共用它，
+	// 使两条路径对同一串字必然得到同一个班号。
+	classNumberPattern = "[0-9]+|" + chineseNumberPattern
+)
+
+var classToken = regexp.MustCompile("^(" + classNumberPattern + ")班?$")
+
+// classNumberHead 只判「以班号字符开头」，不判整段可解析。
+// 年级+班级连写的识别用它守门：「高一同学」开头不是班号字符（是姓名），
+// 而「一一」开头是班号字符却解析失败——后者必须放行到 classCondition 降级，
+// 整段匹配（classToken）会把它一并挡在降级路径之外。
+var classNumberHead = regexp.MustCompile(`^[0-9一二三四五六七八九十]`)
 
 var classDigits = map[string]int{"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
 

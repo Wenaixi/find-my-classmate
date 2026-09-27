@@ -38,7 +38,10 @@ func TestSearchRules(t *testing.T) {
 		{"高一筛选", "高一", 2},
 		{"高三筛选", "高三", 1},
 		{"高三数字别名", "高3", 1},
-		{"纯数字按姓名处理", "223", 0},
+		// 纯数字按班级解析而非姓名：契约语料声明「223」得到 classNumber=223，
+		// 本 fixture 没有 223 班，因此命中 0 条。原用例名「纯数字按姓名处理」
+		// 宣称走姓名路径，与实现相反——按名字读代码会误判班级降级策略。
+		{"超出班级域的数字班级无匹配", "223", 0},
 		{"空输入", "", 0},
 		{"纯分隔符顿号", "、", 0},
 		{"纯分隔符英文逗号", ",", 0},
@@ -54,6 +57,19 @@ func TestSearchRules(t *testing.T) {
 				t.Fatalf("got %d want %d", len(got.Items), tt.want)
 			}
 		})
+	}
+}
+
+// 上一条表里「超出班级域的数字班级无匹配」断言的是结果条数，
+// 而「223 究竟是班级还是姓名」由解析层决定。此处把它钉住，
+// 使读者不必去翻契约语料才知道那个 0 条意味着什么。
+func TestPureDigitsParseAsClassNumber(t *testing.T) {
+	q := parseQuery("223")
+	if q.ClassNo != 223 {
+		t.Errorf("parseQuery(\"223\").ClassNo = %d，期望 223（纯数字按班级解析）", q.ClassNo)
+	}
+	if len(q.NameTokens) != 0 {
+		t.Errorf("parseQuery(\"223\").NameTokens = %v，期望空（不应降级为姓名条件）", q.NameTokens)
 	}
 }
 
@@ -416,23 +432,19 @@ func TestNormalizeNameReusesCleanInput(t *testing.T) {
 func TestGradeValueDomainFollowsKnownGrades(t *testing.T) {
 	original := knownGrades
 	knownGrades = append(append([]Grade{}, original...), Grade("高四"))
-	// 正则按 knownGrades 缓存编译，追加年段后必须重建才能覆盖到它。
-	// 生产中 knownGrades 不可变，首次求值即正确；此处显式重建以验证派生逻辑。
-	gradeClassToken = rebuildGradePattern()
-	t.Cleanup(func() {
-		knownGrades = original
-		gradeClassToken = rebuildGradePattern()
-	})
+	// splitGradeClass 直接遍历 knownGrades 与 gradeAliases，无缓存正则需要重建。
+	t.Cleanup(func() { knownGrades = original })
 
 	// 查询解释：子串匹配必须认识新年段
 	if got := parseGrade("福清一中2025级高四编班名单"); got != Grade("高四") {
 		t.Errorf("parseGrade(高四标题) = %q，期望 高四", got)
 	}
 
-	// 年级+班级连写正则必须认识新年段
-	if !gradeClassToken.MatchString("高四一班") {
-		t.Error("gradeClassToken 不认识 高四一班，年段+班级连写将退化为姓名条件")
-	}
+	// 年级+班级连写必须认识新年段
+	if grade, classPart, ok := splitGradeClass("高四一班"); !ok || grade != Grade("高四") || classPart != "一" {
+		t.Errorf("splitGradeClass(高四一班) = (%q, %q, %v)，期望 (高四, 一, true)",
+			grade, classPart, ok)
+}
 
 	// 加载侧：标题校验经 parseGrade，必须放行合法的新年段名单
 	dir := t.TempDir()

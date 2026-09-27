@@ -2,10 +2,10 @@ package main
 
 import (
 	"cmp"
-	"regexp"
 	"slices"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 type Grade string
@@ -30,27 +30,6 @@ var gradeAliases = []struct {
 	{"高1", GradeOne},
 	{"高2", GradeTwo},
 	{"高3", GradeThree},
-}
-
-// gradePattern 由 knownGrades 与 gradeAliases 生成年段匹配源串。
-// 每次调用重新生成而非包级 var：包级变量在初始化时即固定，
-// 而 knownGrades 是可声明的包级变量，预先求值会让之后追加的年段在正则中缺席。
-//
-// 为什么必须派生：data.go 的名单标题校验反过来依赖 parseGrade，
-// 而 parseGrade 与 gradeClassToken 此前各自硬编码年段字面量。
-// 变异事实（2026-09-26 第六轮探针实测）：把新年段只追加到 knownGrades 后，
-// 运维提示正确列出该文件、gradeOrder 正确排位，但 loadStudents 报
-// 「文件名与年级标题不一致」拒绝加载合法名单，查询返回 total=0 且与
-// 真不存在的年段结果完全一致。跨语言对拍无法发现——两端一致地不认识新年段。
-func gradePattern() string {
-	parts := make([]string, 0, len(knownGrades)+len(gradeAliases))
-	for _, g := range knownGrades {
-		parts = append(parts, regexp.QuoteMeta(string(g)))
-	}
-	for _, a := range gradeAliases {
-		parts = append(parts, regexp.QuoteMeta(a.name))
-	}
-	return strings.Join(parts, "|")
 }
 
 // Student 对外 JSON 契约：只输出 name/grade/class（隐私红线，派生字段与 NameKey 永不出现在任何序列化中）。
@@ -112,17 +91,68 @@ func tokenize(raw string) []string {
 	return strings.Fields(querySeparators.Replace(strings.TrimSpace(raw)))
 }
 
-// gradeClassToken 匹配年级+班级连写（"高二三班"/"高二1班"/"高一十八班"）。
-// 年段部分由 knownGrades 派生，扩展年段无需改动此处。
-// 编译结果必须缓存：调用点在 token 循环内，每次重新编译会让整年段查询的
-// 分配次数从 6 涨到 117（实测 2026-09-26），是不可接受的零分配热路径退化。
-// knownGrades 在生产中不可变，扩展它（如测试构造新年段）后须调用 rebuildGradePattern。
-var gradeClassToken = rebuildGradePattern()
-
-// rebuildGradePattern 按当前 knownGrades 重新编译年段+班级连写正则。
-// 运行时初始化走包级 var 的首次求值，无需显式调用。
-func rebuildGradePattern() *regexp.Regexp {
-	return regexp.MustCompile("^(" + gradePattern() + ")([0-9]+|[一二三四五六七八九十]+)班?$")
+// splitGradeClass 把「年段+班级连写」切成年段与班级两段，
+// 返回 ok=false 表示该 token 不是连写形态。
+//
+// 为什么不能用一条正则切：年段组与班级组共享汉字字符集，
+// 引擎在回溯时会把班级部分从中间切开——「高二十二班」的班级部分
+// 被切成「十二」而非「二十二」，而数据加载路径 parseClassName("二十二班")
+// 得到 22。同一串字两条路径给出不同班号，名单里的「二十二班」因此永远查不到。
+// 隔离实测（2026-09-27）：即便班级组放宽为 .+? 非贪婪，切分结果仍是「十二」，
+// 说明这不是字符集写法的疏漏，而是「用一个正则同时切两段」的结构限制。
+//
+// 因此切分改为：先取最长年段前缀，剩余部分整体交给班级解析。
+// 班级部分的语义判定只有 parseClassName 一处实现，两条路径必然同源。
+// 年段取最长前缀而非首个匹配：别名与规范名可能互为前缀，短的先匹配会切错。
+//
+// 年段值域从 knownGrades 与 gradeAliases 遍历派生，不硬编码年段字面量。
+// 变异事实（2026-09-26 第六轮探针实测）：把新年段只追加到 knownGrades 后，
+// 运维提示正确列出该文件、gradeOrder 正确排位，但 loadStudents 报
+// 「文件名与年级标题不一致」拒绝加载合法名单，查询返回 total=0 且与
+// 真不存在的年段结果完全一致。跨语言对拍无法发现——两端一致地不认识新年段。
+// 本函数与 parseGrade 是年段派生的仅有两处 owner，改任一处都必须同步另一处。
+func splitGradeClass(token string) (grade Grade, classPart string, ok bool) {
+	// 注意长度语义：中文年段用 len() 量出的是字节数（6）而非字符数（2）。
+	// 因此「最长前缀」的比较必须用 utf8.RuneCountInString，
+	// 而下方切片用 token[len(best):] 的字节索引——两者语义不同，不能混用。
+	// 混用的后果：token[2:] 切在字符中间，「高二十二班」会切出「十二」，
+	// 与修复前正则回溯产生的结果完全相同，缺陷看起来「没被修掉」。
+	best := ""
+	bestRunes := 0
+	for _, g := range knownGrades {
+		if strings.HasPrefix(token, string(g)) {
+			if n := utf8.RuneCountInString(string(g)); n > bestRunes {
+				best, bestRunes, grade = string(g), n, g
+			}
+		}
+	}
+	for _, a := range gradeAliases {
+		if strings.HasPrefix(token, a.name) {
+			if n := utf8.RuneCountInString(a.name); n > bestRunes {
+				best, bestRunes, grade = a.name, n, a.grade
+			}
+		}
+	}
+	if best == "" {
+		return "", "", false
+	}
+	// 年段后必须有班级部分，否则「高一」这类纯年段输入会被误判为连写，
+	// 使 parseQuery 的纯年段分支失效（该分支负责整年段查询）。
+	rest := token[len(best):]
+	if rest == "" {
+		return "", "", false
+	}
+	// 去掉可选的「班」后缀。
+	rest = strings.TrimSuffix(rest, "班")
+	// 守门：剩余必须以班号字符开头，否则根本不是连写形态。
+	// 「高一同学」是姓名而非「高一 + 一班」，若不守门会进连写分支
+	// 并被降级成姓名条件，与后续姓名分支重复解释。
+	// 但守门只判「开头像班号」，不判「整段都能解析」——
+	// 「一一」开头像班号却解析失败，交给 classCondition 降级为姓名条件。
+	if !classNumberHead.MatchString(rest) {
+		return "", "", false
+	}
+	return grade, rest, true
 }
 
 // needsNormalize 判定是否真的需要归一化处理。
@@ -174,22 +204,24 @@ func parseGrade(title string) Grade {
 func parseQuery(raw string) Query {
 	query := Query{}
 	for _, token := range tokenize(raw) {
-		// 年级+班级连写（"高二三班"）优先于年级子串，精确解析为年段+班级
-		if match := gradeClassToken.FindStringSubmatch(token); match != nil {
+		// 年级+班级连写（"高二三班"）优先于年级子串，精确解析为年段+班级。
+		// 切分由 splitGradeClass 单点承担（最长年段前缀 + 剩余整体走班级解析），
+		// 与数据加载路径共用同一个班级判定，两条路径不会分叉。
+		if grade, classPart, ok := splitGradeClass(token); ok {
 			// 降级策略由 classCondition 单点承载：!Valid 与 Overflow 一律按姓名处理。
 			// 本分支额外保留年级条件——不降级为「纯年级」，那会把一次精确查询
 			// 放大成整个年段的全量结果，与静默丢弃同属要防的「返回全部」错误。
-			classNo, asName := classCondition(match[2], token)
+			classNo, asName := classCondition(classPart, token)
 			if asName != "" {
 				// 整个 token（连同学级前缀）作为姓名匹配词，而非只取班级部分：
 				// 原始输入是「高一一一班」，用户要的就是这个字符串本身。
 				// 匹配键由 classCondition 产出，调用方不再自行归一化，
 				// 避免「降级用哪种形态」在两处各写一遍。
-				query.Grade = parseGrade(match[1])
+				query.Grade = grade
 				query.NameTokens = append(query.NameTokens, asName)
 				continue
 			}
-			query.Grade = parseGrade(match[1])
+			query.Grade = grade
 			query.ClassNo = classNo
 			continue
 		}

@@ -37,12 +37,71 @@ func TestParseClassNameStates(t *testing.T) {
 // Valid=true，使「无法解析」与「解析为 0」不可区分：查询侧静默丢弃该 token
 // 后条件全空，Search 返回全校第一页；数据侧畸形类名以 ClassNo=0 排到最前。
 func TestParseClassNameValidImpliesPositiveClassNo(t *testing.T) {
-	// 逐个覆盖查表未命中的汉字数字组合：单字重复与非法十位组合。
-	for _, className := range []string{"一一班", "八八班", "零零班", "九十九十九班"} {
+	// 单字重复与非法十位组合：这些必须报非法（Valid=false），
+	// 不能只检查「Valid 时 ClassNo>0」——原断言对下列输入恒真通过：
+	// 「九十九十九」曾被静默截断为 ClassNo=99 且 Valid=true，断言无从发现。
+	for _, className := range []string{"一一班", "八八班", "零零班", "九十九十九班", "十十班", "二十一十班", "十十十班"} {
 		got := parseClassName(className)
+		if got.Valid {
+			t.Errorf("班级 %q 应报非法（超出汉字数字的合法形态），实际 ClassNo=%d Valid=true",
+				className, got.ClassNo)
+		}
 		if got.Valid && got.ClassNo <= 0 {
 			t.Errorf("班级 %q 解析为 Valid=true 但 ClassNo=%d，Valid 谎报: %+v",
 				className, got.ClassNo, got)
+		}
+	}
+}
+
+// 汉字数字的合法形态恰为三种：单字（一~九）、十开头（十/十一）、
+// 第二字为十（二十/二十一…九十九）。超过三字的串一律非法。
+// 逐形态枚举，防止实现再次退化为「只取前三位」。
+func TestParseClassNameRejectsOverlongChineseNumbers(t *testing.T) {
+	overlong := []string{"九十九十九班", "二十一十班", "十十班", "十十十班", "一二十二班", "一二三十班"}
+	for _, className := range overlong {
+		if got := parseClassName(className); got.Valid {
+			t.Errorf("班级 %q 超过三字，应报非法，实际 ClassNo=%d", className, got.ClassNo)
+		}
+	}
+	// 对照：三字以内的合法形态必须仍然可用。
+	for className, want := range map[string]int{
+		"一班": 1, "十班": 10, "十一班": 11, "二十班": 20, "二十一班": 21, "九十九班": 99,
+		"二十二班": 22, "三十三班": 33,
+	} {
+		got := parseClassName(className)
+		if !got.Valid || got.ClassNo != want {
+			t.Errorf("班级 %q 应解析为 %d，实际 %+v", className, want, got)
+		}
+	}
+}
+
+// 两条路径必须对同一串汉字给出同一个班号。
+//
+// 输入必须无歧义：「高二十二班」在「高二」之后剩「十二班」，
+// 它读作「高二 十二班」还是「高二 二十二班」本身有歧义——
+// 拿它断言「期望 22」等于把歧义当事实。因此改用「高二二十二班」这类
+// 年段后紧跟完整班级名的无歧义形态。
+func TestQueryAndDataPathsAgreeOnClassNumber(t *testing.T) {
+	cases := []struct {
+		compound string // 年级+班级连写
+		body     string // 去掉年级后的纯班级名
+	}{
+		{"高二二十二班", "二十二班"},
+		{"高二三十三班", "三十三班"},
+		{"高二二十一班", "二十一班"},
+		{"高二二十五班", "二十五班"},
+		{"高一九班", "九班"},
+		{"高二十一班", "十一班"},
+	}
+	for _, c := range cases {
+		query := parseQuery(c.compound)
+		data := parseClassName(c.body)
+		if !data.Valid {
+			t.Fatalf("对照班级 %q 本身应可解析，实际 %+v", c.body, data)
+		}
+		if int64(query.ClassNo) != int64(data.ClassNo) {
+			t.Errorf("路径分裂：%q 查询侧 classNumber=%d，数据侧 ClassNo=%d（%q）",
+				c.compound, query.ClassNo, data.ClassNo, c.body)
 		}
 	}
 }
