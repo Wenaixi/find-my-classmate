@@ -51,13 +51,6 @@ func newTestStoreWithDir(t *testing.T, files map[string]string, now func() time.
 	return store, dir
 }
 
-// newTestStoreWithClock 构造可注入时钟的 studentStore：
-// 探测节流与失败冷却的测试沿同一条时间线推进，不再从外部改写可写字段。
-func newTestStoreWithClock(t *testing.T, files map[string]string, now func() time.Time) *studentStore {
-	t.Helper()
-	store, _ := newTestStoreWithDir(t, files, now)
-	return store
-}
 
 func TestLoadStudentsDedup(t *testing.T) {
 	dir := t.TempDir()
