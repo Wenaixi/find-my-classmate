@@ -106,22 +106,11 @@ describe("gradeDomain", () => {
     }
   });
 
-  // 编译器只强制「列表里的元素属于 Grade」，拦不住「Grade 里有、列表里缺」：
-  // 把「高四」加进 Grade 联合类型却漏了 gradeValues，tsc 通过、
-  // 全部用例通过（实测），而 parseQuery("高四") 已不再识别新年段——
-  // 正是 CLAUDE.md 记录的那类「两端一致地不认识、对拍两边同样通过」的裂缝。
-  // 契约语料只在恰好含有该年段样本时才拦得住（当前 高一9/高二7/高三3 条），
-  // 因此这里不依赖语料，改为直接枚举 Grade 联合类型的全集。
-  const gradeUnion: Grade[] = ["高一", "高二", "高三"];
-  it("Grade 联合类型的每个成员都在年段值域中声明", () => {
-    for (const grade of gradeUnion) {
-      expect(gradeDomain.values).toContain(grade);
-    }
-  });
-
-  it("年段值域没有 Grade 之外的成员", () => {
-    for (const grade of gradeDomain.values) {
-      expect(gradeUnion).toContain(grade);
-    }
-  });
+  // 「Grade 联合与年段值域互相完整」这条反向完整性由编译器强制：
+  // query.ts 的 GradeDomainGap 检查在 Grade 联合出现 gradeValues 未声明的年段时
+  // 直接报 tsc 错误并点名缺失项。此前这里用一份手抄的 gradeUnion 数组承担，
+  // 而手抄副本在 Grade 联合追加成员时不会跟着长——实测加「高四」后
+  // tsc 干净、全部用例通过，parseQuery 已不再识别该年段。
+  // 那两条断言因此一并删除：它们有判别力但方向反直觉（gradeValues 增长而手抄
+  // 副本没跟上时反而翻红，惩罚一次正确的扩展），而在真正关心的裂缝上恒绿。
 });

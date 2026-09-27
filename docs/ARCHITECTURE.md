@@ -209,7 +209,7 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 | --- | --- |
 | main.go | 启动自举、装配（newHandlerChain/newHandlerChainWith/buildServer）；链顺序的唯一实现是 `newHandlerChainWith` |
 | logging.go | 日志级别与写出（logInfof/logErrorf/openLog/resolveLogDir）；`FMC_LOG_LEVEL` 的解析与目录决议。横切消费方为 data.go、api.go、accessLog |
-| api.go | API 路由与 HTTP 翻译（buildMux(store, version)/searchHandler/healthHandler）：参数取值、错误码映射、JSON 写出；不含查询语义 |
+| api.go | API 路由与 HTTP 翻译（buildMux(store, version) 注册静态资源、health 内联闭包与 searchHandler）：参数取值、错误码映射、JSON 写出；不含查询语义 |
 | errors.go | API 错误码常量表（not_found/method_not_allowed/invalid_limit/invalid_offset/invalid_query/data_unavailable/rate_limited） |
 | config.go | 后端契约常量（端口/分页/上限/限流/缓存头），与 src/config.ts 对拍 |
 | data.go | 数据加载、规范化、去重、热重载（view 唯一只读入口 + Size 只读计数）；探测节流与失败冷却的时机判定收敛为 recoveryDue 单点；`errNoRoster()` 是「无任何年段文件」判定与运维指引的唯一来源，年段清单从 knownGrades 生成，扩展年段时指引自动跟随 |
