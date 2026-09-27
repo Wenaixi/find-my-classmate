@@ -87,6 +87,19 @@ func (l *rateLimiter) sweepLocked(now time.Time, idleTTL time.Duration) {
 	}
 }
 
+// hasBucket 报告指定键的桶当前是否存在，是淘汰行为的只读观测点。
+//
+// 桶的存亡没有外部可观测面：淘汰发生在下一次放行的路径内，而新桶创建会让任何
+// 基于请求计数的断言失真。本方法让淘汰能被直接断言，使测试不必直读 buckets
+// 并手动加锁——那是全仓唯一一处测试操作生产锁的地方。
+// 私有：仅本模块的测试使用，不进入限流器的对外接口。
+func (l *rateLimiter) hasBucket(key string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	_, ok := l.buckets[key]
+	return ok
+}
+
 // rateLimitWith 组装限流中间件：每 IP 每秒 capacity 个请求的突发窗口
 // （capacity 即令牌容量）。429 响应为 JSON（与全站错误格式一致），
 // Retry-After 输出整数秒（RFC 9110）。

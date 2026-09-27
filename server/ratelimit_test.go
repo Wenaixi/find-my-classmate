@@ -187,9 +187,9 @@ func TestFillTokensMultipleIntervals(t *testing.T) {
 // 文件）——它构造 newRateLimiter、不触碰任何名单符号，归属错误让改限流器的人
 // 要去名单测试文件里找。
 //
-// 直读 limiter.buckets 并手动加锁是刻意的：桶的淘汰没有外部可观测面，淘汰动作
-// 发生在下一次放行的路径内，且新桶创建会让任何基于请求计数的断言失真。这是全仓
-// 唯一一处测试操作生产锁的地方，因此连同上面的归属修正一并记在此处。
+// 桶的存亡通过私有观测点 hasBucket 断言，不再直读 buckets 并手动加锁——
+// 那曾是全仓唯一一处测试操作生产锁的地方。淘汰行为本身仍由变异实验证明承重：
+// 关掉 allow 里的惰性淘汰分支后本用例翻红。
 func TestRateLimitAutomaticSweep(t *testing.T) {
 	clock := &fakeClock{current: time.Unix(0, 0)}
 	limiter := newRateLimiter(60, time.Second, clock.Now)
@@ -200,16 +200,10 @@ func TestRateLimitAutomaticSweep(t *testing.T) {
 	clock.current = clock.current.Add(15 * time.Minute)
 	_, _ = limiter.allow("9.9.9.9")
 
-	limiter.mu.Lock()
-	_, hasOld1 := limiter.buckets["1.2.3.4"]
-	_, hasOld2 := limiter.buckets["5.6.7.8"]
-	_, hasNew := limiter.buckets["9.9.9.9"]
-	limiter.mu.Unlock()
-
-	if hasOld1 || hasOld2 {
-		t.Fatalf("超过空闲时间的旧桶应被自动淘汰，实际仍在: 1.2.3.4=%v, 5.6.7.8=%v", hasOld1, hasOld2)
+	if limiter.hasBucket("1.2.3.4") || limiter.hasBucket("5.6.7.8") {
+		t.Fatal("超过空闲时间的旧桶应被自动淘汰")
 	}
-	if !hasNew {
+	if !limiter.hasBucket("9.9.9.9") {
 		t.Fatal("新访问的 IP 桶应正常存在")
 	}
 }
