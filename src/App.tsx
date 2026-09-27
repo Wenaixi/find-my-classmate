@@ -7,14 +7,24 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import siteConfig from "./site.config";
 import { MAX_QUERY_LENGTH, PAGE_SIZE } from "./config";
 import { present } from "./lib/searchReducer";
+import type { SearchSessionApi } from "./lib/searchSession";
 
 const ResultList = lazy(() => import("./components/ResultList"));
 const StatusOrb = lazy(() => import("./components/StatusOrb"));
 
-export function App() {
+// AppProps 是页面组装的唯一可注入面：只暴露查询会话所需的 api，
+// 不暴露控制器或展示派生——那些仍由 App 自己组装。
+// 依赖此前硬编码在函数体内（searchApi 写死在调用点），外部无法替换，
+// 页面装配的全部 JSX 接线因此零渲染断言（唯一 import 是 main.tsx:3）。
+// 默认值即 production 实现，main.tsx 无需改动。
+export interface AppProps {
+  api?: SearchSessionApi;
+}
+
+export function App({ api }: AppProps = {}) {
   // 查询会话深模块：state（渲染派生）+ controller（意图动作）两面消费，
   // 编排（守卫/判别联合/竞态）全部收进模块，组件不再理解 reducer/session。
-  const { state, controller } = useSearchController({ pageSize: PAGE_SIZE, api: { search: searchApi } });
+  const { state, controller } = useSearchController({ pageSize: PAGE_SIZE, api: { search: api?.search ?? searchApi } });
   const { query, items, total, hasMore, state: uiState, statusText, loadingMore, loadMoreError, isComposing } = state;
   // 输入交互语义（IME 组合守卫、Enter 提交、Escape 清空）由 useSearchInput 统一收口：
   // 组件只透传回调，不再手写组合判断——该逻辑此前内联在此处且零测试覆盖。
