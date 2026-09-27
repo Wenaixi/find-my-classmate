@@ -2,6 +2,36 @@
 
 本文件记录 FindMyClassmate 的版本变更。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 修复
+
+- **跨语言查询镜像在「年段+溢出班级」形态上分叉**：`query.ts` 的年级+班级连写分支中，班级号溢出（`classNo < 0`）时直接 `continue`，`parsed.grade` 从未赋值；Go 端同一形态先写 `query.Grade` 再把 token 降级为姓名条件。实测同一输入「高二99999999999999999999班」：Go 端 `grade="高二"`，修复前端为 `undefined`。**该分叉此前无用户可见症状**——`hasNameCondition` 只消费 `nameTokens`，而两端 `nameTokens` 一致——但它是同一条规则的两个镜像实现对不上的实证，且因契约语料缺该形态而长期无从发现。修复后两端五组输入逐行一致。
+
+### 测试
+
+- 契约语料新增两条：纯溢出数字（两端都判溢出时结果须一致）、年段+溢出班级连写（与既有的「高一0班」同构，锁住保留年级条件的降级路径）。新增用例使前端 `query.test.ts` **先翻红后转绿**，Go 端因本就是事实源直接通过——红绿信号精确指向单一根因。
+
+### 架构深化
+
+- **日志从装配层独立为 `logging.go`**：`logInfof` / `logErrorf` / `level` / `parseLogLevel` / `openLog` / `resolveLogDir`（约 54 行）此前住在 `main.go`，却被 `data.go`（热重载）、`api.go`（数据不可用）与 `accessLog`（每条请求）三个 module 消费——改日志行为必须先读懂整个装配流程。`main.go` 从 227 行降至 167 行，只余自举装配、中间件链与 Server 配置三类职责。**不引入日志 interface**：当前只有标准库一种实现，凭空造接缝是负债而非加深。
+- **`web.go` 悬空注释归位**：`serveCachedStatic` 的行为说明（存在性判定与内容读取合一、immutable 只在资源存在时设置）此前夹在 `frontendHandlerWithFS` 与 `acceptsGzip` 之间，既不属于前者也不属于后者，真实实现在 40 行之后。注释已移回其描述的函数头。
+
+### 架构核实（六条候选，四条被证伪撤销）
+
+本轮架构评审产出六条候选，逐条以 `file:line` 证据与变异实验复核后**四条撤销**。记录在此以免后续评审重复提出：
+
+- **「数据不可用」需要统一 owner —— 撤销**。`/api/health` 返回 503 degraded 与 `/api/search` 返回 500 data_unavailable 的差异是刻意且正确的：探针要的是存活视图，搜索要的是业务错误码。`main_test.go` 已分别为两者锁定断言，不是遗漏而是已固定的差异。
+- **客户端 IP 需要 XFF adapter —— 撤销**。README 已把反代边界与交付方案写明（反代层限流 + 可信来源白名单解析 XFF + 防火墙限制端口），`ip.go` 与 README 两处都声明 XFF 属反代层职责。部署形态为容器直接暴露 3078，**不存在第二个 adapter**——为一个不存在的变化点造接缝是负债。
+- **前端展示 module 应收掉 —— 撤销删除，改判加深**。`useSearchInput` 形态浅（44 行、interface 等宽于实现），但变异实验证明两条 IME 守卫**双双承重**：分别移除 `!nativeIsComposing` 与 `!isComposing` 后，`useSearchInput.test.tsx` 各有恰好一条用例翻红。删除测试的答案不是「复杂度消失」而是「不变量失守」，该 module 该加深而非删除。`StatusOrb` 同理（注释自承零承重，但 lazy 挂载与 Suspense 边界不在其内）。
+- **静态资源协商需从传输中拆出 —— 撤销**。`TestStaticResponseNegotiationIsConsistent` 已逐一断言 raw 200 / gzip 200 / 304 三处的 `Vary`，`web_test.go` 另锁 q 值规则（含子串匹配变异实验记录）。协商一致性已是承重断言。
+- 另一条侦察结论「signal 归属跨 module 分裂」经核实**为误报**：`api.ts` 的 `searchApi` 不接受调用方 signal 是正确归属（竞态由 `searchSession` 内部 controller 承担），注释已写明。
+
+### 验证
+
+- 前端 142 → **144 用例**；后端全量（`go clean -testcache`）、`go vet`、`gofmt -l` 均无输出；`npm run typecheck`（`tsc -b`）通过；`npm run build` 产物正常嵌入。
+- 冒烟（真实 2091 人名单）：`/api/health` 200 ok；「高一3班」total=54 分页正常；纯分隔符 `total=0`、降级「一一班」`total=0` 两条已知不变量未回归；400/404/405 三条错误码正确；安全响应头齐全；静态资源 `gzip;q=0` 正确不压缩、`gzip` 返回压缩并带 `Vary` 与 immutable 缓存。
+
 ## [v0.10.4] - 2026-09-27
 
 ### 修复
