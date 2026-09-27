@@ -95,6 +95,49 @@ describe("searchApi error classification", () => {
     expect(opts.signal).toBeDefined();
   });
 
+  // 上方那条只断言 signal 非空——传的是会话的还是超时的它不管，
+  // 正是缺陷能长期存活的原因。以下两条锁住「调用方 signal 真的抵达传输层」。
+  //
+  // 缺陷事实：SearchSessionApi.search 声明四参含 signal，perform 也确实传了，
+  // 而 searchApi 只有三个形参，第四个参数在接口处静默丢弃，
+  // fetch 拿到的仍是 AbortSignal.timeout——会话 abort 只让 perform 判定 stale，
+  // 底层 HTTP 请求继续跑满超时。
+  it("把调用方 signal 交给 fetch，而不是只用自己的超时信号", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => ({ items: [], total: 0, limit: 10, offset: 0, hasMore: false }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const caller = new AbortController();
+    await searchApi("张三", 10, 0, caller.signal);
+
+    const [, opts] = fetchMock.mock.calls[0];
+    // 合并后的信号在被中止时必须一并中止：调用方 signal 是真实取消语义
+    caller.abort();
+    expect(opts.signal.aborted).toBe(true);
+  });
+
+  it("调用方中止后请求在传输层真正终止", async () => {
+    let transportAborted = false;
+    const fetchMock = vi.fn((_url: string, init: RequestInit) => {
+      return new Promise<never>((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => {
+          transportAborted = true;
+          reject(new Error("aborted"));
+        });
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const caller = new AbortController();
+    const pending = searchApi("张三", 10, 0, caller.signal);
+    caller.abort();
+    await pending.catch(() => undefined);
+
+    expect(transportAborted).toBe(true);
+  });
+
   // 原「Safari < 17.4」用例在此：它调用 searchApi，而 searchApi 裸用
   // AbortSignal.timeout、不经过 combineSignals，把 AbortSignal.any 打成
   // undefined 对它毫无影响——降级分支从未被触及。真实覆盖见下方
