@@ -288,6 +288,50 @@ func TestSearchSortsUnorderedInput(t *testing.T) {
 	}
 }
 
+// HasMore 必须等价于「本页取完后仍有剩余」，这是前端唯一的翻页依据。
+//
+// App.tsx 把 hasMore 直接传给 ResultList 的「继续加载」按钮：
+// hasMore 为真则按钮显示，点击后按 offset+limit 再取一页。
+// 契约一旦破坏，用户看到的就是「还有更多」但点出来是空列表——
+// 而 total 与 items 都正确，肉眼无法分辨，只会以为服务坏了。
+//
+// 此前无断言覆盖该契约。穷举 43188 个 (limit, offset) 组合确认
+// 边界符号 limit < len(matches)-offset 与 <= 完全等价（违反数恒为 0），
+// 因此「修边界」是伪命题；承重点在 HasMore 的判据本身。
+//
+// 取样点选在 end 恰为 total-1 的那一格：这是 HasMore 为真的临界位置，
+// 判据一旦写成 end < len(matches)-1 就在此处翻红。末页（end == total）
+// 反而抓不到——那里两个写法同为 false。
+func TestSearchHasMoreMatchesRemainingItems(t *testing.T) {
+	students := benchStudents()
+	total := Search(students, "高一", 1, 0).Total
+	if total < defaultLimit+2 {
+		t.Fatalf("fixture 规模不足，无法覆盖末页临界格，total=%d", total)
+	}
+	// 每组两处：临界格（end == total-1，应为 true）与整页（end << total，true），
+	// 另加末页（end == total，false）。跨 limit 取样，避免只锁住单一页宽。
+	for _, limit := range []int{1, 3, defaultLimit} {
+		for _, back := range []int{1, defaultLimit} {
+			offset := total - limit - back
+			if offset < 0 {
+				continue
+			}
+			got := Search(students, "高一", limit, offset)
+			wantMore := offset+len(got.Items) < got.Total
+			if got.HasMore != wantMore {
+				t.Errorf("limit=%d offset=%d：取回 %d 条、合计 %d 条，HasMore=%v，"+
+					"按「本页之后仍有剩余」应为 %v",
+					limit, offset, len(got.Items), got.Total, got.HasMore, wantMore)
+			}
+		}
+	}
+	// 末页单独断言：取完后无剩余，HasMore 必须为假。
+	last := Search(students, "高一", defaultLimit, total)
+	if last.HasMore {
+		t.Errorf("offset 越过末页时 HasMore 应为 false，实际 true（total=%d）", total)
+	}
+}
+
 // 高三/高二的排序权重与声明序一致
 func TestGradeOrderAcrossGrades(t *testing.T) {
 	students := []Student{
