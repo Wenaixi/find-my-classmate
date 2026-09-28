@@ -16,6 +16,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { createElement } from "react";
 import { App } from "./App";
 import type { Student } from "./types";
+import { MAX_QUERY_LENGTH } from "./config";
 
 // React 18 要求显式声明 act 环境，否则 act() 触发的更新不会在 act 内 flush。
 const actEnv = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -142,13 +143,22 @@ describe("App 装配接线", () => {
     expect(container.querySelector("[data-od-id=results-section]")).toBeNull();
   });
 
-  // 输入框的 maxLength 来自 config.ts 的 MAX_QUERY_LENGTH（契约常量，
-  // 与后端 maxQueryRunes 对拍）。它是 JSX 接线的一部分，编译期只保证
-  // 属性名存在，不保证值来自正确的声明。
+  // 输入框的 maxLength 来自 config.ts 的 MAX_QUERY_LENGTH。
+  //
+  // 此断言承重的是「App 接的是那份声明」这一层接线。此前此处是
+  // expect(input.maxLength).toBeGreaterThan(0)：注释声称接的是契约常量，
+  // 实际任何正数都通过——变异 App.tsx 把属性写成内联字面量后，
+  // 本文件用例全绿。
+  //
+  // 与常量对拍分工（两者不构成恒真）：常量改值时两端同步变化，
+  // 对拍（server/contract_constants_test.go 读本文件比对后端
+  // maxQueryRunes）仍会失败；App 若改为内联字面量，本条立即翻红。
+  // 它覆盖不到的是「App 与常量各写一遍相同数字」，那需要把 JSX 里的
+  // 字面量也纳入对拍，属另一条接缝，不在本用例范围。
   it("输入框的长度上限接的是契约常量", () => {
     const container = mountApp(fakeApi());
     const input = container.querySelector("#query") as HTMLInputElement;
-    expect(input.maxLength).toBeGreaterThan(0);
+    expect(input.maxLength).toBe(MAX_QUERY_LENGTH);
   });
 
   it("提交按钮初始可用，空查询时清空按钮不渲染", () => {
