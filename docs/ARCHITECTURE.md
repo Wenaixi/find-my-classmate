@@ -85,9 +85,10 @@
   两者必须一致——`querySeparators` 会把中英文逗号、顿号、加号替换为空格，
   若判空只剥空白则纯分隔符输入既非空查询也无条件可施加
 
-注意判空**不可**简化为 `len(NameTokens) == 0`：契约语料中 30 条合法查询
+注意判空**不可**简化为 `len(NameTokens) == 0`：契约语料中有相当一部分合法查询
 （高1 / 18班 / 六班 / 高二三班等）nameTokens 为空但带年级或班级条件。
-（该数字随语料增删会变，此处仅供定位量级；语义由语料条目本身逐条守住。）
+此处刻意不写具体条数——它在语料增删时必然漂移，语义由语料条目本身逐条守住；
+需要统计当前量级时读 `docs/query-contract.json` 的 cases 数组。
 
 解析契约的**可执行事实源**是 `docs/query-contract.json`：`src/lib/query.test.ts` 与 `server/contract_test.go` 各自消费同一份语料，任何一侧漂移都会在两侧测试中同时失败。语料中的期望值以 Go 端实测结果为准。
 
@@ -209,7 +210,7 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 | --- | --- |
 | main.go | 启动自举、装配（newHandlerChain/newHandlerChainWith/buildServer）；链顺序的唯一实现是 `newHandlerChainWith` |
 | middleware.go | HTTP 中间件实现（accessLog/statusRecorder/securityHeaders/setSecurityHeaders）；链的相对顺序不由本文件决定，收敛在 main.go 的 newHandlerChainWith |
-| logging.go | 日志级别与写出（logInfof/logErrorf/openLog/resolveLogDir）；`FMC_LOG_LEVEL` 的解析与目录决议。横切消费方为 data.go、api.go、accessLog |
+| logging.go | 日志级别与写出（logInfof/logErrorf/openLog/resolveLogDir）；`FMC_LOG_LEVEL` 的解析与目录决议。横切消费方为 data.go（热重载与失败根因）、main.go（启动自举）、middleware.go 的 accessLog；api.go 零日志调用——它显式放弃消费根因，根因由 data.go 的 recordFailure 单点记录 |
 | api.go | API 路由与 HTTP 翻译（buildMux(store, version) 注册静态资源、health 内联闭包与 searchHandler）：参数取值、错误码映射、JSON 写出；不含查询语义 |
 | errors.go | API 错误码常量表（not_found/method_not_allowed/invalid_limit/invalid_offset/invalid_query/data_unavailable/rate_limited） |
 | config.go | 后端契约常量（端口/分页/上限/限流/缓存头），与 src/config.ts 对拍 |
@@ -253,7 +254,7 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 
 ## 11. 测试策略
 
-- 前端：Vitest——查询契约（query.test.ts）、状态机（searchReducer.test.ts）、竞态编排（searchSession.test.ts）、交互语义与接线（useSearchInput.test.tsx，7 条挂载测试）、控制器 hook 壳（useSearchController.mount.test.tsx）
+- 前端：Vitest——查询契约（query.test.ts）、状态机（searchReducer.test.ts）、竞态编排（searchSession.test.ts）、交互语义与接线（useSearchInput.test.tsx）、页面装配接线（App.mount.test.tsx）、控制器 hook 壳（useSearchController.mount.test.tsx）
 - 纯逻辑测试默认 node 环境，需要 DOM 的测试用文件头 `@vitest-environment jsdom` 单独声明；挂载测试须置 `IS_REACT_ACT_ENVIRONMENT=true`，否则 `act()` 的更新不会 flush，会读到假阴性的旧快照
 - 后端：go test——查询执行与数据加载（search_test.go）；限流回补的极端值由纯函数 `fillTokens` 直测（时钟回拨、容量钳制、连续量不取整）
 - **测试 fixture 的外部 seam**：需要模拟名单文件变化时，测试显式持有 fixture 目录；不得从 `studentStore` 私有字段反向读取目录。生产调用继续只经 `view()` 与 `Size()` 访问名单视图。
@@ -267,7 +268,7 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 - 解析双端一致：解析规则改动必须前后端同步，测试兜底；执行语义单端（后端）
 - 隐私优先：任何新字段、新存储、新接口都要过隐私红线检查
 - 单产物优先：新增功能优先考虑"仍是一个二进制"的形态
-- 本文档是唯一架构文档：结构性变更必须回写本文
+- **活文档按可过期速度分工，不按主题切**：本文档只答「module 划分与接缝为什么是这样」，领域术语的定义在 `CONTEXT.md`（更慢变），纪律与历轮评审结论在 `CLAUDE.md`（最快变，只追加）。同一事实只在一处存在，其余位置指向它——三处各写一遍时，失真会自我复制。本文档是**唯一的架构文档**，结构性变更必须回写本文；术语变更只改 `CONTEXT.md` 并在此处指向。
 
 架构决策记录（ADR）存放于 `docs/adr/`，记录"已评估但未采纳"的方案及其重启条件，
 避免后续架构评审重复提议同一项。当前：

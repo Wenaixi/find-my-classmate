@@ -16,14 +16,18 @@ wire DTO（仅 `name`/`grade`/`class`），使隐私红线由类型形状保证�
 ## 理由（附实测证据）
 
 1. **隐私已由类型强制。** `NameKey`、`ClassNo`、`GradeIdx` 三个内部字段均已带 `json:"-"`
-   （search.go:26-33）。派生字段无法被意外序列化——漏写标签才会暴露，而该情形已被
-   `main_test.go:101` 的 `TestSearchResponseKeys` 覆盖：它逐一断言 `NameKey`/`Name`/
+   （`search.go` 的 `Student` 类型声明）。派生字段无法被意外序列化——漏写标签才会暴露，
+   而该情形已被 `main_test.go` 的 `TestSearchResponseKeys` 覆盖：它逐一断言 `NameKey`/`Name`/
    `ClassName`/`Grade`/`ClassNo`/`GradeIdx` 六个字段名均**不**出现在响应中。
    `serialize_test.go` 另有一层直序列化断言，双重覆盖。
 
-2. **`newStudent` 纪律无实际绕过路径。** 派生字段只在 `newStudent`（search.go:38）写入，
+2. **`newStudent` 纪律无实际绕过路径。** 派生字段只在 `search.go` 的 `newStudent` 写入，
    只在 `search.go` 的排序比较中读取。构造 `Student` 并传入 `Search` 的路径只有
-   `loadStudents`（data.go:93），而它正是使用 `newStudent` 的那一条。
+   `data.go` 的 `loadStudents`，而它正是使用 `newStudent` 的那一条。
+
+   指向代码位置一律用符号名而非行号：本文件原先写 `search.go:26-33`、`main_test.go:101`、
+   `search.go:38`、`data.go:93`，四处全部漂移（最大漂移 20 行），按旧坐标已找不到对应代码。
+   行号是坐标不是身份，符号名才是——这与 CLAUDE.md「注释不写会漂移的行号引用」一致。
 
 3. **成本真实、收益边际。** 拆分需改动 9 个文件，其中包含 CLAUDE.md 记录的
    零分配热路径（整年段查询 819µs/1762 allocs → 34.8µs/7 allocs）。
