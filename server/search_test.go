@@ -444,7 +444,7 @@ func TestGradeValueDomainFollowsKnownGrades(t *testing.T) {
 	if grade, classPart, ok := splitGradeClass("高四一班"); !ok || grade != Grade("高四") || classPart != "一" {
 		t.Errorf("splitGradeClass(高四一班) = (%q, %q, %v)，期望 (高四, 一, true)",
 			grade, classPart, ok)
-}
+	}
 
 	// 加载侧：标题校验经 parseGrade，必须放行合法的新年段名单
 	dir := t.TempDir()
