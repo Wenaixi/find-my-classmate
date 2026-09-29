@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createSearchOrchestrator } from "./useSearchController";
+import { errorMessage } from "./searchReducer";
 import type { SearchResponse } from "../types";
 
 const okResponse = (over: Partial<SearchResponse> = {}): SearchResponse => ({
@@ -45,10 +46,17 @@ describe("createSearchOrchestrator", () => {
     await p1;
 
     // 双向断言之一（正向）：stale 不得把状态推进 error。
-    // 变异态下此处为 "error" 且 statusText 是失败文案，本条立即翻红。
+    // 变异态下此处为 "error"，本条立即翻红。
     const settled = orch.getState();
     expect(settled.state).not.toBe("error");
-    expect(settled.statusText).not.toContain("失败");
+
+    // 状态文案也不得是错误文案。
+    // 断言具体文案而非「失败」二字：COPY.error 是「查询没有完成，请稍后重试」，
+    // 断言不含「失败」会恒真通过——恒真断言比没有断言更危险，它提供虚假的覆盖感。
+    // 此处断言「文案与 error 态下算出的文案不同」，任何让 stale 落到错误文案的
+    // 实现都会使其相等。
+    const errorText = errorMessage(new Error("stale leak"));
+    expect(settled.statusText).not.toBe(errorText);
 
     // 双向断言之二（反向）：也不能停在 loading 态。stale 响应抵达后本次查询
     // 已经结束，界面不得继续显示「正在检索」。只断这一侧的话，把

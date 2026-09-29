@@ -9,11 +9,15 @@ interface ApiStudent {
   class?: unknown;
 }
 
-// decodeItem 不在前端复制年段取值域：后端 knownGrades 是唯一事实源
-// （CLAUDE.md 承诺扩展年段只需在 knownGrades 末尾追加）。若前端硬编码
-// 一份年段清单，后端新增年段后前端会把全部响应判为 invalid-response，
+// decodeItem 不在前端复制年段取值域：后端 knownGrades 是规范名的唯一事实源。
+// 若前端硬编码一份年段清单，后端新增年段后前端会把全部响应判为 invalid-response，
 // 表现为"后端数据正常但全站查询失败"。因此这里只校验 grade 是非空字符串，
 // 值域正确性由后端保证；空串、缺失与非字符串仍被拒绝。
+//
+// 注意「扩展年段」的义务不止 knownGrades 一处：前端 types.ts 的 Grade 联合与
+// query.ts 的 gradeValues 也须同步（加别名时两端 gradeAliases 亦然），
+// 共四处。清单与各处的强制机制见 docs/ARCHITECTURE.md 的年段值域小节，
+// 此处不复述——清单会随代码增删而腐化。
 
 // decodeItem 把一条 wire 记录收敛为合法领域形状，或返回 null 表示不可接受。
 // 只接受 canonical class 单字段：缺字段、类型错误与空串都不静默降级，

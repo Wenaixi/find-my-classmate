@@ -8,7 +8,13 @@ import (
 
 // C6：错误码→HTTP 状态的配对散落在各发射点手写（api.go 6 处 + ratelimit 1 处），
 // errStatus 单表使其唯一化：发射点只传码，writeError 统一查表带出状态。
-// 本测试锁住 7 个错误码与状态的绑定，防止增删码时静默失配（前端按 code 分文案）。
+// 本测试锁住每个错误码与状态的绑定，防止增删码时静默失配。
+//
+// 注意前端并不按错误码分文案：src/lib/searchReducer.ts 的 errorMessage
+// 只读 HTTP status 分四档，cause.code 仅用于前端自造的 "network" 码
+// （后端下发的 invalid_query / rate_limited 等码在 src/ 下零消费）。
+// 错误码仍是契约的一部分——它是对外 wire 契约且被本测试锁定，
+// 但「前端按 code 分文案」不是事实，不要据此推断前端依赖某个码。
 
 func TestErrStatusMapping(t *testing.T) {
 	want := map[string]int{

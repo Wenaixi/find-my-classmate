@@ -109,14 +109,17 @@ export function shouldScrollToResults(state: SearchState): boolean {
 }
 
 // 界面提示派生：查询状态到「这条状态该禁用提交 / 显示哪种提示色 / 是否渲染加载指示」的映射。
-// 此前这三项各自绕开 resultSectionOf 直读状态字面量：App.tsx:102 直比 "loading" 取禁用态，
-// App.tsx:108 把原始枚举喂给 data-state 与 StatusOrb，StatusOrb.tsx:5 再直比一次，
-// styles.css:87-88 第四、第五次镜像同一批字面量。
+// 归位前这三项各自绕开 resultSectionOf 直读状态字面量：App 曾把原始枚举喂给
+// data-state 与 StatusOrb，StatusOrb 再直比一次，样式表另有两份镜像。
 // 变异实验（2026-09-26 架构评审第四轮）证明这三条支路零承重：
-// 把 App.tsx 的 disabled 改成 false、把 data-state 与 orb 状态硬编码、
+// 把 App 的 disabled 改成 false、把 data-state 与 orb 状态硬编码、
 // 让 StatusOrb 对任何状态都渲染，132 条用例全部仍然通过。
-// 新增一个查询状态时，编译器会因 Record 穷尽性强制在此补齐，
-// 而不再依赖改开发者记得同步四个位置的字面量。
+// 归位后界面只消费本函数的派生结果，新增查询状态时不再依赖改开发者
+// 记得同步多个位置的字面量——但**本函数自身没有编译期强制**，
+// 它是三元表达式，新增状态会静默落进 muted/false 分支。
+// 真正受 Record 穷尽性强制的是文件顶部的 COPY 表（缺键即 TS2741）。
+// 本文件底部的 SearchStateExhaustive 检查把「状态集合已变」这件事
+// 显式化，使新增状态时至少有一处必须被审视。
 export type StatusTone = "muted" | "ink" | "dim";
 
 export interface StatusHint {
@@ -248,3 +251,30 @@ export function searchReducer(state: SearchControllerState, action: SearchAction
       return { ...state, isComposing: false };
   }
 }
+
+// 声明式状态全集：把「一共有哪些查询状态」从各处的 if 链与测试里的手抄数组
+// 收成一处，供下方穷尽性检查与消费方派生。
+//
+// 必须用 as const 而非 SearchState[]：显式标注会把字面量拓宽回 SearchState，
+// 于是下方 Exclude 恒为 never、检查形同虚设——这正是 types.ts 的 GradeDomainGap
+// 注释里记着的同一条教训。
+const searchStateValues = ["idle", "editing", "loading", "success", "duplicate", "empty", "error"] as const satisfies readonly SearchState[];
+
+// SearchState 联合里出现 searchStateValues 未声明的状态时报错。
+//
+// 为什么需要它：COPY（文件顶部）是 Record<SearchState, string>，缺键会报 TS2741，
+// 但那只是状态文案一处受强制。getState 与 resultSectionOf 都是 if 链，
+// 新增状态时二者静默落 default 分支（getState 落 duplicate、resultSectionOf 落 null
+// 即结果区完全不渲染），编译器一声不吭。deriveStatusHint 同样是三元表达式。
+// 本检查把这些「无人审视」的派生点汇成一处：状态集合一变，这里必须被改。
+//
+// 报错形态刻意带出缺失项本身（缺 "pending" 时退化为 { missing: "pending" }），
+// 而不是让 Exclude 得 never 后报一条无从解读的 never 不兼容。
+//
+// 检查必须落在非测试文件：.dockerignore 排除 src/**/*.test.ts，
+// 放进测试文件则容器镜像构建的 tsc -b 不再检查它，会造出一条「本地绿、镜像不查」
+// 的隐形防线。searchStateValues 在生产中无人消费，但 tsconfig.app.json 未开
+// noUnusedLocals，声明本身不报错。
+type SearchStateGap = Exclude<SearchState, (typeof searchStateValues)[number]>;
+const searchStateExhaustive: SearchStateGap extends never ? true : { missing: SearchStateGap } = true;
+void searchStateExhaustive;
