@@ -75,7 +75,7 @@ func loadStudents(dir string) ([]Student, error) {
 		if err := json.Unmarshal(payload, &document); err != nil {
 			return nil, fmt.Errorf("解析%s数据失败: %w", grade, err)
 		}
-		if document.Title == "" || parseGrade(document.Title) != grade {
+		if document.Title == "" || parseGradeInTitle(document.Title) != grade {
 			return nil, errors.New("文件名与年级标题不一致")
 		}
 		if document.Roster == nil {

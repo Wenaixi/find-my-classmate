@@ -101,14 +101,18 @@ export function normalizeName(value: string): string {
   return value.replace(goSpace, "").toUpperCase();
 }
 
-// parseGrade 与 Go 端 search.go 语义一致：子串匹配（已是班级连写的 token 由 splitGradeClass 优先精确解析）。
+// parseGrade 与 Go 端 search.go 的 parseGradeInToken 语义一致：精确匹配。
+//
+// 曾用子串匹配（token.includes），与 Go 端同样会把「高一鸣」这类含年段串的
+// 姓名读成年段条件，使姓名条件被吞掉。Go 端已把标题侧（子串）与查询侧（精确）
+// 拆成两个函数；前端没有标题校验的消费方，故只需这一个精确语义。
 // 遍历声明的年段值域而非硬编码比较：扩展年段只需在 gradeValues / gradeAliases 追加。
 function parseGrade(token: string): Grade | undefined {
   for (const grade of gradeValues) {
-    if (token.includes(grade)) return grade;
+    if (token === grade || token === grade + "班") return grade;
   }
   for (const [alias, grade] of gradeAliases) {
-    if (token.includes(alias)) return grade;
+    if (token === alias || token === alias + "班") return grade;
   }
   return undefined;
 }

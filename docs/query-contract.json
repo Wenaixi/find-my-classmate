@@ -313,9 +313,46 @@
       "classNumber": null
     },
     {
+      "$comment": "曾被锁成缺陷行为：token 含年段子串但不是纯年段时，年段子串匹配把姓名条件整个吞掉，nameTokens 变空而 grade 被置位，一次精确姓名检索被放大成整个年段的全量返回（实测 Search(「高一鸣」) 返回同年级全部）。修复后年段在查询侧改为精确匹配（整个 token 即年段或年段+「班」），本条按姓名处理。标题侧仍用子串匹配（标题形如「福清一中2025级高一编班名单」，年段只是标题的一部分），两个语义已拆为 parseGradeInToken 与 parseGradeInTitle 两个函数。",
       "raw": "高一同学",
       "tokens": [
         "高一同学"
+      ],
+      "nameTokens": [
+        "高一同学"
+      ],
+      "grade": null,
+      "classNumber": null
+    },
+    {
+      "$comment": "缺陷的直接样本：真实存在的中文人名。修复前 parseGrade 的子串匹配命中「高一」，姓名条件被吞掉，Search 返回整个高一年级（实测探针 total=2 含无关的「张伟」）。与「高一同学」同族，前者是刻意构造的教学场景，此条是自然出现的姓名。",
+      "raw": "高一鸣",
+      "tokens": [
+        "高一鸣"
+      ],
+      "nameTokens": [
+        "高一鸣"
+      ],
+      "grade": null,
+      "classNumber": null
+    },
+    {
+      "$comment": "别名形态的同族样本：年段别名「高1」同样是子串匹配的受害者。修复后按姓名处理。",
+      "raw": "高1鸣",
+      "tokens": [
+        "高1鸣"
+      ],
+      "nameTokens": [
+        "高1鸣"
+      ],
+      "grade": null,
+      "classNumber": null
+    },
+    {
+      "$comment": "纯年段 token 仍必须被识别为年段（精确匹配的对照组，防止修复退化为「一律按姓名处理」）。带「班」后缀的形态同样成立。",
+      "raw": "高一班",
+      "tokens": [
+        "高一班"
       ],
       "nameTokens": [],
       "grade": "高一",

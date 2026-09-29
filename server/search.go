@@ -110,7 +110,7 @@ func tokenize(raw string) []string {
 // 运维提示正确列出该文件、gradeOrder 正确排位，但 loadStudents 报
 // 「文件名与年级标题不一致」拒绝加载合法名单，查询返回 total=0 且与
 // 真不存在的年段结果完全一致。跨语言对拍无法发现——两端一致地不认识新年段。
-// 本函数与 parseGrade 是年段派生的仅有两处 owner，改任一处都必须同步另一处。
+// 本函数与 parseGradeInToken 是年段派生的仅有两处 owner，改任一处都必须同步另一处。
 func splitGradeClass(token string) (grade Grade, classPart string, ok bool) {
 	// 注意长度语义：中文年段用 len() 量出的是字节数（6）而非字符数（2）。
 	// 因此「最长前缀」的比较必须用 utf8.RuneCountInString，
@@ -184,10 +184,17 @@ func normalizeName(value string) string {
 	return builder.String()
 }
 
-// parseGrade 按规范名与别名做子串匹配，与 knownGrades 声明的年段保持一致。
-// 不得回退为硬编码比较：data.go 的名单标题校验依赖本函数，
+// parseGradeInTitle 按子串匹配年段，供名单标题校验使用。
+//
+// 标题形如「福清一中2025级高一编班名单」——年段只是标题的一部分，
+// 因此这里必须是子串语义，与查询侧的精确匹配（parseGradeInToken）不同。
+// 两者曾共用一个子串实现，导致「高一鸣」这类含年段串的姓名在查询侧
+// 被读成年段条件，姓名条件消失、一次精确检索被放大成整个年段的枚举
+// （v0.10.1「高一0班不得放大成整年段全量」的同族实例）。
+//
+// 不得回退为硬编码比较：本函数是 data.go 标题校验的依赖，
 // 漏认识新年段会让合法名单文件被判为「文件名与年级标题不一致」而拒绝加载。
-func parseGrade(title string) Grade {
+func parseGradeInTitle(title string) Grade {
 	for _, g := range knownGrades {
 		if strings.Contains(title, string(g)) {
 			return g
@@ -195,6 +202,27 @@ func parseGrade(title string) Grade {
 	}
 	for _, a := range gradeAliases {
 		if strings.Contains(title, a.name) {
+			return a.grade
+		}
+	}
+	return ""
+}
+
+// parseGradeInToken 按精确匹配识别查询 token 里的年段。
+//
+// 「精确」指整个 token 就是年段本身，或年段后仅跟一个「班」字
+// （「高一」「高一班」）。更长的 token 一律不认：连写形态由
+// splitGradeClass 优先处理，其余含年段串的更长 token（如「高一鸣」、
+// 「高1同学」）是姓名，必须走姓名条件，否则姓名条件被吞掉，
+// 查询退化为整个年段的全量返回。
+func parseGradeInToken(token string) Grade {
+	for _, g := range knownGrades {
+		if token == string(g) || token == string(g)+"班" {
+			return g
+		}
+	}
+	for _, a := range gradeAliases {
+		if token == a.name || token == a.name+"班" {
 			return a.grade
 		}
 	}
@@ -234,7 +262,11 @@ func parseQuery(raw string) Query {
 			query.ClassNo = classNo
 			continue
 		}
-		if grade := parseGrade(token); grade != "" {
+		// 纯年段 token：整个 token 就是年段（或年段 + 「班」）。
+		// 这里用精确匹配而非子串：含年段串的更长 token（如「高一鸣」）是姓名，
+		// 须落到下方姓名分支。否则姓名条件被吞掉，一次精确检索被放大成
+		// 整个年段的全量返回（v0.10.1「高一0班不得放大成整年段全量」的同族实例）。
+		if grade := parseGradeInToken(token); grade != "" {
 			query.Grade = grade
 			continue
 		}

@@ -479,9 +479,16 @@ func TestGradeValueDomainFollowsKnownGrades(t *testing.T) {
 	// splitGradeClass 直接遍历 knownGrades 与 gradeAliases，无缓存正则需要重建。
 	t.Cleanup(func() { knownGrades = original })
 
-	// 查询解释：子串匹配必须认识新年段
-	if got := parseGrade("福清一中2025级高四编班名单"); got != Grade("高四") {
-		t.Errorf("parseGrade(高四标题) = %q，期望 高四", got)
+	// 标题侧：子串匹配必须认识新年段
+	if got := parseGradeInTitle("福清一中2025级高四编班名单"); got != Grade("高四") {
+		t.Errorf("parseGradeInTitle(高四标题) = %q，期望 高四", got)
+	}
+
+	// 查询侧：精确匹配必须认识新年段（含可选的「班」后缀）
+	for _, token := range []string{"高四", "高四班"} {
+		if got := parseGradeInToken(token); got != Grade("高四") {
+			t.Errorf("parseGradeInToken(%q) = %q，期望 高四", token, got)
+		}
 	}
 
 	// 年级+班级连写必须认识新年段
@@ -490,7 +497,7 @@ func TestGradeValueDomainFollowsKnownGrades(t *testing.T) {
 			grade, classPart, ok)
 	}
 
-	// 加载侧：标题校验经 parseGrade，必须放行合法的新年段名单
+	// 加载侧：标题校验经 parseGradeInTitle，必须放行合法的新年段名单
 	dir := t.TempDir()
 	body := `{"标题":"福清一中2025级高四编班名单","名单":{"1班":[{"姓名":"探测同学"}]}}`
 	if err := os.WriteFile(filepath.Join(dir, "高四.json"), []byte(body), 0o600); err != nil {
