@@ -327,6 +327,91 @@ func TestFailureCauseIsLoggedOncePerOutage(t *testing.T) {
 	}
 }
 
+// recordFailure 的 changed 判据有两个析取项，此前只有第一个被验证：
+// 「此前无失败记录」（lastFailErr == nil）由 TestFailureCauseIsLoggedOncePerOutage
+// 双向承重；「本次根因与上次不同」（错误文本比对）全仓零断言。
+// 变异实验（2026-09-30 第十六轮）：删掉后一项，go build 通过、
+// go clean -testcache + -count=1 全量测试零翻红。
+//
+// 既有用例为何没抓住：它的第二轮是「先恢复再损坏」，而恢复路径会清空 lastFailErr，
+// 于是走的是 nil 半支而非文本比对半支。要覆盖后者必须**不经过恢复**，
+// 在同一次持续不可用期间把根因从 A 换成 B。
+//
+// 可达路径：dataStamps 的指纹是 (size, modTime)，两种损坏数据的字节长度不同，
+// 因此写入即产生新指纹，越过 2 秒冷却后 reload 重试并以新根因再次 recordFailure。
+func TestFailureCauseIsLoggedAgainWhenRootCauseChanges(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFiles(t, dir)
+	clock := &fakeClock{current: time.Now()}
+	store, err := newStudentStore(dir, clock.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var buf bytes.Buffer
+	oldOut := log.Writer()
+	log.SetOutput(&buf)
+	defer log.SetOutput(oldOut)
+
+	// 第一次故障：JSON 语法错误，根因含「解析」。
+	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte("{broken"), 0o644)
+	clock.advance(30 * time.Second)
+	if _, err := store.view(); err == nil {
+		t.Fatal("损坏名单 view 应报错")
+	}
+	if !strings.Contains(buf.String(), "解析") {
+		t.Fatalf("首次故障应记录含根因的日志，实际 %q", buf.String())
+	}
+	firstCount := strings.Count(buf.String(), "\n")
+	if firstCount != 1 {
+		t.Fatalf("首次故障应只记录 1 条，实际 %d 条：%q", firstCount, buf.String())
+	}
+
+	// 同一次持续不可用期间更换根因：文件内容合法但标题指向高二，
+	// 与文件名「高一.json」不一致，触发 data.go 的标题校验失败。
+	// 字节长度与「{broken」不同 → 指纹变化 → 越过冷却后重试。
+	buf.Reset()
+	mismatched := `{"标题":"福清一中2025级高二编班名单","名单":{"1班":[{"姓名":"王皓轩"}]}}`
+	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(mismatched), 0o644)
+	clock.advance(30 * time.Second)
+	if _, err := store.view(); err == nil {
+		t.Fatal("标题不一致时 view 应继续报错")
+	}
+
+	after := buf.String()
+	if !strings.Contains(after, "标题") {
+		t.Errorf("根因变化后应记录新的根因（含「标题」），实际日志 %q", after)
+	}
+	// 恰好一条：根因变了不等于每次请求都记——同一次故障内的重复探针仍不得刷屏。
+	if count := strings.Count(after, "\n"); count != 1 {
+		t.Errorf("根因变化后应只补记 1 条，实际 %d 条：%q", count, after)
+	}
+
+	// 双向的反向：根因再次变化（回到解析错误）应再补记一条，
+	// 而根因未变则不再补记。合并断言会把两种实现的差异暴露出来。
+	buf.Reset()
+	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte("{"+"broken"), 0o644)
+	clock.advance(30 * time.Second)
+	if _, err := store.view(); err == nil {
+		t.Fatal("再次损坏后 view 应报错")
+	}
+	if count := strings.Count(buf.String(), "\n"); count != 1 {
+		t.Errorf("根因第三次变化应再补记 1 条，实际 %d 条：%q", count, buf.String())
+	}
+
+	// 根因未变时不得继续补记：再探两次，指纹与根因都与上一轮相同。
+	buf.Reset()
+	for i := range 3 {
+		clock.advance(30 * time.Second)
+		if _, err := store.view(); err == nil {
+			t.Fatalf("探针 #%d：持续不可用期间 view 应继续报错", i+1)
+		}
+	}
+	if count := strings.Count(buf.String(), "\n"); count != 0 {
+		t.Errorf("根因未变的持续故障不应再记录，实际 %d 条：%q", count, buf.String())
+	}
+}
+
 // 失败已发布时探测节流必须让位：否则"指纹变化立即重试"失效，
 // 已修好的名单会最长延迟一个节流窗口才恢复。
 func TestStoreRecoveryBypassesProbeThrottle(t *testing.T) {

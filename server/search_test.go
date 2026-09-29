@@ -304,6 +304,50 @@ func TestSearchSortsUnorderedInput(t *testing.T) {
 	}
 }
 
+// 排序第一键（匹配度）此前零判别力断言：全仓四条顺序断言的取样点全部落在同分格。
+//
+// 取样点分析：TestSearchSortsUnorderedInput 查询「张」命中「张甲/乙/丙/丁」，
+// 四者同为前缀匹配（全 1 分）；TestGradeOrderAcrossGrades 用三份同名「林宇」，
+// 三者同为完全相等（全 0 分）。因此把排序比较器的第一键置为恒返 0 时，
+// 全量 Go 测试零翻红——但行为确实会变（探针实测顺序翻转）。
+// 这与第九轮撤销的「第三键」必须分开记账：那次根因是 loadStudents 已使输入全局有序
+// （真冗余）；本例第一键活跃，只是在两个不同分值共存时无人取样（真缺口）。
+//
+// 取样点的设计约束（第一版探针踩过这个坑）：必须让匹配度键与班级号键给出**相反**顺序，
+// 否则一个键会掩盖另一个的失效。「伟张」得 2 分（包含匹配）却坐 1 班，
+// 「张伟」得 1 分（前缀匹配）却坐 2 班——第一键生效则张伟在前，
+// 第二键生效则伟张在前，两者绝无可能同时成立。
+func TestSearchSortsByMatchScoreBeforeClass(t *testing.T) {
+	students := []Student{
+		newStudent("伟张", GradeOne, "1班", parseClassName("1班")),
+		newStudent("张伟", GradeOne, "2班", parseClassName("2班")),
+	}
+	got := Search(students, "张", 10, 0)
+	if len(got.Items) != 2 {
+		t.Fatalf("应返回 2 条，实际 %d", len(got.Items))
+	}
+	// 契约：完整匹配 < 前缀匹配 < 包含匹配。与班级号升序相反，故此断言
+	// 只能由第一键满足——删掉第一键时顺序翻转为「伟张、张伟」，本条立即翻红。
+	if got.Items[0].Name != "张伟" || got.Items[1].Name != "伟张" {
+		t.Fatalf("匹配度优先：前缀匹配的张伟应排在包含匹配的伟张之前，实际 %s、%s",
+			got.Items[0].Name, got.Items[1].Name)
+	}
+	// 双向：同分时第二键（班级号升序）接续。本 fixture 的两名不同分，
+	// 故另取一组同分样本，确保第一键与第二键的职责各自被覆盖。
+	sameScore := []Student{
+		newStudent("张丙", GradeOne, "3班", parseClassName("3班")),
+		newStudent("张甲", GradeOne, "1班", parseClassName("1班")),
+	}
+	byClass := Search(sameScore, "张", 10, 0)
+	if len(byClass.Items) != 2 {
+		t.Fatalf("应返回 2 条，实际 %d", len(byClass.Items))
+	}
+	if byClass.Items[0].Name != "张甲" || byClass.Items[1].Name != "张丙" {
+		t.Fatalf("同分时按班级号升序：1班的张甲应在前，实际 %s、%s",
+			byClass.Items[0].Name, byClass.Items[1].Name)
+	}
+}
+
 // HasMore 必须等价于「本页取完后仍有剩余」，这是前端唯一的翻页依据。
 //
 // App.tsx 把 hasMore 直接传给 ResultList 的「继续加载」按钮：
