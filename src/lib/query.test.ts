@@ -78,6 +78,24 @@ describe("hasNameCondition", () => {
     expect(hasNameCondition("99999999999999999999")).toBe(true);
   });
 
+  // 含年段串的姓名：修复前被读成年段条件，此处返回 false，界面因此提示
+  // 「已匹配整个年段」而实际返回整个年段的全量。修复后走姓名条件。
+  // 这是前端唯一消费的布尔（searchReducer 经它派生提示文案），
+  // 解析层有契约语料对拍，但该布尔本身此前零断言。
+  it("true for names containing a grade string", () => {
+    expect(hasNameCondition("高一鸣")).toBe(true);
+    expect(hasNameCondition("高1鸣")).toBe(true);
+    expect(hasNameCondition("高一同学")).toBe(true);
+  });
+
+  // 对照侧：纯年段与「年段+班」仍必须为 false。只断上一侧的话，
+  // 把判断退化为「一律按姓名处理」同样会通过（那样提示文案永远
+  // 显示为姓名查询，而实际返回整个年段）。
+  it("false for pure grade token with optional 班 suffix", () => {
+    expect(hasNameCondition("高一班")).toBe(false);
+    expect(hasNameCondition("高1班")).toBe(false);
+  });
+
   it("true for mixed name + class", () => {
     expect(hasNameCondition("张三，18班")).toBe(true);
   });
