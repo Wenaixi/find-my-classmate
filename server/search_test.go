@@ -216,6 +216,53 @@ func TestNameTokensNotMisparsed(t *testing.T) {
 	}
 }
 
+// 姓名含完整年段串时必须按姓名处理，不得被读成年段条件。
+//
+// 缺陷事实：parseGrade 曾用子串匹配，查询侧与标题校验共用同一实现。
+// 「高一鸣」是真实存在的中文人名，命中「高一」后姓名条件被整个吞掉，
+// Search 返回整个高一年级（实测探针：total=2，含无关的「张伟」）。
+// 属本仓已修过三次的同族实例——无法解析的班级 token 不得静默丢弃、
+// 纯分隔符不得退化为全校检索、高一0班不得放大成整年段全量。
+//
+// 与 TestNameTokensNotMisparsed 的分工：那条测的是含单个「高」「班」字的姓名
+// （高翔、班长），永远走不到年段子串所在的分支；本条才打到那一格。
+func TestNameContainingGradeStringIsNotTreatedAsGrade(t *testing.T) {
+	students := []Student{
+		newStudent("高一鸣", GradeOne, "1班", parseClassName("1班")),
+		newStudent("张伟", GradeOne, "2班", parseClassName("2班")),
+		newStudent("高二峰", GradeTwo, "1班", parseClassName("1班")),
+	}
+
+	// 姓名优先：含年段串的 token 走姓名条件，精确命中 1 人。
+	for _, name := range []string{"高一鸣", "高二峰"} {
+		q := parseQuery(name)
+		if len(q.NameTokens) != 1 || q.Grade != "" {
+			t.Errorf("parseQuery(%q) 应得到姓名条件且无年段条件，实际 %+v", name, q)
+		}
+		got := Search(students, name, 10, 0)
+		if len(got.Items) != 1 || got.Items[0].Name != name {
+			t.Errorf("查询 %q 应精确命中 1 人（不得放大为整个年段），实际 %d 人", name, len(got.Items))
+		}
+	}
+
+	// 纯年段仍必须返回整个年段——只断上一侧的话，把判断退化为
+	// 「一律按姓名处理」同样会通过（那样精确查询正常，纯年段查询却全空）。
+	for _, raw := range []string{"高一", "高一班", "高1", "高1班"} {
+		q := parseQuery(raw)
+		if q.Grade != GradeOne || len(q.NameTokens) != 0 {
+			t.Errorf("parseQuery(%q) 应得到年段条件且无姓名条件，实际 %+v", raw, q)
+		}
+		if got := Search(students, raw, 10, 0); got.Total != 2 {
+			t.Errorf("纯年段查询 %q 应返回整个高一年级 2 人，实际 %d", raw, got.Total)
+		}
+	}
+
+	// 连写形态不受影响：年段 + 班级仍精确到班。
+	if got := Search(students, "高一2班", 10, 0); len(got.Items) != 1 || got.Items[0].Name != "张伟" {
+		t.Errorf("连写 高一2班 应精确命中张伟，实际 %+v", got.Items)
+	}
+}
+
 // 年级+班级连写输入（"高三三班"）精确解析为年段+班级：
 // 旧语义按年级子串处理返回全年级，现改为精确班级筛选（用户报告缺陷）。
 func TestGradeSubstringBehavior(t *testing.T) {

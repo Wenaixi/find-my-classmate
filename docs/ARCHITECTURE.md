@@ -54,14 +54,15 @@
 - 姓名匹配键：删除与 Go `unicode.IsSpace` 相同的空白集合（`\t\n\v\f\r`、空格、U+0085、U+00A0 及 Unicode White_Space 全体）并统一大写（normalizeName）
 - **空白集合必须逐码位对齐，不得用 JS 的 `\s` 近似**。两端差集恰为两个码位且方向相反：U+0085（NEL）是 Go 的空白而 JS `\s` 不含；U+FEFF 自 Unicode 4.0.1 起不在 White_Space 内，Go 不认而 JS `\s` 认。用 `\s` 会在 U+FEFF 上静默分叉——前端 `trim()` 还会移除首尾的 U+FEFF，使 `␣18班` 在前端被削成 `18班`（判为班级条件）而在 Go 整体保留为一个姓名 token，进而翻转前端唯一消费的「是否含姓名条件」布尔。`src/lib/query.ts` 的 `goSpaceChars` 是前端这两处差集的唯一修正点。
 - 超长数字串按姓名处理，不作为班级条件（与 Go 的 -1 语义一致）
-- **年段值域是单点事实源**：后端 `knownGrades`（规范名）与 `gradeAliases`（别名映射）声明全部年段，`splitGradeClass`（年级+班级连写切分）与 `parseGrade`（标题/子串匹配）是仅有的两处派生 owner，改任一处都必须同步另一处；前端 `gradeValues` / `gradeAliases` 镜像同一份声明。两个方向各由一处强制：正向（列表里的值必须属于 `Grade`）由 `as const satisfies readonly Grade[]` 承担，反向（`Grade` 联合里的值必须已在列表中声明）由 `query.ts` 的编译期检查承担并在报错中点名缺失年段。**扩展年段需改四处声明**（后端 `knownGrades`、前端 `types.ts` 的 `Grade`、`query.ts` 的 `gradeValues`，加别名时另改两端的 `gradeAliases`），不改任何解析逻辑。
-- 该不变量的脆弱点在依赖方向：`data.go` 的名单标题校验（`parseGrade(document.Title) != grade`）**反过来依赖查询侧的 `parseGrade`**。查询侧漏认识新年段时，合法名单文件会被判「文件名与年级标题不一致」而拒绝加载。**解析层的对拍抓不到这类裂缝**：两端一致地不认识新年段时对拍同样通过，`docs/query-contract.json` 必须先有该年段样本才表达得出来。清单本身由 `contract_grade_test.go` 单独对拍（双向集合比较，拦得住「只改了一端」）；**但两端同时缺少某个年段时该对拍同样恒通过**——这是集合比较的结构性上限，不是实现缺陷。
+- **年段值域是单点事实源**：后端 `knownGrades`（规范名）与 `gradeAliases`（别名映射）声明全部年段，年段派生有四处 owner——`splitGradeClass`（年级+班级连写切分，最长前缀）、`parseGradeInToken`（查询侧，精确匹配）、`parseGradeInTitle`（标题侧，子串匹配）、`gradeOrder`（声明序用于排序）；前端 `gradeValues` / `gradeAliases` 镜像同一份声明。两个方向各由一处强制：正向（列表里的值必须属于 `Grade`）由 `as const satisfies readonly Grade[]` 承担，反向（`Grade` 联合里的值必须已在列表中声明）由 `query.ts` 的编译期检查承担并在报错中点名缺失年段。**扩展年段需改四处声明**（后端 `knownGrades`、前端 `types.ts` 的 `Grade`、`query.ts` 的 `gradeValues`，加别名时另改两端的 `gradeAliases`），不改任何解析逻辑。
+  - **查询侧与标题侧的匹配语义不同，不可合并**：`parseGradeInToken` 要求整个 token 就是年段（或年段 + 「班」），`parseGradeInTitle` 用子串匹配。二者曾共用一个子串实现，代价是含年段串的姓名（真实人名「高一鸣」）在查询侧被读成年段条件，姓名条件消失、一次精确检索被放大成整个年段的全量返回——与「无法解析的班级 token 不得静默丢弃」「纯分隔符不得退化为全校检索」「高一0班不得放大成整年段全量」同族。契约语料中「高一同学」曾把该缺陷行为锁成期望值（断言 `nameTokens` 为空且 `grade` 为高一，且无 `$comment` 说明依据），修复时已改为按姓名处理并补 `$comment` 记录裁决。**含年段串的 token 按姓名处理是当前的读法**，语料另有「高一班」作为纯年段对照组，防止该判断退化为「一律按姓名」。
+- 该不变量的脆弱点在依赖方向：`data.go` 的名单标题校验（`parseGradeInTitle(document.Title) != grade`）消费的是年段值域声明。漏认识新年段时，合法名单文件会被判「文件名与年级标题不一致」而拒绝加载。**解析层的对拍抓不到这类裂缝**：两端一致地不认识新年段时对拍同样通过，`docs/query-contract.json` 必须先有该年段样本才表达得出来。清单本身由 `contract_grade_test.go` 单独对拍（双向集合比较，拦得住「只改了一端」）；**但两端同时缺少某个年段时该对拍同样恒通过**——这是集合比较的结构性上限，不是实现缺陷。前端无标题校验的消费方，故只需 `parseGradeInToken` 一个精确语义。
 - 分配纪律（归属已随年级+班级连写的切分实现调整，此处保留其教训）：把正则编译放进热路径会让整年段查询分配从 6 涨到 117（实测），被 `TestSearchAllocsBudget` 当场拦下。当前的 `splitGradeClass` 直接遍历 `knownGrades` 与 `gradeAliases` 做最长前缀匹配，不编译正则，因此无缓存可重建——新增解析逻辑时仍以该预算为闸门。
 
 后端独占的**执行**契约：
 
 - 匹配规则：所有姓名 token 都必须包含匹配（AND 语义），年段精确匹配，班级按班号匹配
-- 排序：完整匹配（0 分）< 前缀匹配（1 分）< 包含匹配（2 分），同分按年级声明序（高一<高二<高三，gradeOrder）再按班级号升序
+- 排序：完整匹配（0 分）< 前缀匹配（1 分）< 包含匹配（2 分），同分按年级声明序（高一<高二<高三，gradeOrder）再按班级号升序。**多 token 时按各 token 的三态得分求和**（`nameScoreSum`）——总分衡量的是与全部查询词的总距离，不区分「一个 token 完全匹配 + 另一个勉强包含」与「两个 token 都只是包含」。这是有意的简化：求和把各 token 的匹配质量压成一个可加标量，用户预期上等价于「越贴近查询词越靠前」，而逐 token 比较需要一套词典序规则且难以向用户解释。排序为后端独占行为，前端无镜像，跨语言对拍覆盖不到此处。
 - 分页：`{ items, total, limit, offset, hasMore }`；limit 默认 10，上限 50
 
 
