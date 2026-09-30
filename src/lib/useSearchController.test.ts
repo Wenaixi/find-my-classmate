@@ -147,6 +147,56 @@ describe("createSearchOrchestrator", () => {
     expect(orch.getState().items.map((s) => s.name)).toEqual(["甲", "乙"]);
   });
 
+  // loadMore 的 offset 此前零断言：既有 loadMore 用例全部在 await 之后取样，
+  // 只断 items 增长或请求次数，从不看请求参数。
+  // 变异实验：把 offset 改成常量 0（永远重新请求第一页并原地追加），
+  // 前端全量仍绿——而追加语义已彻底坏掉。
+  // 断言必须双向：正向断「offset 等于已加载条数」，
+  // 反向断「两次请求的 offset 不同」，否则把 offset 硬编码为任何
+  // 与已加载条数恰好相等的常量都能通过。
+  it("loadMore 请求的 offset 是已加载条数，不重复第一页", async () => {
+    const first = okResponse({ items: [{ name: "甲", grade: "高一", className: "1班" }], total: 3, hasMore: true });
+    const second = okResponse({ items: [{ name: "乙", grade: "高一", className: "2班" }], total: 3, hasMore: false });
+    const api = { search: vi.fn().mockResolvedValueOnce(first).mockResolvedValueOnce(second) };
+    const orch = createSearchOrchestrator({ pageSize: 10, api });
+    orch.onInput("甲");
+    await orch.submit();
+    await orch.loadMore();
+
+    const offsets = api.search.mock.calls.map((c) => c[2] as number);
+    expect(offsets[0]).toBe(0);
+    expect(offsets[1]).toBe(1);
+    // 反向：两次请求取样点不同，恒返同一值的实现不能通过。
+    expect(offsets[0]).not.toBe(offsets[1]);
+  });
+
+  // 加载更多进行中按 Enter 必须被拦住：新查询的 submit-start 会清空 items，
+  // 而追加结果随后抵达，两条并发请求会让用户看到结果被覆盖或重复。
+  // 变异实验：删掉 submit 守卫里的 loadingMore 项，前端全量仍绿。
+  it("加载更多进行中不发起新查询", async () => {
+    let resolveLoadMore!: (r: SearchResponse) => void;
+    const first = okResponse({ items: [{ name: "甲", grade: "高一", className: "1班" }], total: 2, hasMore: true });
+    const api = {
+      search: vi
+        .fn()
+        .mockResolvedValueOnce(first)
+        .mockImplementationOnce(() => new Promise<SearchResponse>((r) => (resolveLoadMore = r))),
+    };
+    const orch = createSearchOrchestrator({ pageSize: 10, api });
+    orch.onInput("甲");
+    await orch.submit();
+    const callsBeforeLoadMore = api.search.mock.calls.length;
+
+    // 不 await：请求在途，此刻 submit 必须被守卫拦住。
+    const pending = orch.loadMore();
+    await orch.submit();
+    expect(api.search.mock.calls.length).toBe(callsBeforeLoadMore + 1);
+
+    resolveLoadMore(okResponse({ items: [{ name: "乙", grade: "高一", className: "2班" }], total: 2, hasMore: false }));
+    await pending;
+    expect(orch.getState().items.map((s) => s.name)).toEqual(["甲", "乙"]);
+  });
+
   it("loadMore does not request when there is no next page", async () => {
     // 守卫的另一侧：无后续页时不发起请求。此前守卫被改成无条件 return 也无人发现。
     const api = { search: vi.fn().mockResolvedValue(okResponse({ items: [{ name: "甲", grade: "高一", className: "1班" }], total: 1, hasMore: false })) };

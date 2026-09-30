@@ -1,6 +1,7 @@
 import { useMemo, useReducer, useRef } from "react";
-import { initialState, searchReducer, SearchControllerState } from "./searchReducer";
+import { initialState, searchReducer, SearchControllerState, type SearchAction } from "./searchReducer";
 import { createSearchSession, SearchSessionApi } from "./searchSession";
+import type { SearchResult } from "./searchSession";
 import type { Student } from "../types";
 
 // 查询会话深模块：把「发起并展示一次查询」的编排（守卫、判别联合、session/reducer
@@ -31,27 +32,43 @@ export function createSearchOrchestrator(opts: OrchestratorOptions): SearchOrche
   let state = initialState;
   const session = createSearchSession(opts.api);
 
+  // run 是「一次查询动作」的唯一实现：启动态 → 发起 → 派发结果。
+  //
+  // 此前 submit 与 loadMore 各手写这套骨架，start/result 这对 action 的配对
+  // 与「三分支必须一次派发完毕」这条不变量在两处各写一份而互不引用。
+  // 那条不变量是永久卡死缺陷换来的：stale 无分支可走时 state 永远停在
+  // loading，而守卫正是「loading 中不发起新请求」，按 Enter 毫无反应。
+  //
+  // 收进 run 后配对由类型承载：result 以字面量类型传入，模板字面量类型
+  // `${S}-result` 把它约束为与 start 同名的那条，传不成对的动作编不过。
+  // 守卫仍留在各自的动作里——两者的守卫集合本就不同，合并会掩盖差异。
+  type StartAction = { type: "submit-start" } | { type: "load-more-start" };
+  const run = async <S extends StartAction["type"]>(
+    start: Extract<SearchAction, { type: S }>,
+    resultType: S extends `${infer Base}-start` ? `${Base}-result` : never,
+    invoke: () => Promise<SearchResult>,
+  ) => {
+    state = searchReducer(state, start);
+    const outcome = await invoke();
+    // 判别联合整体交给 reducer：ok 落定、error 置错、stale 静默释放启动态。
+    // 三分支必须一次派发完毕，理由见上。
+    state = searchReducer(state, { type: resultType, result: outcome });
+  };
+
   const submit = async () => {
-    const q = state.query.trim();
     // 守卫：空查询、loading 中、加载更多进行中都不发起新请求
+    const q = state.query.trim();
     if (!q || state.state === "loading" || state.loadingMore) return;
-    state = searchReducer(state, { type: "submit-start" });
-    const result = await session.submit(q, opts.pageSize);
-    // 判别联合直接交给 reducer：ok 落定、error 置错、stale 静默释放 loading。
-    // 三分支必须一次派发完毕——调用方若只对 error 写回状态，stale 会让 state
-    // 永远停在 loading，而 submit 的守卫正是「loading 中不发起新请求」，
-    // 形成按 Enter 无反应的死角。
-    state = searchReducer(state, { type: "submit-result", result });
+    await run({ type: "submit-start" }, "submit-result", () => session.submit(q, opts.pageSize));
   };
 
   const loadMore = async () => {
-    const q = state.query.trim();
     // 守卫：空查询、无更多、加载中、加载更多进行中都不发起
+    const q = state.query.trim();
     if (!q || !state.hasMore || state.loadingMore || state.state === "loading") return;
-    state = searchReducer(state, { type: "load-more-start" });
-    const result = await session.loadMore(q, opts.pageSize, state.items.length);
-    // 判别联合直接交给 reducer：ok 追加、error 置错、stale 静默复位
-    state = searchReducer(state, { type: "load-more-result", result });
+    // offset 在守卫之后、启动态之前读：它必须反映已加载条数。
+    const offset = state.items.length;
+    await run({ type: "load-more-start" }, "load-more-result", () => session.loadMore(q, opts.pageSize, offset));
   };
 
   const clear = () => {
