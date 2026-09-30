@@ -116,7 +116,15 @@ export function App({ api }: AppProps = {}) {
               </div>
             </BorderBeam>
             <div className="search-hint" id="search-hint" data-od-id="search-hint"><span>例：张三，18班 · 李四 高二（可用空格或逗号隔开）</span><span>ENTER 查询 / ESC 清空</span></div>
-            <div className="status-line" id="status-line" data-od-id="status-feedback" data-tone={view.tone} aria-live="polite"><Suspense fallback={null}><StatusOrb show={view.showOrb} /></Suspense><span>{statusText}</span></div>
+            <div className="status-line" id="status-line" data-od-id="status-feedback" data-tone={view.tone} aria-live="polite">
+              {/* 边界必须包在 Suspense 之外：async chunk 的拒绝由外层边界捕获，
+                  内层只能处理已挂载子树的渲染错误。结果区那条 lane 已是同一形状，
+                  此处此前漏了它——而本行无条件挂载，StatusOrb 的 chunk 一旦加载
+                  失败（部署切换后旧 chunk 404、网络抖动）错误会冒泡到 React 根，
+                  ErrorBoundary 注释自陈要防的整页白屏正是此情形。 */}
+              <ErrorBoundary><Suspense fallback={null}><StatusOrb show={view.showOrb} /></Suspense></ErrorBoundary>
+              <span>{statusText}</span>
+            </div>
           </form>
         </section>
         {hasResultSection && <section className="results-section" ref={resultsRef} data-od-id="results-section" aria-labelledby="results-title" aria-live="polite"><div className="results-head"><div><p className="section-kicker">SEARCH OUTPUT</p><h2 id="results-title" data-od-id="results-title">查询结果</h2></div><div className="result-count-block"><span className="result-count" data-od-id="result-count">{view.countLabel}</span><span className="result-count-label">MATCHES</span></div></div><ErrorBoundary><Suspense fallback={<div className="result-loading"><span>正在加载结果组件</span></div>}>{renderResultBody()}</Suspense></ErrorBoundary></section>}

@@ -61,9 +61,9 @@ func TestGradeDomainMatchesFrontend(t *testing.T) {
 // 行首锚定不可省：缺了 (?m)^\s* 时正则会从文件任意位置开始匹配，于是上方
 // 注释里一行被注释掉的同名声明也会被当成真声明。实测：把真实声明改成
 // 别的年段、同时在上一行留一条带正确清单的注释，本对拍报告 PASS——
-// 而生产跑着一份完全不同的年段清单。四条抽取器里只有本条原先无锚，
-// 其余三条（contract_constants_test.go 的两条与 parseFrontendGradeAliases）
-// 都用 (?m)^\s*；本条现已与其同形。
+// 而生产跑着一份完全不同的年段清单。四条抽取器里原有两条无锚
+// （本条与 parseFrontendGradeAliases），现已一并补上；另两条
+// （contract_constants_test.go 的数值与正则抽取）本就带 (?m)^。
 //
 // 数组可能跨行书写，因此右端仍匹配到第一个右方括号为止，只锚定左端。
 func parseFrontendGradeValues(t *testing.T) map[Grade]struct{} {
@@ -101,13 +101,21 @@ func parseFrontendGradeValues(t *testing.T) map[Grade]struct{} {
 // 形如 ["高1", "高一"] 的二元组数组，抽出的引号序列按偶数位配对。
 // 若将来别名声明改为对象形态或引入非字面量，本函数会因抽不出条目而失败——
 // 那是对拍跟丢了声明形态的信号，不是静默通过。
+//
+// 行首锚定与 gradeValues 同理，缺了 (?m)^\s* 会把上方注释里的同名声明当成真声明：
+// 实测把别名表改小、同时留一条含完整清单的注释，本对拍报告 PASS 而两端已不一致。
+// 尾部仍锚 \n]：该声明当前顶格书写、数组体可跨行，两者缺一都会误抽或抽不出。
+//
+// 已知上限：(?m)^ 只挡行注释，块注释内部的行首同样是行首，
+// 因此形如 /*\nconst gradeAliases = ...\n*/ 的诱饵仍会被匹配。这是
+// 「正则抽不出真正的声明」这一机制的结构性上限，不是实现缺陷。
 func parseFrontendGradeAliases(t *testing.T) map[string]Grade {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join("..", "src", "lib", "query.ts"))
 	if err != nil {
 		t.Fatalf("读取前端年段声明文件失败: %v", err)
 	}
-	pattern := regexp.MustCompile(`(?s)const\s+gradeAliases\s*(?::[^=]+)?=\s*\[(.*?)\n\]`)
+	pattern := regexp.MustCompile(`(?ms)^\s*const\s+gradeAliases\s*(?::[^=]+)?=\s*\[(.*?)\n\]`)
 	match := pattern.FindSubmatch(raw)
 	if match == nil {
 		t.Fatal("前端 gradeAliases 声明未在 src/lib/query.ts 中找到（对拍读取的是该声明的数组字面量）")
