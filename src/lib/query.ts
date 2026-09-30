@@ -19,23 +19,25 @@ const chineseOnesClass = "[" + chineseDigitOnes + "]";
 // classDigits 是汉字数字到班号的真值表，与 chineseDigitOnes 同源派生。
 // 「十」不在 chineseDigitOnes 里（它的值不是位置即值），单独补入。
 //
-// 刻意声明为字面量元组而非 Record<string, string>：显式标注会把键拓宽回
-// string，于是「键集与 chineseDigitOnes 是否一致」在类型层面恒成立，
-// 下方的自洽检查形同虚设。as const 保留字面量类型，键集才能参与 Exclude。
+// 元组用 as const 而非 Record：显式标注会把键拓宽回 string，
+// 而 chineseNumberToInt 按运行时字符串查表，下游确实需要一个可索引的
+// 宽类型——见下方 classDigits 的 Record 标注。
+//
+// 此前此处有一条「键集自洽检查」（Exclude 元组键联合, keyof typeof classDigits）。
+// 它恒不发作：classDigits 经 Object.fromEntries 构造，其键类型被拓宽为 string
+// （标注与 fromEntries 自身的 lib.es2019 签名都会拓宽，删掉标注也无济于事），
+// 于是 Exclude<X, string> 对任何 X 都是 never。
+// 变异实验实测：把值表整个换成 { "十": "10" }，tsc -b 仍然 CLEAN；
+// 而把 chineseDigitOnes 漏掉「四」也不报警——表由该字符串派生，两者同步变化。
+// 它声称防的「漏字」在派生写法下本就结构性不可能，故按本仓纪律删除
+// 一条不存在的防线，而不是留一个让读者以为有保护的空转检查。
+// 该行的真实保护是：值表由 chineseDigitOnes 派生（漏字不可能），
+// 解析行为由契约语料覆盖（classNumber 非空的样本有 25 条）。
 const classDigitEntries = [
   ...[...chineseDigitOnes].map((d, i) => [d, String(i + 1)] as const),
   ["十", "10"] as const,
 ] as const;
 const classDigits: Record<string, string> = Object.fromEntries(classDigitEntries);
-
-// 值表键集的自洽检查：它必须恰好覆盖 chineseDigitOnes 的九个单字加「十」。
-// 派生写法已使「漏字」不可能，但键集与字符集仍分属两处声明（一个字符串、
-// 一个元组），键集写错时只有 chineseNumberToInt 查表未命中才发作——表现为
-// 该班级名降级为姓名条件，用户搜「四班」找不到四班，且两端可同时错而对拍静默。
-// 此检查让不一致在编译期报错，而不是等到运行时静默降级。
-type ClassDigitKeyGap = Exclude<(typeof classDigitEntries)[number][0], keyof typeof classDigits>;
-const classDigitsExhaustive: ClassDigitKeyGap extends never ? true : { missing: ClassDigitKeyGap } = true;
-void classDigitsExhaustive;
 
 // classNumberPattern 精确编码班号的合法形态：阿拉伯数字，或汉字数字的
 // 「单字 / 十开头 / 第二字为十」三种。

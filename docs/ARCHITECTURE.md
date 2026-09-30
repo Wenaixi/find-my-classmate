@@ -117,9 +117,9 @@
 | 汉字数字形态 | `classparse.go` `chineseNumberPattern` | `query.ts` 同名常量 | `contract_constants_test.go` 声明对拍 |
 | 完整班号形态 | `classparse.go` `classNumberPattern` | `query.ts` 同名常量 | `contract_constants_test.go` 声明对拍 |
 | 连写守门字符集 | `classparse.go` `classHeadChars` | `query.ts` 同名常量 | `contract_constants_test.go` 声明对拍 |
-| 汉字数字值表 | `classparse.go` `classDigits` | `query.ts` `classDigits` | 前端编译期键集检查；解析行为归契约语料 |
+| 汉字数字值表 | `classparse.go` `classDigits` | `query.ts` `classDigits` | 两端均由 `chineseDigitOnes` 派生（漏字结构上不可能）；解析行为归契约语料。**此前此行记的「前端编译期键集检查」已删除**：它以 `Exclude<元组键, keyof typeof classDigits>` 表达，而 `classDigits` 经 `Object.fromEntries` 构造后键类型被拓宽为 `string`，`Exclude<X, string>` 对任何 X 都是 `never`——实测把值表整个换掉 `tsc -b` 仍 CLEAN。留一条恒不发作的检查比不写更危险：读者会据此以为有防线 |
 | 查询分隔符 | `search.go` `querySeparators` | `query.ts` `separators` | 契约语料（形态有限，可穷举） |
-| 空白集合 | `unicode.IsSpace`（无第二份声明） | `query.ts` `goSpaceChars` | 契约语料（三个差集码位各一条） |
+| 空白集合 | `unicode.IsSpace`（无第二份声明） | `query.ts` `goSpaceChars` | 契约语料（两处差集码位各一条：Go 独有的 U+0085、JS 独有的 U+FEFF） |
 | 解析算法本身 | `search.go` / `classparse.go` | `query.ts` | `docs/query-contract.json` 逐条对拍 |
 
 **这张表本身也有表达力上限，且上限是结构性的**：`classNumberHead` 曾以「零对拍」
