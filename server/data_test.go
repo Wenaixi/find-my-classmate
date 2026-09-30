@@ -112,6 +112,12 @@ func TestLoadStudentsTitleMismatch(t *testing.T) {
 	if _, err := loadStudents(dir); err == nil || !strings.Contains(err.Error(), "不一致") {
 		t.Fatalf("标题与文件名不一致应报错，实际 %v", err)
 	}
+	// 年段标识与成因缺一不可：运维从日志判断该看哪份名单，靠的正是它。
+	// 变异实验：把本条之外另三个失败出口的 %s.json 去掉，Go 全量仍绿。
+	_, err := loadStudents(dir)
+	if !strings.Contains(err.Error(), "高一.json") {
+		t.Fatalf("失败原因应带年段标识（指向出问题的文件），实际 %v", err)
+	}
 }
 
 func TestLoadStudentsBadClassKey(t *testing.T) {
@@ -137,6 +143,10 @@ func TestLoadStudentsRejectsNullRoster(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "名单结构异常") {
 		t.Fatalf("名单为 null 应报错，实际 %v", err)
 	}
+	// 同上：年段标识与成因缺一不可，此处只放高一一份文件，出错的就是它。
+	if !strings.Contains(err.Error(), "高一.json") {
+		t.Fatalf("名单结构失败应带年段标识，实际 %v", err)
+	}
 
 	// 反向：同目录补一份合法名单，守卫不得把正常数据一并拒掉。
 	// 与上面的失败样本同目录，避免「因为另一个文件坏了才报错」的歧义。
@@ -157,6 +167,10 @@ func TestLoadStudentsRejectsEmptyStudentName(t *testing.T) {
 	_, err := loadStudents(dir)
 	if err == nil || !strings.Contains(err.Error(), "学生记录格式异常") {
 		t.Fatalf("空姓名学生记录应报错，实际 %v", err)
+	}
+	// 同上：学生记录失败必须指明是哪一份名单里的哪一条。
+	if !strings.Contains(err.Error(), "高一.json") {
+		t.Fatalf("学生记录失败应带年段标识，实际 %v", err)
 	}
 
 	good := t.TempDir()
