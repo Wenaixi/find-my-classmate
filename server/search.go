@@ -110,7 +110,12 @@ func tokenize(raw string) []string {
 // 运维提示正确列出该文件、gradeOrder 正确排位，但 loadStudents 报
 // 「文件名与年级标题不一致」拒绝加载合法名单，查询返回 total=0 且与
 // 真不存在的年段结果完全一致。跨语言对拍无法发现——两端一致地不认识新年段。
-// 本函数与 parseGradeInToken 是年段派生的仅有两处 owner，改任一处都必须同步另一处。
+// 本函数只是四处年段派生 owner 之一，另三处为 parseGradeInToken（查询侧精确
+// 匹配）、parseGradeInTitle（标题侧子串匹配）与 gradeOrder（声明序排序）。
+// 改本函数时不必同步另三处，但「识别年段」这件事共有四个 owner：漏改任何一处，
+// 症状都表现为同一族缺陷的不同形态——上文的变异事实正是漏改标题侧的那一种，
+// 而它与本函数的取值域声明是同一份。判据是「是否从值域导出新的语义值」：
+// errNoRoster 只把已知成员渲染成中文错误文案，不导出新语义，属消费而非派生。
 func splitGradeClass(token string) (grade Grade, classPart string, ok bool) {
 	// 注意长度语义：中文年段用 len() 量出的是字节数（6）而非字符数（2）。
 	// 因此「最长前缀」的比较必须用 utf8.RuneCountInString，

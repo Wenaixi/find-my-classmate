@@ -21,8 +21,6 @@ export interface SearchControllerState {
 export type SearchAction =
   | { type: "input-change"; query: string }
   | { type: "submit-start" }
-  | { type: "submit-success"; items: Student[]; total: number; hasMore: boolean; query: string }
-  | { type: "submit-error"; cause: unknown }
   | { type: "submit-result"; result: SearchResult }
   | { type: "load-more-start" }
   | { type: "load-more-result"; result: SearchResult }
@@ -206,26 +204,13 @@ export function searchReducer(state: SearchControllerState, action: SearchAction
       return { ...state, query: action.query, state: "editing", statusText: COPY.editing };
     case "submit-start":
       return { ...state, items: [], total: 0, hasMore: false, state: "loading", statusText: COPY.loading, loadingMore: false, loadMoreError: false };
-    case "submit-success":
-      // 派生归位：调用方只交原始事实，状态与文案在此一次性算出，
-      // 避免 App.tsx 在每个分支手工串联 getState/hasNameCondition/statusTextFor。
-      {
-        const next = getState(action.items, action.query, action.total);
-        return {
-          ...state,
-          items: action.items,
-          total: action.total,
-          hasMore: action.hasMore,
-          state: next,
-          statusText: statusTextFor(next, action.total, hasNameCondition(action.query)),
-        };
-      }
-    case "submit-error":
-      return { ...state, items: [], state: "error", statusText: errorMessage(action.cause) };
     case "submit-result": {
       // 单 action 收编三分支，与 load-more-result 完全对称：ok 落定、error 置错、
-      // stale 静默释放。此前 ok 与 error 是 submit-success / submit-error 两个 action，
-      // 而 stale 无分支可走——调用方只对 error 写回状态，state 永远停在 loading。
+      // stale 静默释放。ok 与 error 的派生也一并在此完成，调用方只交原始事实，
+      // 不再手工串联 getState/hasNameCondition/statusTextFor。
+      //
+      // 收成单 action 的直接原因是 stale 曾无分支可走：ok 与 error 各占一个 action，
+      // 而调用方只对 error 写回状态，stale 直接 return，state 永远停在 loading。
       //
       // stale 的 loading 释放必须在 reducer 内显式完成：stale 表示本次查询已被作废
       // （组合期的输入变化会 invalidate 在途请求），而 state 仍停在 submit-start 写入的
@@ -291,7 +276,12 @@ export function searchReducer(state: SearchControllerState, action: SearchAction
 // 必须用 as const 而非 SearchState[]：显式标注会把字面量拓宽回 SearchState，
 // 于是下方 Exclude 恒为 never、检查形同虚设——这正是 types.ts 的 GradeDomainGap
 // 注释里记着的同一条教训。
-const searchStateValues = ["idle", "editing", "loading", "success", "duplicate", "empty", "error"] as const satisfies readonly SearchState[];
+//
+// 导出供测试消费：此前它是 const 而非 export，测试里的四份手抄数组一个都没被收走，
+// 于是「状态集合变大」时生产侧两处检查报错、而那四份「穷尽性断言」仍全绿——
+// 它们遍历的数组里没有新成员。与 types.ts 的 GradeDomainGap 手抄数组（第十四轮修过）
+// 是同一形态，此处是它的状态枚举版本。
+export const searchStateValues = ["idle", "editing", "loading", "success", "duplicate", "empty", "error"] as const satisfies readonly SearchState[];
 
 // SearchState 联合里出现 searchStateValues 未声明的状态时报错。
 //

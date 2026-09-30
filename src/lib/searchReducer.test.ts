@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { getState, errorMessage, initialState, present, searchReducer, statusTextFor, resultSectionOf, shouldScrollToResults, deriveStatusHint } from "./searchReducer";
+import { getState, errorMessage, initialState, present, searchReducer, searchStateValues, statusTextFor, resultSectionOf, shouldScrollToResults, deriveStatusHint } from "./searchReducer";
 import { ApiError } from "./api";
 import type { SearchState, Student } from "../types";
+
+// 成功终态的统一构造：生产已改派 submit-result，测试若继续打 submit-success
+// 就会锁在一个生产零派发的分支上——死代码仍显得受保护，本仓已因此改过一次。
+const okSettled = (items: Student[], total: number, hasMore: boolean, query = "张三") =>
+  searchReducer(
+    searchReducer(initialState, { type: "input-change", query }),
+    { type: "submit-result", result: { ok: true, response: { items, total, limit: 10, offset: 0, hasMore } } }
+  );
 
 const makeStudents = (n: number): Student[] =>
   Array.from({ length: n }, (_, i) => ({ name: `学生${i}`, grade: "高一" as const, className: `${(i % 5) + 1}班` }));
@@ -33,13 +41,21 @@ describe("errorMessage", () => {
 
 describe("resultSectionOf", () => {
   it("maps every query state to exactly one section", () => {
-    // 穷尽性断言：7 个状态必须全部有归属。
-    // 此前映射表内联在组件里，新增查询状态时无任何测试会提醒补映射，
+    // 运行期逐项核对，不是编译期强制：遍历数组由 searchStateValues 派生，
+    // 状态集合变大时本用例会随之下标期望不符而翻红（toEqual 锁的是逐项期望），
+    // 而搜索状态文案表（COPY）缺键报 TS2741、searchStateExhaustive 报
+    // { missing }——那两处才是编译期强制。改动前这里是手抄数组，
+    // 状态集合变大时它静默保持绿色，本用例名不副实。
+    //
+    // 映射表此前内联在组件里，新增查询状态时无任何测试会提醒补映射，
     // 未覆盖的状态会静默落进「不渲染结果区」。
-    const all: SearchState[] = ["idle", "editing", "loading", "success", "duplicate", "empty", "error"];
+    const all: SearchState[] = [...searchStateValues];
     const mapped = all.map(resultSectionOf);
     expect(mapped).toEqual([null, null, "loading", "list", "list", "empty", "error"]);
-    // 7 个状态恰好收敛为 5 种区段归属（success 与 duplicate 同为 list）。
+    // 状态恰好收敛为 5 种区段归属（success 与 duplicate 同为 list）。
+    // 刻意不写死「7 个」：状态集合会增删，写死数字必然漂移——本仓已因此
+    // 在多处文档与注释间产生过不一致。此处断言的是去重后的区段名集合，
+    // 状态增删而区段名不变时它仍然通过，这是与上方逐项期望的分工。
     // 用 Record 统计而非 Set：键是有限的静态字面量。
     const distinct: Record<string, number> = {};
     for (const section of mapped) {
@@ -80,7 +96,7 @@ describe("shouldScrollToResults", () => {
   it("stays consistent with the section mapping", () => {
     // 滚动集合与区段集合派生自同一处，不可能出现「滚到了但不显示」
     // 或「显示了但不滚动」的错位。此前两者在 App.tsx 里各写一份。
-    const all: SearchState[] = ["idle", "editing", "loading", "success", "duplicate", "empty", "error"];
+    const all: SearchState[] = [...searchStateValues];
     for (const state of all) {
       const section = resultSectionOf(state);
       expect(shouldScrollToResults(state)).toBe(section !== null && section !== "loading");
@@ -97,7 +113,7 @@ describe("searchReducer", () => {
   // 状态与提示文案必须一致：切到 editing 时不能保留上一轮的
   // 错误或结果文案，否则用户会看到 editing 状态配上"网络异常"之类的提示。
   it("refreshes status text when leaving error for editing", () => {
-    const afterError = searchReducer(initialState, { type: "submit-error", cause: new ApiError("x", undefined, "network") });
+    const afterError = searchReducer(initialState, { type: "submit-result", result: { ok: false, reason: "error", cause: new ApiError("x", undefined, "network") } });
     expect(afterError.state).toBe("error");
     const s = searchReducer(afterError, { type: "input-change", query: "张" });
     expect(s.state).toBe("editing");
@@ -107,13 +123,15 @@ describe("searchReducer", () => {
 
   it("refreshes status text when leaving success for editing", () => {
     const items: Student[] = [{ name: "张三", grade: "高一", className: "1班" }];
-    const afterSuccess = searchReducer(initialState, {
-      type: "submit-success",
-      items,
-      total: 1,
-      hasMore: false,
-      query: "张三",
-    });
+    // 经 submit-result 的 ok 分支构造成功态：生产已改派它，测试若继续打
+    // submit-success 就会锁在一个生产不再走的路径上——死代码仍显得受保护。
+    const afterSuccess = searchReducer(
+      searchReducer(initialState, { type: "input-change", query: "张三" }),
+      {
+        type: "submit-result",
+        result: { ok: true, response: { items, total: 1, limit: 10, offset: 0, hasMore: false } },
+      }
+    );
     const s = searchReducer(afterSuccess, { type: "input-change", query: "李" });
     expect(s.state).toBe("editing");
     expect(s.statusText).not.toBe("已定位 1 位同学");
@@ -122,7 +140,7 @@ describe("searchReducer", () => {
   // IME 组合开始即视为一次新的编辑意图：切到 editing 并刷新文案，
   // 否则查询失败后开始打字会持续显示 error 状态配旧的错误文案。
   it("refreshes state and status text when composition starts from error", () => {
-    const afterError = searchReducer(initialState, { type: "submit-error", cause: new ApiError("x", undefined, "network") });
+    const afterError = searchReducer(initialState, { type: "submit-result", result: { ok: false, reason: "error", cause: new ApiError("x", undefined, "network") } });
     const s = searchReducer(afterError, { type: "composition-start" });
     expect(s.state).toBe("editing");
     expect(s.isComposing).toBe(true);
@@ -131,13 +149,7 @@ describe("searchReducer", () => {
 
   it("refreshes state and status text when composition starts from success", () => {
     const items: Student[] = [{ name: "张三", grade: "高一", className: "1班" }];
-    const afterSuccess = searchReducer(initialState, {
-      type: "submit-success",
-      items,
-      total: 1,
-      hasMore: false,
-      query: "张三",
-    });
+    const afterSuccess = okSettled(items, 1, false);
     const s = searchReducer(afterSuccess, { type: "composition-start" });
     expect(s.state).toBe("editing");
     expect(s.statusText).not.toBe("已定位 1 位同学");
@@ -170,9 +182,9 @@ describe("searchReducer", () => {
 
   it("settles to success/duplicate/empty", () => {
     const items = [{ name: "张三", grade: "高一" as const, className: "1班" }];
-    expect(searchReducer(initialState, { type: "submit-success", items, total: 1, hasMore: false, query: "张三" }).state).toBe("success");
-    expect(searchReducer(initialState, { type: "submit-success", items, total: 2, hasMore: true, query: "张三" }).state).toBe("duplicate");
-    expect(searchReducer(initialState, { type: "submit-success", items: [], total: 0, hasMore: false, query: "查无此人" }).state).toBe("empty");
+    expect(okSettled(items, 1, false).state).toBe("success");
+    expect(okSettled(items, 2, true).state).toBe("duplicate");
+    expect(okSettled([], 0, false).state).toBe("empty");
   });
 
   it("load-more-result ok appends items and resets loadingMore", () => {
@@ -218,29 +230,26 @@ describe("statusTextFor", () => {
 describe("orchestration inside the reducer", () => {
   it("derives success and its status text from a raw response", () => {
     const items: Student[] = [{ name: "张三", grade: "高一", className: "1班" }];
-    const s = searchReducer(initialState, { type: "submit-start" });
-    const next = searchReducer(s, { type: "submit-success", items, total: 1, hasMore: false, query: "张三" });
+    const next = okSettled(items, 1, false);
     expect(next.state).toBe("success");
     expect(next.statusText).toBe("已定位 1 位同学");
   });
 
   it("derives empty when the response carries no match", () => {
-    const s = searchReducer(initialState, { type: "submit-start" });
-    const next = searchReducer(s, { type: "submit-success", items: [], total: 0, hasMore: false, query: "查无此人" });
+    const next = okSettled([], 0, false);
     expect(next.state).toBe("empty");
     expect(next.statusText).toBe("没有找到匹配记录");
   });
 
   it("hints the whole grade for a pure grade query without the caller deriving it", () => {
-    const s = searchReducer(initialState, { type: "submit-start" });
-    const next = searchReducer(s, { type: "submit-success", items: [], total: 200, hasMore: true, query: "高一" });
+    const next = okSettled([], 200, true, "高一");
     expect(next.state).toBe("duplicate");
     expect(next.statusText).toContain("整个年段/班级");
   });
 
   it("classifies the failure cause into status text", () => {
     const s = searchReducer(initialState, { type: "submit-start" });
-    const next = searchReducer(s, { type: "submit-error", cause: new ApiError("x", 429, "rate_limited") });
+    const next = searchReducer(s, { type: "submit-result", result: { ok: false, reason: "error", cause: new ApiError("x", 429, "rate_limited") } });
     expect(next.state).toBe("error");
     expect(next.statusText).toBe("请求过于频繁，请稍候再试");
   });
@@ -250,7 +259,7 @@ describe("deriveStatusHint", () => {
   // 这组断言锁的是「界面提示只由查询状态派生」，此前三条支路改坏都不会有任何用例翻红：
   // 把 App.tsx 的 disabled 改成 false、把 data-state 硬编码、让 StatusOrb 对任何状态都渲染，
   // 132 条用例全部通过。断言必须锁住派生值本身，野生支路才无法复活。
-  const all: SearchState[] = ["idle", "editing", "loading", "success", "duplicate", "empty", "error"];
+  const all: SearchState[] = [...searchStateValues];
 
   it("只有 loading 状态禁用提交并渲染加载指示", () => {
     for (const state of all) {
@@ -290,7 +299,7 @@ describe("deriveStatusHint", () => {
 // 下列断言从「同一次派生」这一接缝验证一致性，改任一派生即翻红。
 describe("present", () => {
   it("每个查询状态的展示派生组合都可用且自洽", () => {
-    const all: SearchState[] = ["idle", "editing", "loading", "success", "duplicate", "empty", "error"];
+    const all: SearchState[] = [...searchStateValues];
     for (const state of all) {
       const p = present({ ...initialState, state, query: "张三" });
       expect(p.section).toBe(resultSectionOf(state));

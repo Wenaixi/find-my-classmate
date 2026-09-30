@@ -171,9 +171,9 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 | src/config.ts | 前端契约常量（PAGE_SIZE/MAX_QUERY_LENGTH/MAX_LIMIT/REQUEST_TIMEOUT_MS） | 无 |
 | src/lib/api.ts | 网络适配与响应结构校验（decodeItem 只认 canonical class 单字段） | types, config |
 | src/lib/query.ts | 查询解释（解析 token、hasNameCondition、姓名归一化，空白语义与 Go 对齐含 NEL），不含匹配/排序/分页 | types |
-| src/lib/searchReducer.ts | 搜索状态机纯 reducer（状态派生/错误文案/纯年段与班级整段命中提示） | types, api, config |
+| src/lib/searchReducer.ts | 搜索状态机纯 reducer（状态派生/错误文案/纯年段与班级整段命中提示） | types, api, query（hasNameCondition）、resultSummary、searchSession、config |
 | src/lib/searchSession.ts | 请求竞态编排（requestId + abort）；竞态骨架由私有 perform 单点承载，submit/loadMore 只差 id 来源与 offset | types |
-| src/lib/useSearchController.ts | 查询控制器深模块（createSearchOrchestrator 纯逻辑 + hook 壳），state + controller 两面消费 | types, api, config |
+| src/lib/useSearchController.ts | 查询控制器深模块（createSearchOrchestrator 纯逻辑 + hook 壳），state + controller 两面消费 | types, searchReducer, searchSession（无 api/config 直依赖：api 类型经 searchSession 间接进来，分页大小由调用方经 opts 传入） |
 | src/lib/useSearchInput.ts | 交互语义（IME 组合守卫、Enter 提交、Escape 清空）；组合状态取自 nativeEvent 与控制器 state 两个来源，任一为真都不得提交 | useSearchController |
 | src/lib/resultSummary.ts | 结果摘要单点派生（进度/计数/剩余文案） | 无 |
 | src/site.config.ts | 站点展示文案（数据来源/运营团队/数据处理方） | 无 |
