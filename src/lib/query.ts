@@ -1,18 +1,56 @@
 import type { Grade, ParsedQuery } from "../types";
 
 const separators = /[，,、+]+/g;
-const classDigits: Record<string, string> = { 一: "1", 二: "2", 三: "3", 四: "4", 五: "5", 六: "6", 七: "7", 八: "8", 九: "9", 十: "10" };
+
+// 汉字数字的单字符集是班级域的跨语言契约：Go 端 classparse.go 的三处用途
+// （正则字符类、连写守门、值映射）与本文件的三处此前各手抄一遍，共六份。
+// 第十八轮变异实验实测：把两端 classNumberHead 同时删掉「四」与「七」，
+// Go 全量测试与前端 194 条全部零翻红——语料与对拍在结构上表达不出
+// 「两端一致地错」，而守门收窄会让「高一四班」从「高一 + 4 班」
+// 退化为整年段全量返回。
+//
+// 因此这组字符集必须有单一 owner：下方 chineseDigitOnes 是它，
+// 三处用途全部由它派生。
+//
+// 「十」单独处理而非并入：它的值是 10 而不是位置即值，
+// 而 chineseDigitOnes 的顺序恰好是值序（index+1），两者不能共用一条推导。
+const chineseDigitOnes = "一二三四五六七八九";
+const chineseOnesClass = "[" + chineseDigitOnes + "]";
+// classDigits 是汉字数字到班号的真值表，与 chineseDigitOnes 同源派生。
+// 「十」不在 chineseDigitOnes 里（它的值不是位置即值），单独补入。
+//
+// 刻意声明为字面量元组而非 Record<string, string>：显式标注会把键拓宽回
+// string，于是「键集与 chineseDigitOnes 是否一致」在类型层面恒成立，
+// 下方的自洽检查形同虚设。as const 保留字面量类型，键集才能参与 Exclude。
+const classDigitEntries = [
+  ...[...chineseDigitOnes].map((d, i) => [d, String(i + 1)] as const),
+  ["十", "10"] as const,
+] as const;
+const classDigits: Record<string, string> = Object.fromEntries(classDigitEntries);
+
+// 值表键集的自洽检查：它必须恰好覆盖 chineseDigitOnes 的九个单字加「十」。
+// 派生写法已使「漏字」不可能，但键集与字符集仍分属两处声明（一个字符串、
+// 一个元组），键集写错时只有 chineseNumberToInt 查表未命中才发作——表现为
+// 该班级名降级为姓名条件，用户搜「四班」找不到四班，且两端可同时错而对拍静默。
+// 此检查让不一致在编译期报错，而不是等到运行时静默降级。
+type ClassDigitKeyGap = Exclude<(typeof classDigitEntries)[number][0], keyof typeof classDigits>;
+const classDigitsExhaustive: ClassDigitKeyGap extends never ? true : { missing: ClassDigitKeyGap } = true;
+void classDigitsExhaustive;
+
 // classNumberPattern 精确编码班号的合法形态：阿拉伯数字，或汉字数字的
 // 「单字 / 十开头 / 第二字为十」三种。
 // 汉字部分此前写 [一二三四五六七八九十]+ 贪婪匹配任意长度，而
 // chineseNumberToInt 只认那三种形态，于是超长输入「匹配成功却被静默截断」。
-// 与 Go 端 classparse.go 的 classNumberPattern 保持同一份语义。
-const chineseNumberPattern = "[一二三四五六七八九]|十[一二三四五六七八九]?|[一二三四五六七八九]十[一二三四五六七八九]?";
+// 与 Go 端 classparse.go 的 classNumberPattern 保持同一份语义，
+// 字符类由 chineseDigitOnes 派生，使两端无法分叉。
+const chineseNumberPattern = chineseOnesClass + "|十" + chineseOnesClass + "?|" + chineseOnesClass + "十" + chineseOnesClass + "?";
 const classNumberPattern = "\\d+|" + chineseNumberPattern;
 const classToken = new RegExp(`^(${classNumberPattern})班?$`);
 // classNumberHead 只判「以班号字符开头」，不判整段可解析：
 // 年级+班级连写用它守门，「一一」开头像班号却解析失败，须放行到降级路径。
-const classNumberHead = /^[0-9一二三四五六七八九十]/;
+// 字符集与 chineseDigitOnes 同源派生：它曾零对拍且收窄即致整年段全量。
+const classHeadChars = "[0-9" + chineseDigitOnes + "十]";
+const classNumberHead = new RegExp("^" + classHeadChars);
 // 年段值域与 Go 端 search.go 的 knownGrades 保持同一份事实。
 // 硬编码会使「扩展年段只需在 knownGrades 追加」在两端同时失效，
 // 且跨语言对拍无法发现——两端一致地不认识新年段，对拍语料必须先有该年段样本。

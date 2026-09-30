@@ -153,10 +153,15 @@ func splitConcatenation(expr string) []string {
 // （JS 无 u 标志的 \d 与 Go 的 [0-9] 在 ASCII 数字上等价）。本对拍比较
 // 归一化后的语义形式，因此把 \d 展开为 [0-9]。
 //
-// 表达力上限：只锁这两条声明。chineseNumberToInt、classDigits、
-// splitGradeClass 是算法而非字面量，正则抽不出来，归契约语料覆盖；
-// goSpaceChars 一侧是枚举而 Go 端用 unicode.IsSpace，根本没有第二份声明，
-// 无法对拍——这三类都不在本对拍范围，不要因「已对拍」而以为已覆盖。
+// 覆盖范围：汉字数字形态、完整班号形态、连写守门字符集三条声明对拍。
+// chineseNumberToInt、classDigits、splitGradeClass 是算法或派生值而非字面量，
+// 正则抽不出来——值表的键集由前端 query.ts 的编译期检查承担，
+// 解析行为归契约语料覆盖；goSpaceChars 一侧是枚举而 Go 端用
+// unicode.IsSpace，根本没有第二份声明，无法对拍。
+// **不要因「已对拍」而以为已覆盖**：对拍与语料对「两端一致地错」同时失明，
+// 第十八轮实测两端同时删掉守门字符集里的「四」与「七」即零翻红。
+// 唯一能拦住这种漂移的是单一 owner——两端各把字符集收成一处声明、
+// 三处用途由它派生，使「同源分叉」在结构上不可能。
 func TestChineseNumberPatternMatchesFrontend(t *testing.T) {
 	got := normalizeDigitClass(parseFrontendPattern(t, "chineseNumberPattern"))
 	if got != chineseNumberPattern {
@@ -173,6 +178,24 @@ func TestClassNumberPatternMatchesFrontend(t *testing.T) {
 	want := normalizeDigitClass(classNumberPattern)
 	if got != want {
 		t.Errorf("班号形态声明两端不一致:\n  前端 = %q\n  后端 = %q", got, want)
+	}
+}
+
+// TestClassHeadCharsMatchesFrontend 对拍连写守门的字符集。
+//
+// 它此前是本仓唯一一处「零对拍且收窄即致整年段全量」的声明：守门只判
+// 「以班号字符开头」，字符集漏掉某个汉字数字时，「高一四班」会走不进
+// 连写分支、落回纯年段条件，一次精确查询被放大成整年段全量返回。
+// 第十八轮变异实验实测：把两端同时删掉「四」与「七」，Go 全量测试与
+// 前端全部用例零翻红——语料只在首字符为 {0,1,2,三,十,一,9} 的连写样本上
+// 取样，而这七字恰好都不在被删集合内。**两端一致地错时，对拍与语料同时静默。**
+//
+// 修法是两端各把该字符集收成单一 owner 并派生三处用途，本用例锁住
+// 派生出的这一份——它不再是零对拍声明。
+func TestClassHeadCharsMatchesFrontend(t *testing.T) {
+	got := parseFrontendPattern(t, "classHeadChars")
+	if got != classHeadChars {
+		t.Errorf("连写守门字符集两端不一致:\n  前端 = %q\n  后端 = %q", got, classHeadChars)
 	}
 }
 

@@ -10,7 +10,21 @@ import (
 // search.go 的查询解析与 data.go 的名单加载校验都依赖它，
 // 归位到独立文件后，改查询语义不会静默改变数据文件校验行为。
 
-// classNumberPattern 是班号的合法形态，精确编码两种写法：
+// 汉字数字的单字符集是班级域的跨语言契约，两端各需一份声明：
+// 本文件的三处用途（正则字符类、连写守门、值映射）此前各手抄一遍，
+// TS 端 query.ts 同样手抄三处，共六份。第十八轮变异实验实测：
+// 把两端 classNumberHead 同时删掉「四」与「七」，Go 全量测试与前端 194 条
+// 全部零翻红——语料与对拍在结构上表达不出「两端一致地错」，
+// 而守门收窄会让「高一四班」从「高一 + 4 班」退化为整年段全量返回。
+//
+// 因此这组字符集必须有单一 owner：下方 chineseDigitOnes 是它，
+// 正则字符类、classNumberHead 与 classDigits 全部由它派生。
+//
+// 「十」单独声明而非并入：它的值是 10 而不是位置即值，
+// 而 chineseDigitOnes 的顺序恰好是值序（index+1），两者不能共用一条推导。
+const chineseDigitOnes = "一二三四五六七八九"
+
+// chineseNumberPattern 是班号的合法形态，精确编码两种写法：
 // 阿拉伯数字（任意长度，是否溢出由 Atoi 判定）与汉字数字的
 // 「单字 / 十开头 / 第二字为十」三种形态。
 //
@@ -19,8 +33,13 @@ import (
 // 「匹配成功却被静默截断」：「九十九十九」取前三位得 99、「十十」得 20、
 // 「二十一十」得 21，且都声称 Valid=true——畸形班名因此被当成合法班号。
 // 正则的接受域必须与解析器的接受域一致，超长输入应在匹配阶段就落选。
+//
+// 字符类由 chineseDigitOnes 派生而非手写：手写副本曾与 classNumberHead
+// 的字符集分叉（后者漏字无从发现，因为两端可同时漏）。
+// 拼接在编译期完成，不把正则构造放进热路径。
 const (
-	chineseNumberPattern = "[一二三四五六七八九]|十[一二三四五六七八九]?|[一二三四五六七八九]十[一二三四五六七八九]?"
+	chineseOnesClass    = "[" + chineseDigitOnes + "]"
+	chineseNumberPattern = chineseOnesClass + "|十" + chineseOnesClass + "?|" + chineseOnesClass + "十" + chineseOnesClass + "?"
 	// classNumberPattern 是完整班号（阿拉伯数字或汉字数字）。
 	// 查询侧的年级+班级连写正则与数据侧的班级名正则共用它，
 	// 使两条路径对同一串字必然得到同一个班号。
@@ -33,9 +52,32 @@ var classToken = regexp.MustCompile("^(" + classNumberPattern + ")班?$")
 // 年级+班级连写的识别用它守门：「高一同学」开头不是班号字符（是姓名），
 // 而「一一」开头是班号字符却解析失败——后者必须放行到 classCondition 降级，
 // 整段匹配（classToken）会把它一并挡在降级路径之外。
-var classNumberHead = regexp.MustCompile(`^[0-9一二三四五六七八九十]`)
+//
+// 字符集与 chineseDigitOnes 同源派生：它是本文件唯一一处曾零对拍而
+// 收窄即致整年段全量的声明，现已无法与 chineseNumberPattern 分叉。
+var classNumberHead = regexp.MustCompile("^" + classHeadChars);
 
-var classDigits = map[string]int{"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
+// classHeadChars 是 classNumberHead 的字符集：阿拉伯数字加十个汉字数字。
+// 单独提出为常量，使跨语言对拍能直接锁它——锁整个正则会被 "^" 与
+// 字符类的包装形式干扰，而真正需要两端一致的是这串字符。
+const classHeadChars = "[0-9" + chineseDigitOnes + "十]"
+
+// classDigits 是汉字数字到班号的真值表，与 chineseDigitOnes 同源派生。
+// 「十」不在 chineseDigitOnes 里（它的值不是位置即值），单独补入。
+// 派生而非手写，使值表与两处正则无法分叉。
+var classDigits = func() map[string]int {
+	digits := make(map[string]int, len(chineseDigitOnes)+1)
+	// 序号取字符位置而非字节偏移：Go 的 range 遍历字符串时 i 是字节下标，
+	// 中文字符占三字节，按 i+1 赋值会得到「四:10」「五:13」这类错值。
+	// 正则字符类全对而值表错时只有走值表的用例翻红——探针实测才发现。
+	pos := 0
+	for _, r := range chineseDigitOnes {
+		digits[string(r)] = pos + 1
+		pos++
+	}
+	digits["十"] = 10
+	return digits
+}()
 
 // chineseNumberToInt 解析汉字数字（支持 一~九十九 与 十~十九）。
 // 第二个返回值报告解析是否成功：classDigits 查表未命中时旧实现返回零值 0，
