@@ -155,13 +155,21 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 
 `idle → editing → loading → success | duplicate | empty | error`
 
-- 输入变化 → editing
+- 输入变化 → editing（**IME 组合期间只更新 query、保留原状态**：组合中的候选文字不是一次新的编辑意图）
 - 提交 → loading（清空旧结果）
-- 响应 0 条 → empty；1 条 → success；多条 → duplicate（分页展示）
-- 请求失败 → error（保留重试入口）
+- 查询落定由单个 `submit-result` action 收编三分支，与 `load-more-result` 同形：
+  成功 → success / duplicate / empty（按条数派生）；真实失败 → error（保留重试入口）；
+  **作废（stale）→ editing**
 - 清空（Escape / 清空按钮）→ 回到 idle
 
+**作废分支不可省略**：组合期的输入变化会 `session.invalidate()` 作废在途请求，
+若 stale 无分支可走，state 永远停在 loading，而 submit 的守卫正是「loading 中不
+发起新请求」——形成死角：状态行显示「正在检索完整名单」、提交按钮禁用，按 Enter
+没有任何反应。目标用户正是中文输入法人群。
+
 结果区仅在非 idle/editing 状态渲染，滚动定位由 state 变化触发。
+**loading 必须真的上屏**：hook 壳对 Promise 型动作分两段渲染（启动态 + 终态），
+缺前一段则整段请求期间零重渲染，加载界面成为不可达的死代码。
 
 ## 7. 前端模块边界
 
@@ -170,10 +178,10 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 | src/App.tsx | 页面组装；只消费查询控制器的 state/controller 两面与 `present` 展示派生，不理解 reducer/session、不手写组合判断 | 全部 |
 | src/config.ts | 前端契约常量（PAGE_SIZE/MAX_QUERY_LENGTH/MAX_LIMIT/REQUEST_TIMEOUT_MS） | 无 |
 | src/lib/api.ts | 网络适配与响应结构校验（decodeItem 只认 canonical class 单字段） | types, config |
-| src/lib/query.ts | 查询解释（解析 token、hasNameCondition、姓名归一化，空白语义与 Go 对齐含 NEL），不含匹配/排序/分页 | types |
-| src/lib/searchReducer.ts | 搜索状态机纯 reducer（状态派生/错误文案/纯年段与班级整段命中提示） | types, api, query（hasNameCondition）、resultSummary、searchSession、config |
+| src/lib/query.ts | 查询解释（解析 token、hasNameCondition、姓名归一化，空白语义与 Go 对齐含 NEL），不含匹配/排序/分页。**降级策略由 `classCondition` 单点持有**，与 Go 端 `classparse.go` 同名函数同形；`classNumber` 返回显式三态而非 `-1`/`0` 哨兵 | types |
+| src/lib/searchReducer.ts | 搜索状态机纯 reducer（状态派生/错误文案/纯年段与班级整段命中提示/`present` 展示派生含错误区段文案切分） | types, api, query（hasNameCondition）、resultSummary, searchSession, config |
 | src/lib/searchSession.ts | 请求竞态编排（requestId + abort）；竞态骨架由私有 perform 单点承载，submit/loadMore 只差 id 来源与 offset | types |
-| src/lib/useSearchController.ts | 查询控制器深模块（createSearchOrchestrator 纯逻辑 + hook 壳），state + controller 两面消费 | types, searchReducer, searchSession（无 api/config 直依赖：api 类型经 searchSession 间接进来，分页大小由调用方经 opts 传入） |
+| src/lib/useSearchController.ts | 查询控制器深模块（createSearchOrchestrator 纯逻辑 + hook 壳），state + controller 两面消费。**hook 壳对 Promise 型动作分两段渲染**：先渲染启动态（loading / loadingMore），落定后渲染终态——缺前一段则整段请求期间零重渲染、加载界面不可达 | types, searchReducer, searchSession（无 api/config 直依赖：api 类型经 searchSession 间接进来，分页大小由调用方经 opts 传入） |
 | src/lib/useSearchInput.ts | 交互语义（IME 组合守卫、Enter 提交、Escape 清空）；组合状态取自 nativeEvent 与控制器 state 两个来源，任一为真都不得提交 | useSearchController |
 | src/lib/resultSummary.ts | 结果摘要单点派生（进度/计数/剩余文案） | 无 |
 | src/site.config.ts | 站点展示文案（数据来源/运营团队/数据处理方） | 无 |

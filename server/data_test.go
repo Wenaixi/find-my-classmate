@@ -399,7 +399,6 @@ func TestFailureCauseIsLoggedAgainWhenRootCauseChanges(t *testing.T) {
 		t.Errorf("根因第三次变化应再补记 1 条，实际 %d 条：%q", count, buf.String())
 	}
 
-
 	// 根因未变时不得继续补记：再探两次，指纹与根因都与上一轮相同。
 	buf.Reset()
 	for i := range 3 {
@@ -459,7 +458,7 @@ func TestFailureCauseNamesTheGrade(t *testing.T) {
 	}
 
 	// 反向：换成高二出错，年段必须随之改变——只断「含年段」的话，
-	 // 把年段硬编码成高一的实现同样通过。
+	// 把年段硬编码成高一的实现同样通过。
 	buf2 := capture()
 	broken2 := `{"标题":"福清一中2025级高二编班名单","名单":{"零班":[{"姓名":"李四"}]}}`
 	if err := os.WriteFile(filepath.Join(dir, "高二.json"), []byte(broken2), 0o644); err != nil {
