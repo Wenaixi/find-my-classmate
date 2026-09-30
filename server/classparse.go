@@ -38,7 +38,7 @@ const chineseDigitOnes = "一二三四五六七八九"
 // 的字符集分叉（后者漏字无从发现，因为两端可同时漏）。
 // 拼接在编译期完成，不把正则构造放进热路径。
 const (
-	chineseOnesClass    = "[" + chineseDigitOnes + "]"
+	chineseOnesClass     = "[" + chineseDigitOnes + "]"
 	chineseNumberPattern = chineseOnesClass + "|十" + chineseOnesClass + "?|" + chineseOnesClass + "十" + chineseOnesClass + "?"
 	// classNumberPattern 是完整班号（阿拉伯数字或汉字数字）。
 	// 查询侧的年级+班级连写正则与数据侧的班级名正则共用它，
@@ -55,7 +55,7 @@ var classToken = regexp.MustCompile("^(" + classNumberPattern + ")班?$")
 //
 // 字符集与 chineseDigitOnes 同源派生：它是本文件唯一一处曾零对拍而
 // 收窄即致整年段全量的声明，现已无法与 chineseNumberPattern 分叉。
-var classNumberHead = regexp.MustCompile("^" + classHeadChars);
+var classNumberHead = regexp.MustCompile("^" + classHeadChars)
 
 // classHeadChars 是 classNumberHead 的字符集：阿拉伯数字加十个汉字数字。
 // 单独提出为常量，使跨语言对拍能直接锁它——锁整个正则会被 "^" 与
