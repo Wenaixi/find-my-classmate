@@ -101,6 +101,36 @@ describe("hasNameCondition", () => {
   });
 });
 
+// 降级方向的断言。此前前端没有任何用例直接断「班级不可解析时必须降级为姓名
+// 条件」——契约语料断的是两端结果一致，两端一致地丢掉 token 时同样通过。
+// Go 端 classparse_test 有这条方向的断言（classCondition("0","0班") 必须
+// 产出非空 asName），前端此前只有对拍、没有接缝断言，两侧保护强度不对称。
+describe("班级不可解析时的降级方向", () => {
+  // 双向：正向断「产出了姓名匹配键」，反向断「未产出班级条件」。
+  // 只断正向的话，把 classNo 恒为 0 的实现同样通过。
+  it("汉字数字非法形态降级为姓名条件而非丢弃", () => {
+    const parsed = parseQuery("一一班");
+    expect(parsed.nameTokens).toEqual(["一一班"]);
+    expect(parsed.classNumber).toBeUndefined();
+  });
+
+  it("年段可解析而班级不可解析时保留年段条件并降级为姓名条件", () => {
+    const parsed = parseQuery("高一一一班");
+    // 年段条件必须保留：降级为「纯年段」会把一次精确查询放大成整年段全量。
+    expect(parsed.grade).toBe("高一");
+    // 降级为姓名条件而非静默丢弃：丢弃会让全部条件落空、退化成全校检索。
+    expect(parsed.nameTokens).toEqual(["高一一一班"]);
+    expect(parsed.classNumber).toBeUndefined();
+  });
+
+  it("数字溢出与非法同策略：都按姓名处理", () => {
+    const overflow = parseQuery("高二99999999999999999999班");
+    expect(overflow.grade).toBe("高二");
+    expect(overflow.nameTokens).toEqual(["高二99999999999999999999班"]);
+    expect(overflow.classNumber).toBeUndefined();
+  });
+});
+
 // 年段值域声明的不变量。
 //
 // 这组断言锁的不是「切分用的正则长什么样」，而是「声明本身完整且自洽」：

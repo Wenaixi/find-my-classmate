@@ -132,6 +132,36 @@ function chineseNumberToInt(value: string): number {
   return Number(classDigits[value] ?? 0);
 }
 
+// classCondition 把一个班级片段解释为「已解释的条件片段」，与 Go 端
+// classparse.go 的同名函数同形：两端的降级策略收在同一处，两条路径必然同源。
+//
+// matchPart 是班级部分（用于判定班号），rawToken 是用户输入的整个 token
+// （用于降级为姓名条件时的匹配键）。两者必须分开：查询「一一班」时班级部分是
+// 「一一」，而降级后的姓名匹配键必须是「一一班」——用户输入的是后者。
+//
+// 不变量：无法解析与数字溢出都降级为姓名条件，绝不丢弃 token。丢弃会让全部
+// 条件落空，Search 退化成与用户输入无关的全校检索——这不是理论风险，v0.9.1
+// 修复前输入「一一班」曾返回全校 1047 条。
+//
+// 修复前该策略在 parseQuery 内联了四处（连写+溢出、连写+非法、纯班级+溢出、
+// 纯班级+非法），其中两对逐字等价、每处自带一份理由、部分理由只存在于其中
+// 一处靠「照抄旁边那段」维持。Go 端 classCondition 的注释自陈它经历过同样的
+// 阶段（「此前 parseQuery 有四段近乎逐字重复」），而前端至今停在那里——同一条
+// 规则的两个镜像实现分叉过一次（Go 判「高二」而 TS 为 undefined，靠补语料
+// 才发现）。形状不变，裂缝会再开。
+//
+// 返回值约定（与 Go 端一致）：classNo > 0 表示解析为班级条件；
+// 否则 asName 非空，调用方把它追加到姓名条件。
+function classCondition(matchPart: string, rawToken: string): { classNo: number; asName: string } {
+  const parsed = classNumber(matchPart);
+  if (parsed.ok && parsed.classNo > 0) {
+    return { classNo: parsed.classNo, asName: "" };
+  }
+  // 降级：匹配键取 rawToken（用户原始输入）而非 matchPart——「降级时用哪个形态
+  // 参与匹配」与「降级」本身是同一个决定，收在这里使调用方无法传错。
+  return { classNo: 0, asName: normalizeName(rawToken) };
+}
+
 export function parseQuery(raw: string): ParsedQuery {
   // 与 Go 端 strings.Fields 对齐：按 goSpaceSplit 切分，而不是 JS 的 \s。
   // 注意不能用 JS 的 trim 收尾——它会移除首尾的 U+FEFF，而 Go 的 strings.TrimSpace
@@ -141,48 +171,27 @@ export function parseQuery(raw: string): ParsedQuery {
   const parsed: ParsedQuery = { tokens, nameTokens: [] };
 
   for (const token of tokens) {
-    // 年级+班级连写（"高二三班"）优先于年级子串，精确解析为年段+班级。
-    // 切分由 splitGradeClass 单点承担（最长年段前缀 + 剩余整体走班级解析），
-    // 与 Go 端 search.go 同名函数逐条对齐。
+    // 年段+班级连写（"高二三班"）：切分由 splitGradeClass 单点承担，
+    // 班级判定与降级策略由 classCondition 单点承担，两个调用点形状不同
+    // （连写要额外保留年段条件、纯班级没有年段可保留），策略本身不泄漏。
     const gradeClass = splitGradeClass(token);
     if (gradeClass) {
-      const classNo = classNumber(gradeClass.classPart);
-      if (classNo < 0) {
-        // 超长数字：班级不可解析，但年级部分仍然可解析。
-        // 保留年级条件并把整个 token 按姓名处理——与下方 classNo <= 0 分支同策略，
-        // 也与 Go 端 search.go 降级时先写 query.Grade 的行为一致。
-        // 修复前本分支直接 continue，parsed.grade 从未赋值：同一条规则的两个镜像
-        // 实现因此分叉（Go 判「高二」而 TS 为 undefined），且契约语料缺此形态，
-        // 分叉长期无人发现。语料「高二99999999999999999999班」锁住该行为。
-        parsed.grade = gradeClass.grade;
-        parsed.nameTokens.push(normalizeName(token));
-        continue;
-      }
       parsed.grade = gradeClass.grade;
-      if (classNo <= 0) {
-        // 年级可解析而班级不可解析：整个 token 按姓名处理并保留年级条件。
-        // 与 Go 端 parseQuery 同策略：不降级为「纯年级」，那会把一次精确查询
-        // 放大成整个年段的全量结果；也不静默丢弃，那会退化成全校检索。
-        parsed.nameTokens.push(normalizeName(token));
-        continue;
+      const condition = classCondition(gradeClass.classPart, token);
+      if (condition.classNo > 0) {
+        parsed.classNumber = condition.classNo;
+      } else {
+        parsed.nameTokens.push(condition.asName);
       }
-      parsed.classNumber = classNo;
       continue;
     }
-    const classMatch = token.match(classToken);
-    if (classMatch) {
-      const classNo = classNumber(token);
-      if (classNo < 0) {
-        // 超长数字（Go 端 -1 语义）：按姓名处理，避免"返回全部"
-        parsed.nameTokens.push(normalizeName(token));
-        continue;
+    if (classToken.test(token)) {
+      const condition = classCondition(token, token);
+      if (condition.classNo > 0) {
+        parsed.classNumber = condition.classNo;
+      } else {
+        parsed.nameTokens.push(condition.asName);
       }
-      if (classNo <= 0) {
-        // 汉字数字查表未命中（0 班号不存在）：按姓名处理而非静默丢弃。
-        parsed.nameTokens.push(normalizeName(token));
-        continue;
-      }
-      parsed.classNumber = classNo;
       continue;
     }
     const grade = parseGrade(token);
@@ -195,18 +204,31 @@ export function parseQuery(raw: string): ParsedQuery {
   return parsed;
 }
 
-function classNumber(value: string): number {
+// 班级判定的显式三态，与 Go 端 ClassParseResult 同形。
+// 修复前用 -1（溢出）与 0（非法/不匹配）两个哨兵表达，而哨兵之间行为完全相同——
+// 零信息量，且「0 既是非法又是合法 0 班号」正是 Go 端第十三轮消除的零值歧义。
+//
+// Overflow 一值在两端都零生产消费方：三态化的收益是类型层——非法与溢出在
+// 类型上可区分，调用方不必靠「两个值恰好同行为」来推断它没漏判——
+// 而不是行为层的差异化处置。当前两端对二者同策略（都按姓名处理）。
+export type ClassNumberResult =
+  | { ok: true; classNo: number }
+  | { ok: false; reason: "invalid" }
+  | { ok: false; reason: "overflow" };
+
+function classNumber(value: string): ClassNumberResult {
   const match = value.match(classToken);
-  if (!match) return 0;
+  if (!match) return { ok: false, reason: "invalid" };
   const digits = match[1];
   if (/^\d+$/.test(digits)) {
     const n = Number(digits);
-    // 溢出判定与 Go 端 classNumber 对齐：Atoi 失败即视为无效班级。
+    // 溢出判定与 Go 端对齐：Atoi 失败即视为无效班级。
     // 前端用 Number.isSafeInteger 表达同一上限（超出安全整数范围的数字串即无效）。
-    if (!Number.isSafeInteger(n)) return -1;
-    return n;
+    if (!Number.isSafeInteger(n)) return { ok: false, reason: "overflow" };
+    return { ok: true, classNo: n };
   }
-  return chineseNumberToInt(digits);
+  const parsed = chineseNumberToInt(digits);
+  return parsed > 0 ? { ok: true, classNo: parsed } : { ok: false, reason: "invalid" };
 }
 
 // 判定查询是否含姓名条件（任一 token 解析后成为姓名匹配词）。
