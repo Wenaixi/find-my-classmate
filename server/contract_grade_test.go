@@ -57,14 +57,22 @@ func TestGradeDomainMatchesFrontend(t *testing.T) {
 // 书写形式，容忍纯排版改动。gradeValues 用 as const satisfies 收窄类型，
 // 抽取只认字符串字面量数组本身，as const 与 satisfies 都不影响抽取结果。
 // 因此前端换用别的类型收窄手法不会让本对拍失败——它只关心声明了哪些年段。
+//
+// 行首锚定不可省：缺了 (?m)^\s* 时正则会从文件任意位置开始匹配，于是上方
+// 注释里一行被注释掉的同名声明也会被当成真声明。实测：把真实声明改成
+// 别的年段、同时在上一行留一条带正确清单的注释，本对拍报告 PASS——
+// 而生产跑着一份完全不同的年段清单。四条抽取器里只有本条原先无锚，
+// 其余三条（contract_constants_test.go 的两条与 parseFrontendGradeAliases）
+// 都用 (?m)^\s*；本条现已与其同形。
+//
+// 数组可能跨行书写，因此右端仍匹配到第一个右方括号为止，只锚定左端。
 func parseFrontendGradeValues(t *testing.T) map[Grade]struct{} {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join("..", "src", "lib", "query.ts"))
 	if err != nil {
 		t.Fatalf("读取前端年段声明文件失败: %v", err)
 	}
-	// 数组可能跨行书写，因此匹配到第一个右方括号为止，不按行锚定尾部。
-	pattern := regexp.MustCompile(`(?s)const\s+gradeValues\s*(?::[^=]+)?=\s*\[(.*?)\]`)
+	pattern := regexp.MustCompile(`(?ms)^\s*const\s+gradeValues\s*(?::[^=]+)?=\s*\[(.*?)\]`)
 	match := pattern.FindSubmatch(raw)
 	if match == nil {
 		t.Fatal("前端 gradeValues 声明未在 src/lib/query.ts 中找到（对拍读取的是该声明的数组字面量）")
