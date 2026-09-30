@@ -405,4 +405,34 @@ describe("present", () => {
     expect(p.summary.countLabel).toBe("显示 0 / 0 条记录");
     expect(p.summary.progress).toBe(0);
   });
+
+  // errorCopy 是 present 唯一跨两个 module 的不变量（标题与说明不得同句重复），
+  // 此前只有 App.mount.test.tsx 一条端到端 DOM 断言守着它——那是「该接缝上
+  // 应能直接断言、断言却在别处」的形态。变异实验：把 detail 改成恒定串
+  // （前缀剥离与空串兜底同时失效）后前端全量仍绿。
+  //
+  // 三个输入给出三个不同结果，因此三条断言互不重复、各自可证伪：
+  //   分类文案（不以标题为前缀）→ 说明原样保留，不加标题前缀
+  //   以标题为前缀且有剩余     → 去掉前缀与紧随的分隔符
+  //   以标题为前缀且无剩余     → 保留原句，不给空说明
+  it("分类文案原样呈现，不被错误区段标题污染", () => {
+    // 429 的分类文案不以 ERROR_TITLE 为前缀，属「说明本无前缀」这一支。
+    const p = present({ ...initialState, state: "error", statusText: "请求过于频繁，请稍候再试" });
+    expect(p.errorCopy.title).toBe("查询没有完成");
+    expect(p.errorCopy.detail).toBe("请求过于频繁，请稍候再试");
+  });
+
+  it("说明以标题为前缀时去掉前缀与紧随的分隔符", () => {
+    // 兜底文案恰好是「标题 + 分隔符 + 说明」，去掉前缀后不得与标题同句。
+    const p = present({ ...initialState, state: "error", statusText: "查询没有完成，请稍后重试" });
+    expect(p.errorCopy.title).toBe("查询没有完成");
+    expect(p.errorCopy.detail).toBe("请稍后重试");
+    expect(p.errorCopy.detail.startsWith(p.errorCopy.title)).toBe(false);
+  });
+
+  it("去掉前缀后为空时保留原句，不给用户一块空白说明", () => {
+    const p = present({ ...initialState, state: "error", statusText: "查询没有完成" });
+    expect(p.errorCopy.detail).toBe("查询没有完成");
+    expect(p.errorCopy.detail.length).toBeGreaterThan(0);
+  });
 });
