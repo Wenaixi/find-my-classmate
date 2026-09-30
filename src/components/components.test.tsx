@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { createElement, type ReactNode } from "react";
+import { present, initialState } from "../lib/searchReducer";
 import ResultList from "./ResultList";
 import StatusOrb from "./StatusOrb";
 import ErrorBoundary from "./ErrorBoundary";
@@ -117,14 +118,24 @@ describe("ResultList", () => {
     { name: "李四", grade: "高二" as const, className: "2班" },
   ];
 
-  function mountList(over: { hasMore?: boolean; loadMoreError?: boolean } = {}) {
+  // 夹具经 present 取 loadMoreZone，而不是手工拼 props：
+  // 原先把 hasMore 同时喂给 summary 与组件，而两者都从同一个 override 派生，
+  // 于是夹具在结构上无法表达「两者不一致」——加载区的三条界面知识零断言。
+  // 改走 present 后，组件断言的就是生产真实接缝。
+  function mountList(over: { hasMore?: boolean; loadMoreError?: boolean; loadingMore?: boolean } = {}) {
+    const hasMore = over.hasMore ?? false;
     return mount(
       createElement(ResultList, {
         items: students,
-        summary: deriveResultSummary(students.length, students.length, over.hasMore ?? false),
-        hasMore: over.hasMore ?? false,
-        loadingMore: false,
-        loadMoreError: over.loadMoreError ?? false,
+        summary: deriveResultSummary(students.length, students.length + (hasMore ? 20 : 0), hasMore),
+        loadMoreZone: present({
+          ...initialState,
+          items: students,
+          total: students.length,
+          hasMore,
+          loadingMore: over.loadingMore ?? false,
+          loadMoreError: over.loadMoreError ?? false,
+        }).loadMoreZone,
         onLoadMore: () => {},
       }),
     );
@@ -157,6 +168,25 @@ describe("ResultList", () => {
   // 元素恒在则断言恒真。该条件必须双向断言才有承重。
   it("loadMoreError 为假时不渲染失败提示", () => {
     expect(mountList().querySelector(".load-more-error")).toBeNull();
+  });
+
+  // 加载中这一支此前零断言：全仓唯一的 loadingMore 取值是 false，
+  // 而上面两条 hasMore 用例都在 loadingMore 为 false 下渲染按钮，
+  // 于是 disabled 与「正在加载」文案从无一次被真正检查。
+  // 变异实验：把 disabled 硬编码为 false、标签硬编码为「继续加载」，
+  // 前端全量仍绿。取样点必须让 busy 为真，双向断言才有承重。
+  it("加载更多进行中时按钮禁用且文案切换为正在加载", () => {
+    const button = mountList({ hasMore: true, loadingMore: true }).querySelector("[data-od-id=load-more-cta]") as HTMLButtonElement;
+    expect(button).not.toBeNull();
+    expect(button.disabled).toBe(true);
+    expect(button.textContent).toContain("正在加载");
+  });
+
+  it("加载更多未在进行时按钮可用且文案为继续加载", () => {
+    const button = mountList({ hasMore: true, loadingMore: false }).querySelector("[data-od-id=load-more-cta]") as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+    expect(button.textContent).toContain("继续加载");
+    expect(button.textContent).not.toContain("正在加载");
   });
 
   // 本组唯一涉及第三方库副作用的断言，也是最不可替代的一条。

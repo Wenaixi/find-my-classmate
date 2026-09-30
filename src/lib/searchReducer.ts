@@ -184,6 +184,20 @@ export interface Presentation {
    * 说明在说明以标题为前缀时去掉该前缀，使重复在派生处即被排除。
    */
   errorCopy: { title: string; detail: string };
+  /**
+   * 加载更多的三个界面知识：是否还有后续页、当前是否在加载、上次是否失败。
+   *
+   * 收到此处是因为它们此前住在 ResultList 里各判一次，而 present 自称
+   * 折出「视图需要的全部展示派生」——新增查询状态时改 present 不会让它们跟随。
+   * 同一形状的知识此前一分为二：submit 的忙碌态归 deriveStatusHint，
+   * loadMore 的忙碌态却在组件里。
+   *
+   * show 取代原先单独下传的 hasMore：summary 内部已把同一个布尔编码过两次
+   * （toolbarState 与 loadMoreLabel），再传一份独立的 hasMore 等于让同一事实
+   * 跨接缝两次，组件因此能渲染出「工具栏说已全部加载、按钮却还在」的
+   * 自相矛盾界面。收进这个 zone 后，一处判定、一处下传。
+   */
+  loadMoreZone: { show: boolean; busy: boolean; error: boolean };
 }
 
 // 错误区段的固定标题：与 COPY.error 的前缀同源，但两者不是同一句。
@@ -214,6 +228,7 @@ export function present(state: SearchControllerState): Presentation {
     showClear: state.query.length > 0,
     summary: deriveResultSummary(state.items.length, state.total, state.hasMore),
     errorCopy: splitErrorCopy(state.statusText),
+    loadMoreZone: { show: state.hasMore, busy: state.loadingMore, error: state.loadMoreError },
   };
 }
 

@@ -81,7 +81,7 @@ export function App({ api }: AppProps = {}) {
       case "loading":
         return <div className="result-loading" role="status"><span>扫描名单索引</span><span className="loading-pulse" aria-hidden="true" /></div>;
       case "list": {
-        return <ResultList items={items} summary={view.summary} hasMore={hasMore} loadingMore={loadingMore} loadMoreError={loadMoreError} onLoadMore={() => void loadMore()} />;
+        return <ResultList items={items} summary={view.summary} loadMoreZone={view.loadMoreZone} onLoadMore={() => void loadMore()} />;
       }
       case "empty":
         return <div className="result-message" data-od-id="empty-state"><strong>查无此人</strong><p>换个写法试试。可以只输入姓氏，或补充年段 / 班级缩小范围。</p><button className="text-action" onClick={() => document.getElementById("query")?.focus()}>继续输入 <span aria-hidden="true">↗</span></button></div>;

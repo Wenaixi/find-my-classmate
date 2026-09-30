@@ -6,9 +6,13 @@ import type { ResultSummary } from "../lib/resultSummary";
 interface ResultListProps {
   items: Student[];
   summary: ResultSummary;
-  hasMore: boolean;
-  loadingMore: boolean;
-  loadMoreError: boolean;
+  /**
+   * 加载更多的三个界面知识，由 present 的 loadMoreZone 单点派生后下传。
+   * 此前这三个布尔与 summary 一起作为独立 props 进来，其中 hasMore
+   * 在 summary 内已被编码两次（toolbarState、loadMoreLabel），
+   * 同一事实跨接缝两次，组件能渲染出自相矛盾的界面。
+   */
+  loadMoreZone: { show: boolean; busy: boolean; error: boolean };
   onLoadMore: () => void;
 }
 
@@ -34,7 +38,7 @@ function ResultCard({ student, index }: { student: Student; index: number }) {
   );
 }
 
-export default function ResultList({ items, summary, hasMore, loadingMore, loadMoreError, onLoadMore }: ResultListProps) {
+export default function ResultList({ items, summary, loadMoreZone, onLoadMore }: ResultListProps) {
   const liquidWrapRef = useRef<HTMLDivElement | null>(null);
 
   // liquid-gooey 渲染两个装饰 SVG：data-gooey-svg 与 data-gooey-overlay。
@@ -78,8 +82,8 @@ export default function ResultList({ items, summary, hasMore, loadingMore, loadM
       <div className="load-more-zone" data-od-id="load-more-zone">
         <div className="load-progress" aria-hidden="true"><span style={{ width: summary.progress + "%" }} /></div>
         <div className="load-more-copy"><span>{summary.countLabel}</span><span>{summary.loadMoreLabel}</span></div>
-        {hasMore && <button className="load-more-button" data-od-id="load-more-cta" type="button" onClick={onLoadMore} disabled={loadingMore} aria-label={"继续加载，剩余 " + summary.remaining + " 条结果"}><span>{loadingMore ? "正在加载" : "继续加载"}</span><span className="button-arrow" aria-hidden="true">↗</span></button>}
-        {loadMoreError && <div className="load-more-error" role="alert">加载失败，请再次点击继续加载。</div>}
+        {loadMoreZone.show && <button className="load-more-button" data-od-id="load-more-cta" type="button" onClick={onLoadMore} disabled={loadMoreZone.busy} aria-label={"继续加载，剩余 " + summary.remaining + " 条结果"}><span>{loadMoreZone.busy ? "正在加载" : "继续加载"}</span><span className="button-arrow" aria-hidden="true">↗</span></button>}
+        {loadMoreZone.error && <div className="load-more-error" role="alert">加载失败，请再次点击继续加载。</div>}
       </div>
     </>
   );
