@@ -49,8 +49,13 @@ func logf(min level, format string, args ...any) {
 func logInfof(format string, args ...any)  { logf(levelInfo, format, args...) }
 func logErrorf(format string, args ...any) { logf(levelError, format, args...) }
 
-// resolveLogDir 优先使用 FMC_LOG_DIR 环境变量；未设置时沿用数据目录下的 log 子目录。
-// 容器场景数据目录通常只读挂载，日志必须写到独立可写位置。
+// resolveLogDir 优先使用 FMC_LOG_DIR 环境变量；未设置时回落到数据目录下的 log 子目录。
+//
+// 回退分支只覆盖**本地开发**（数据目录可写），不覆盖容器场景：容器里数据目录
+// 通常只读挂载（Dockerfile 的 VOLUME + compose 的 :ro），此时该回退必然导致
+// openLog 失败、服务不启动。两个真实部署都显式设了 FMC_LOG_DIR 规避，
+// 故今天不触发——但删掉那行 ENV 的镜像变体会静默落进这条死路。
+// 失败时的指引由 main 的调用点给出（提示设置 FMC_LOG_DIR），不在此重复。
 func resolveLogDir(dataDir string) string {
 	if value := os.Getenv("FMC_LOG_DIR"); value != "" {
 		return value

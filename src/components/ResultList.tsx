@@ -37,12 +37,19 @@ function ResultCard({ student, index }: { student: Student; index: number }) {
 export default function ResultList({ items, summary, hasMore, loadingMore, loadMoreError, onLoadMore }: ResultListProps) {
   const liquidWrapRef = useRef<HTMLDivElement | null>(null);
 
-  // liquid-gooey 渲染的装饰 SVG（data-gooey-svg）含幽灵 g 节点会被 Chrome 捕获进 Tab 序列，
-  // 落在"搜索"与"继续加载"之间造成键盘焦点陷落。SVG 是纯装饰层（aria-hidden），对其 inert 阻断焦点。
+  // liquid-gooey 渲染两个装饰 SVG：data-gooey-svg 与 data-gooey-overlay。
+  // 二者含幽灵 g 节点，会被 Chrome 捕获进 Tab 序列，落在「搜索」与「继续加载」
+  // 之间造成键盘焦点陷落——纯装饰层却能吃掉键盘焦点。SVG 是 aria-hidden 的装饰
+  // 层，对其 inert 阻断焦点。
+  //
+  // 两层都要覆盖：库自己的 MutationObserver 用 closest 匹配
+  // "[data-gooey-svg], [data-gooey-overlay]" 把二者当同类，overlay 的 z-index 是
+  // 9999、库注释自陈「Above the content layer by design」，内含与 svg 层结构对称的
+  // g/defs/mask。此前只选择 svg 层，只挡住一半。
   useEffect(() => {
-    const svgs = liquidWrapRef.current?.querySelectorAll("[data-gooey-svg]");
-    svgs?.forEach((svg) => {
-      (svg as HTMLElement).setAttribute("inert", "");
+    const decorative = liquidWrapRef.current?.querySelectorAll("[data-gooey-svg], [data-gooey-overlay]");
+    decorative?.forEach((node) => {
+      (node as HTMLElement).setAttribute("inert", "");
     });
   }, [items.length]);
 

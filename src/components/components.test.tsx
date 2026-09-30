@@ -170,11 +170,21 @@ describe("ResultList", () => {
   //
   // 此前无任何断言覆盖，删掉整个 useEffect 全部测试仍然通过。
   // 变异实验：移除 setAttribute("inert", "") 后本用例翻红。
-  it("装饰 SVG 标记为 inert，阻断键盘焦点陷落", () => {
-    const decorative = mountList().querySelectorAll("[data-gooey-svg]");
-    expect(decorative.length).toBeGreaterThan(0);
-    decorative.forEach((node) => {
-      expect(node.hasAttribute("inert")).toBe(true);
-    });
+  it("全部装饰 SVG 层标记为 inert，阻断键盘焦点陷落", () => {
+    // liquid-gooey 渲染两个装饰 SVG：data-gooey-svg 与 data-gooey-overlay。
+    // 库自己把二者当同类（其 MutationObserver 用 closest 匹配
+    // "[data-gooey-svg], [data-gooey-overlay]"），而 overlay 的 z-index 是 9999、
+    // 库注释自陈「Above the content layer by design」，内含与 svg 层结构对称的
+    // g/defs/mask——即幽灵节点的来源与 svg 层相同。
+    //
+    // 修复此前只选择 [data-gooey-svg]，只挡住一半。逐层断言而非断言总数：
+    // 断「总数 > 0」的话，只覆盖一层的实现同样通过。
+    for (const selector of ["[data-gooey-svg]", "[data-gooey-overlay]"]) {
+      const nodes = mountList().querySelectorAll(selector);
+      expect(nodes.length, `选择器 ${selector} 未命中任何节点`).toBeGreaterThan(0);
+      nodes.forEach((node) => {
+        expect(node.hasAttribute("inert")).toBe(true);
+      });
+    }
   });
 });
