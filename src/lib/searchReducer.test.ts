@@ -172,6 +172,33 @@ describe("searchReducer", () => {
     expect(s.statusText).toBe(composing.statusText);
   });
 
+  // 组合结束的复位是「组合期不得提交」这条不变量的释放点：组合期 Enter 被
+  // useSearchInput 的守卫拦下，靠的就是 isComposing 在此归零。
+  //
+  // 第十八轮变异实验：把本分支改为恒返 state（不复位）后，前端 194 条用例
+  // 零翻红——该分支此前全文零断言。
+  //
+  // 取样点必须经 composition-start 抵达真实态：初始态的 isComposing 本就是
+  // false，若从 initialState 直接派发 composition-end，「正确复位」与「什么都没做」
+  // 给出同一个 false，断言恒真。下方两条成对：组合期间为真、结束后为假。
+  it("composition-end releases the composing flag after a real composition", () => {
+    const composing = searchReducer(initialState, { type: "composition-start" });
+    expect(composing.isComposing).toBe(true);
+    const s = searchReducer(composing, { type: "composition-end" });
+    expect(s.isComposing).toBe(false);
+  });
+
+  // 反向：组合结束的复位不得把组合期输入保留的其它状态一并改写。
+  // 它只释放 isComposing，状态与文案仍由 composition-start 决定。
+  it("composition-end releases only the composing flag", () => {
+    const afterError = searchReducer(initialState, { type: "submit-result", result: { ok: false, reason: "error", cause: new ApiError("x", undefined, "network") } });
+    const composing = searchReducer(afterError, { type: "composition-start" });
+    const s = searchReducer(composing, { type: "composition-end" });
+    expect(s.isComposing).toBe(false);
+    // 组合开始已把文案从错误态刷成 editing，组合结束不把它改回去。
+    expect(s.statusText).toBe(composing.statusText);
+  });
+
   it("clears results on submit-start", () => {
     const withResults = { ...initialState, items: [] as Student[], state: "duplicate" as SearchState };
     const s = searchReducer(withResults, { type: "submit-start" });
@@ -207,6 +234,33 @@ describe("searchReducer", () => {
     const s = searchReducer({ ...initialState, loadingMore: true }, { type: "load-more-result", result: { ok: false, reason: "stale" } });
     expect(s.loadingMore).toBe(false);
     expect(s.loadMoreError).toBe(false);
+  });
+
+  // 加载更多的错误提示必须在「点继续加载」时立刻清除，而不是等本次落定。
+  //
+  // loadMoreError 的生命周期是跨请求的：load-more-result 的 ok 分支经 ...state
+  // 继承该字段、不重置它（重置职责不在那里），因此 load-more-start 是唯一的
+  // 清理点。删掉它，用户「失败一次 → 点继续加载 → 本次成功」之后，红色提示
+  // 「加载失败，请再次点击继续加载」仍留在页面上。
+  //
+  // 第十八轮变异实验：删掉该行的 loadMoreError: false 后，前端 194 条用例
+  // 零翻红——load-more-start 的 case 分支此前全文零次派发。
+  //
+  // 取样点必须经 load-more-result 的 error 分支抵达真实态，而不是像上面三条
+  // 那样手工构造 {...initialState, loadingMore: true}：手工态绕过了唯一的清理
+  // 点，「正确清理」与「什么都没做」给出同一个 false，断言恒真。
+  it("load-more-start clears the error left by a previous failure", () => {
+    const failed = searchReducer(initialState, { type: "load-more-result", result: { ok: false, reason: "error", cause: new Error("boom") } });
+    expect(failed.loadMoreError).toBe(true);
+    const s = searchReducer(failed, { type: "load-more-start" });
+    expect(s.loadMoreError).toBe(false);
+  });
+
+  // 反向：清理错误的同时必须仍进入加载更多态。两个字段同处一行，
+  // 只断 loadMoreError 会放过「恒返 state」这种把 loadingMore 也丢掉的退化实现。
+  it("load-more-start enters the loading-more state", () => {
+    const s = searchReducer(initialState, { type: "load-more-start" });
+    expect(s.loadingMore).toBe(true);
   });
 
   it("resets on clear", () => {
