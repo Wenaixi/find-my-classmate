@@ -119,7 +119,10 @@ git push origin v0.10.3
 
 > **tag 必须与 `CHANGELOG.md` 的对应版本条目精确匹配**——`release.yml` 用 `awk`
 > 按 `github.ref_name` 抽取该条目作为 Release 正文，找不到会显式失败（`exit 1`）。
-> 当前版本见 `package.json` 的 `version` 字段。
+> 当前版本以 `CHANGELOG.md` 顶部最新的已发布条目为准（`## [Unreleased]` 之下
+> 第一条带日期的条目）。**不要看 `package.json` 的 `version`**——该字段带
+> `private: true`，全仓无任何代码读取它，且它当前落后于已发布版本一代。
+> 二进制内显示的版本号由发布流水线用 ldflags 从 git tag 注入，与 tag 同源。
 
 `.github/workflows/release.yml` 会执行全量测试，然后：
 1. 交叉编译 Linux amd64 / macOS arm64 / Windows amd64 三平台二进制（内嵌前端页面与 API 服务），连同空 data 占位目录与文档打包成 `findmyclassmate.tar.gz` 并创建 GitHub Release。**发布包不含任何名单数据**，使用者按下方数据格式章节自行放置 `data/高一.json` 等年段名单

@@ -33,8 +33,8 @@
 
 - 按声明序 `knownGrades`（高一/高二/高三）探测数据目录，存在的文件才加载，缺失文件自动跳过；目录为空时明确报错
 - 剥离 UTF-8 BOM
-- 校验：文件名与标题中的年段必须一致、名单结构完整、班级名可解析为班号、按（年段+班级+姓名）去重
-- 归一化输出统一模型：`{ Name, NameKey, Grade, ClassName }`
+- 校验：文件名与标题中的年段必须一致、名单结构完整、班级名可解析为班号、按（年段+**班号**+姓名）去重
+- 归一化输出统一模型：`Student` 共六个字段，定义见 `search.go` 的 `Student`——`Name` / `NameKey` / `Grade` / `ClassName` 四个带 json tag，加上两个 `json:"-"` 的加载期预计算派生字段 `ClassNo`（班号）与 `GradeIdx`（年段序）。**去重键用的是 `ClassNo` 而非 `ClassName`**：「1班」与「一班」解析出同一班号、是同一个班，用班名会让同一人因写法不同被加载两次并在响应里出现两条班名不同的记录；班级写法仍按原样展示，只是不再影响身份判定。
 
 **隐私红线（不可破坏）**：
 
@@ -105,6 +105,31 @@
 **跨语言对拍**：`server/contract_constants_test.go` 读取前端 `src/config.ts` 的三个常量
 （PAGE_SIZE / MAX_QUERY_LENGTH / MAX_LIMIT）与后端 config.go 断言一致，任一侧漂移立即失败——
 与 query-contract.json 对解析契约的机制相同，同步义务不再只靠注释。
+
+**跨语言声明的覆盖表**：同一份事实在 Go 与 TS 各持一份声明时，靠什么保证不漂移。
+新增声明时补一行——**「未列入」不等于「已覆盖」**。
+
+| 声明 | Go 位置 | TS 位置 | 覆盖机制 |
+| --- | --- | --- | --- |
+| 年段规范名值域 | `search.go` `knownGrades` | `query.ts` `gradeValues` + `types.ts` `Grade` | `contract_grade_test.go` 双向集合比较 + 前端编译期反向检查 |
+| 年段别名映射 | `search.go` `gradeAliases` | `query.ts` `gradeAliases` | `contract_grade_test.go` 双向集合比较 |
+| 数值常量 | `config.go` | `config.ts` | `contract_constants_test.go` 逐条抽取字面量 |
+| 汉字数字形态 | `classparse.go` `chineseNumberPattern` | `query.ts` 同名常量 | `contract_constants_test.go` 声明对拍 |
+| 完整班号形态 | `classparse.go` `classNumberPattern` | `query.ts` 同名常量 | `contract_constants_test.go` 声明对拍 |
+| 连写守门字符集 | `classparse.go` `classHeadChars` | `query.ts` 同名常量 | `contract_constants_test.go` 声明对拍 |
+| 汉字数字值表 | `classparse.go` `classDigits` | `query.ts` `classDigits` | 前端编译期键集检查；解析行为归契约语料 |
+| 查询分隔符 | `search.go` `querySeparators` | `query.ts` `separators` | 契约语料（形态有限，可穷举） |
+| 空白集合 | `unicode.IsSpace`（无第二份声明） | `query.ts` `goSpaceChars` | 契约语料（三个差集码位各一条） |
+| 解析算法本身 | `search.go` / `classparse.go` | `query.ts` | `docs/query-contract.json` 逐条对拍 |
+
+**这张表本身也有表达力上限，且上限是结构性的**：`classNumberHead` 曾以「零对拍」
+形态留在表外，第十八轮变异实验实测把两端同时删掉守门字符集里的「四」与「七」，
+Go 全量测试与前端全部用例**零翻红**——语料只在首字符为 `{0,1,2,三,十,一,9}`
+的连写样本上取样，这七字恰好都不在被删集合内。
+**两端一致地错时，任何跨语言机制都表达不出来**（对拍与语料同时静默）。
+唯一能拦住这种漂移的是**单一 owner**：两端各把字符集收成一处声明、
+三处用途由它派生，使「同源分叉」在结构上不可能。表里标「声明对拍」的行
+若其声明本身有多个手抄副本，先收成单一 owner 再对拍。
 
 E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章节声明；本条只约束"同一数值两份定义必须一致"。
 
@@ -232,7 +257,7 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 
 数据热重载策略：文件指纹探测带 1 秒节流（原子 CAS 保证同窗口单请求探测权）；变化则互斥重载，并发用读写锁保护（view() 为唯一数据访问入口）；重载失败有 2 秒冷却（指纹驱动）且旧数据不对外服务（一致性优先于可用性的设计决策）。
 
-两条时间窗口的判定收敛为 `recoveryDue(now)` 单点：探测节流与失败冷却共用同一条时间线，"同一条时间线"因此是代码事实而非注释承诺。时钟由构造函数注入（`newStudentStore(dir, now)`），不从外部改写可写字段。指纹采集阶段失败（目录缺失等）以 `lastFailStampKnown` 显式标记，不复用 `lastFailStamps` 的 nil 表达"无指纹"——后者曾使 `sameStamps(nil, ...)` 恒为假，冷却判定永不成立，目录缺失时每个请求都重试读盘并写错误日志。
+两条时间窗口的**时长**判定收敛为 `recoveryDue(now)` 单点：探测节流与失败冷却共用同一条时间线。**但「失败态下探测节流让位」这条规则不在其中**——`reload` 的首行门直接读 `lastFailAt` 字段判断当前是否处于失败态，因为 `recoveryDue` 的返回值只有两个布尔，表达不了这第三维语义。该行为有唯一承重用例（`TestStoreRecoveryBypassesProbeThrottle`），失效后果仅为「修复后的名单晚一个探测窗口恢复」，无用户可见错误。改「失败态豁免」时 `recoveryDue` 与 `reload` 两处注释都要改，且它们互不引用。时钟由构造函数注入（`newStudentStore(dir, now)`），不从外部改写可写字段。指纹采集阶段失败（目录缺失等）以 `lastFailStampKnown` 显式标记，不复用 `lastFailStamps` 的 nil 表达"无指纹"——后者曾使 `sameStamps(nil, ...)` 恒为假，冷却判定永不成立，目录缺失时每个请求都重试读盘并写错误日志。
 
 健康检查语义（/api/health）：进程存活 + 数据可用性。数据损坏/缺失时返回 503 {"status":"degraded","reason":"data"}；响应携带 version（ldflags -X main.version，本地构建为 dev）。
 
