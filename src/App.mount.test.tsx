@@ -20,8 +20,7 @@ import { MAX_QUERY_LENGTH } from "./config";
 import { ApiError } from "./lib/api";
 
 // React 18 要求显式声明 act 环境，否则 act() 触发的更新不会在 act 内 flush。
-const actEnv = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
-actEnv.IS_REACT_ACT_ENVIRONMENT = true;
+import "./lib/testActEnv";
 
 // ---- 浏览器 API 垫片：只补 jsdom 未实现、且被真实调用到的那几个方法，
 // 不模拟任何布局行为，因此不会让断言失真。 ----

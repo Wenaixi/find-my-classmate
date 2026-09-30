@@ -11,9 +11,7 @@ import { createElement } from "react";
 import { useSearchController, type SearchOrchestrator } from "./useSearchController";
 import { useSearchInput } from "./useSearchInput";
 
-// React 18 要求显式声明 act 环境，否则事件触发的更新不会在 act 内被 flush。
-const actEnv = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
-actEnv.IS_REACT_ACT_ENVIRONMENT = true;
+import "./testActEnv";
 
 interface Stub {
   controller: SearchOrchestrator;

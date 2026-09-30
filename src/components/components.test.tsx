@@ -14,11 +14,7 @@ import ResultList from "./ResultList";
 import StatusOrb from "./StatusOrb";
 import ErrorBoundary from "./ErrorBoundary";
 import { deriveResultSummary } from "../lib/resultSummary";
-
-// React 18 要求显式声明 act 环境，否则 act() 触发的更新不会在 act 内 flush，
-// 测试会读到未刷新的旧快照而产生假阴性。
-const actEnv = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
-actEnv.IS_REACT_ACT_ENVIRONMENT = true;
+import "../lib/testActEnv";
 
 // liquid-gooey 依赖 ResizeObserver，jsdom 未实现该 API，缺失时组件挂载即抛错。
 // 缺的是浏览器 API 而非组件逻辑，补最小垫片即可让组件进入可测状态——

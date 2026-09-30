@@ -13,10 +13,7 @@ import { ApiError } from "./api";
 import { useSearchController, type SearchOrchestrator } from "./useSearchController";
 import type { SearchResponse } from "../types";
 
-// React 18 要求显式声明 act 环境，否则 force() 触发的更新不会在 act 内被 flush，
-// 测试会读到未刷新的旧快照而产生假阴性。
-const actEnv = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
-actEnv.IS_REACT_ACT_ENVIRONMENT = true;
+import "./testActEnv";
 
 const response = (over: Partial<SearchResponse> = {}): SearchResponse => ({
   items: [], total: 0, limit: 10, offset: 0, hasMore: false, ...over,
