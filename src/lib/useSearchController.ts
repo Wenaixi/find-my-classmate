@@ -37,12 +37,11 @@ export function createSearchOrchestrator(opts: OrchestratorOptions): SearchOrche
     if (!q || state.state === "loading" || state.loadingMore) return;
     state = searchReducer(state, { type: "submit-start" });
     const result = await session.submit(q, opts.pageSize);
-    if (!result.ok) {
-      // 判别联合：stale 永不进入业务错误路径；真实错误按 cause 分类
-      if (result.reason === "error") state = searchReducer(state, { type: "submit-error", cause: result.cause });
-      return;
-    }
-    state = searchReducer(state, { type: "submit-success", items: result.response.items, total: result.response.total, hasMore: result.response.hasMore, query: q });
+    // 判别联合直接交给 reducer：ok 落定、error 置错、stale 静默释放 loading。
+    // 三分支必须一次派发完毕——调用方若只对 error 写回状态，stale 会让 state
+    // 永远停在 loading，而 submit 的守卫正是「loading 中不发起新请求」，
+    // 形成按 Enter 无反应的死角。
+    state = searchReducer(state, { type: "submit-result", result });
   };
 
   const loadMore = async () => {
@@ -96,7 +95,16 @@ export function useSearchController(opts: OrchestratorOptions) {
       ((...args: Parameters<SearchOrchestrator[K]>) => {
         const fn = orch[key] as (...a: typeof args) => unknown;
         const out = fn(...args);
-        if (out instanceof Promise) return out.finally(() => force());
+        // Promise 型动作（submit / loadMore）分两段渲染：先渲染它同步写入的启动态
+        // （submit-start 的 loading、load-more-start 的 loadingMore），再在落定后
+        // 渲染终态。缺了前一段，orchestrator 在第一个 await 之前同步改完 state 就挂起，
+        // 整段请求期间零次重渲染——loading 与 loadingMore 永不进入任何一次渲染，
+        // 整套加载界面（结果区 loading 区段、StatusOrb、提交禁用、加载更多禁用）不可达。
+        // 该 Promise 签名本身不携带「会改几次 state」这一事实，因此壳必须显式两段。
+        if (out instanceof Promise) {
+          force();
+          return out.finally(() => force());
+        }
         force();
         return out;
       }) as SearchOrchestrator[K];

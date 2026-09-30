@@ -23,6 +23,7 @@ export type SearchAction =
   | { type: "submit-start" }
   | { type: "submit-success"; items: Student[]; total: number; hasMore: boolean; query: string }
   | { type: "submit-error"; cause: unknown }
+  | { type: "submit-result"; result: SearchResult }
   | { type: "load-more-start" }
   | { type: "load-more-result"; result: SearchResult }
   | { type: "clear" }
@@ -221,6 +222,36 @@ export function searchReducer(state: SearchControllerState, action: SearchAction
       }
     case "submit-error":
       return { ...state, items: [], state: "error", statusText: errorMessage(action.cause) };
+    case "submit-result": {
+      // 单 action 收编三分支，与 load-more-result 完全对称：ok 落定、error 置错、
+      // stale 静默释放。此前 ok 与 error 是 submit-success / submit-error 两个 action，
+      // 而 stale 无分支可走——调用方只对 error 写回状态，state 永远停在 loading。
+      //
+      // stale 的 loading 释放必须在 reducer 内显式完成：stale 表示本次查询已被作废
+      // （组合期的输入变化会 invalidate 在途请求），而 state 仍停在 submit-start 写入的
+      // loading。submit 的守卫正是「loading 中不发起新请求」，因此不释放就形成死角：
+      // 状态行显示「正在检索完整名单」、提交按钮禁用，按 Enter 没有任何反应。
+      // 这与 loadMore 侧早已修复的同族缺口只差一个分支。
+      //
+      // stale 落定到 editing 而非 success/empty/error：组合期的输入已写入 state.query，
+      // 而针对它的查询尚未发起，界面应回到「正在编辑、可以再次提交」。
+      const r = action.result;
+      if (r.ok) {
+        const next = getState(r.response.items, state.query, r.response.total);
+        return {
+          ...state,
+          items: r.response.items,
+          total: r.response.total,
+          hasMore: r.response.hasMore,
+          state: next,
+          statusText: statusTextFor(next, r.response.total, hasNameCondition(state.query)),
+        };
+      }
+      if (r.reason === "error") {
+        return { ...state, items: [], state: "error", statusText: errorMessage(r.cause) };
+      }
+      return { ...state, state: "editing", statusText: COPY.editing };
+    }
     case "load-more-start":
       return { ...state, loadingMore: true, loadMoreError: false };
     case "load-more-result": {
@@ -241,8 +272,10 @@ export function searchReducer(state: SearchControllerState, action: SearchAction
     case "composition-start":
       // 组合开始意味着用户正在输入新的查询词：切到 editing 并刷新文案，
       // 否则查询失败后开始打字会一直显示 error 状态配"网络异常"旧文案。
-      // 处于 loading 时保留 loading——组合不影响在途请求，
-      // 其响应返回后会正常派发 submit-success / submit-error。
+      // 处于 loading 时保留 loading——组合本身不影响在途请求。但组合期的输入事件
+      // 会经 onInput 调 session.invalidate() 作废它，因此该响应到达时得到的是 stale
+      // 而非 success/error，由 submit-result 的 stale 分支负责释放 loading
+      // （此前这里无分支可走，state 永远停在 loading，提交按钮被守卫锁死）。
       if (state.state === "loading") {
         return { ...state, isComposing: true };
       }

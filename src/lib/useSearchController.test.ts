@@ -64,6 +64,40 @@ describe("createSearchOrchestrator", () => {
     expect(settled.state).not.toBe("loading");
   });
 
+  // stale 的落定状态必须是「正在编辑、可以再次提交」，而不只是「不是 loading」。
+  //
+  // 上一条用 not.toBe("loading") 断言 stale 后不卡在 loading——这挡住了死角，
+  // 但没锁定它落到哪里：把 stale 当作空成功（既不置错也不释放）同样能通过那一侧，
+  // 而那种实现会让界面停在「已定位 0 位同学」的错误计数上。
+  //
+  // 取样点是 stale 抵达之后、后续 submit 之前：中途已被成功结果覆盖时，
+  // 两个实现给同一个值，断言失去判别力。
+  it("在途查询被输入变化作废后，状态落到可再次提交的 editing 而非任何结果态", async () => {
+    let resolveFirst!: (r: SearchResponse) => void;
+    const api = {
+      search: vi
+        .fn()
+        .mockImplementationOnce(() => new Promise<SearchResponse>((r) => (resolveFirst = r))),
+    };
+    const orch = createSearchOrchestrator({ pageSize: 10, api });
+    orch.onInput("甲");
+    const p1 = orch.submit();
+    expect(orch.getState().state).toBe("loading");
+
+    // 输入变化作废在途请求（组合期的输入走的是同一条路径）。
+    orch.onInput("甲乙");
+    resolveFirst(okResponse());
+    await p1;
+
+    const settled = orch.getState();
+    // 落定到 editing：组合期的输入已写入 query，而针对它的查询尚未发起。
+    expect(settled.state).toBe("editing");
+    expect(settled.statusText).not.toBe(errorMessage(new Error("stale leak")));
+    // 不得保留作废查询的条目或计数。
+    expect(settled.items).toHaveLength(0);
+    expect(settled.total).toBe(0);
+  });
+
   // 与上一条成对：stale 路径下界面必须呈现「后续查询的结果」，而不是任何错误态。
   // 只断言「不是 error」的话，把 stale 当作空成功（既不置错也不追加）同样通过——
   // 那种实现会让 items 停在旧值。本条锁定 stale 语义的实际结果。
