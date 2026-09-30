@@ -171,6 +171,34 @@ export interface Presentation {
   showClear: boolean;
   /** 结果区摘要：进度、计数与剩余文案的唯一来源 */
   summary: ResultSummary;
+  /**
+   * 错误区段的标题与说明。
+   *
+   * 二者此前分处两处：标题由组件硬编码，说明是 state.statusText。未知错误形态
+   * （非 ApiError 的异常、非法响应）下 statusText 走 errorMessage 的兜底分支，
+   * 返回的文案以标题那句为前缀——同一句在同屏出现两次。分类文案明确时
+   * （400/429/500/network）不重复，恰好掩盖了它。
+   *
+   * 收到此处是因为「标题与说明不重复」是跨两个 module 的不变量：组件硬编码
+   * 标题、文案由 reducer 派生，两侧各自改动都会破坏它，而编译器不报任何错。
+   * 说明在说明以标题为前缀时去掉该前缀，使重复在派生处即被排除。
+   */
+  errorCopy: { title: string; detail: string };
+}
+
+// 错误区段的固定标题：与 COPY.error 的前缀同源，但两者不是同一句。
+// 分类文案（400/429/500/network）不以此为前缀，说明原样呈现。
+const ERROR_TITLE = "查询没有完成";
+
+// splitErrorCopy 把状态文案拆成错误区段的标题与说明。
+// 说明以标题为前缀时去掉该前缀（去掉后为空则保留原句），使同屏重复不可能发生。
+// 刻意不新增「错误说明」文案表：说明已有唯一来源 errorMessage，此处只做切分。
+function splitErrorCopy(statusText: string): { title: string; detail: string } {
+  if (!statusText.startsWith(ERROR_TITLE)) {
+    return { title: ERROR_TITLE, detail: statusText };
+  }
+  const rest = statusText.slice(ERROR_TITLE.length).replace(/^[，,、]\s*/, "");
+  return { title: ERROR_TITLE, detail: rest || statusText };
 }
 
 export function present(state: SearchControllerState): Presentation {
@@ -185,6 +213,7 @@ export function present(state: SearchControllerState): Presentation {
     countLabel: state.total ? String(state.total) : "--",
     showClear: state.query.length > 0,
     summary: deriveResultSummary(state.items.length, state.total, state.hasMore),
+    errorCopy: splitErrorCopy(state.statusText),
   };
 }
 

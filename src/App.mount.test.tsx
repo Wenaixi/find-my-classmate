@@ -17,6 +17,7 @@ import { createElement } from "react";
 import { App } from "./App";
 import type { Student } from "./types";
 import { MAX_QUERY_LENGTH } from "./config";
+import { ApiError } from "./lib/api";
 
 // React 18 要求显式声明 act 环境，否则 act() 触发的更新不会在 act 内 flush。
 const actEnv = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -38,14 +39,18 @@ if (typeof proto["scrollIntoView"] !== "function") {
   proto["scrollIntoView"] = function scrollIntoView(): void {};
 }
 
-// canvas.getContext：thinking-orbs 挂载时调用（jsdom 未实现）。
-const canvasProto = g["CanvasRenderingContext2D"] as { prototype?: Record<string, unknown> } | undefined;
-if (canvasProto?.prototype !== undefined && typeof canvasProto.prototype["getContext"] !== "function") {
-  canvasProto.prototype["getContext"] = function getContext(): null {
+// canvas.getContext：thinking-orbs 挂载时调用（jsdom 未实现，缺失时抛错并刷 console.error）。
+// 必须挂在 HTMLCanvasElement.prototype 上：getContext 是该元素的方法，
+// 此前这段改的是 CanvasRenderingContext2D.prototype（那是 2D 上下文自身的原型），
+// 于是整个 if 从不进入、垫片形同虚设——真正兜住报错的是下面的 console.error 静音。
+// 静默与垫片并存是刻意的：静音避免测试输出被第三方库噪音淹没，
+// 垫片在 jsdom 真的提供 getContext 时才生效。
+const canvasElementProto = g["HTMLCanvasElement"] as { prototype?: Record<string, unknown> } | undefined;
+if (canvasElementProto?.prototype !== undefined && typeof canvasElementProto.prototype["getContext"] !== "function") {
+  canvasElementProto.prototype["getContext"] = function getContext(): null {
     return null;
   };
 }
-Element.prototype.scrollIntoView = function scrollIntoView(): void {};
 if (g["matchMedia"] === undefined) {
   g["matchMedia"] = function matchMedia(query: string) {
     void query;
@@ -278,6 +283,121 @@ describe("App 装配接线", () => {
 
     // 零条时用占位符而非 0——这条口径此前只在 present 的单测里
     expect(container.querySelector("[data-od-id=result-count]")!.textContent).toBe("1");
+  });
+
+  // 结果区段的 empty 与 error 两个分支此前零渲染断言：searchReducer 的单测验证了
+  // resultSectionOf 的返回值，却没有验证 App 真的按该返回值渲染了对应 JSX。
+  // 把 empty 分支的 JSX 换成 loading 的，界面直接错而全部用例仍然通过——
+  // 恒真的「不渲染某元素」断言比没有断言更危险，它提供虚假的覆盖感。
+  //
+  // 双向：正向断言该区段确实出现；反向断言它不与其余区段同时出现。
+  // 只断正向的话，把四个分支全部渲染成同一段 JSX 的实现同样通过。
+  it("零结果时渲染 empty 区段，且不同时渲染 error 区段", async () => {
+    const api = fakeApi([]);
+    const container = mountApp(api);
+    const input = container.querySelector("#query") as HTMLInputElement;
+
+    await act(async () => {
+      setNativeValue(input, "查无此人");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector("[data-od-id=empty-state]")).not.toBeNull();
+    expect(container.querySelector("[data-od-id=error-state]")).toBeNull();
+    expect(container.querySelector("[data-od-id=results-section] .result-message")!.textContent).toContain("查无此人");
+  });
+
+  it("查询失败时渲染 error 区段与重试入口，且不同时渲染 empty 区段", async () => {
+    const api = fakeApi();
+    api.search = async () => {
+      throw new ApiError("限流", 429, "rate_limited");
+    };
+    const container = mountApp(api);
+    const input = container.querySelector("#query") as HTMLInputElement;
+
+    await act(async () => {
+      setNativeValue(input, "张三");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector("[data-od-id=error-state]")).not.toBeNull();
+    expect(container.querySelector("[data-od-id=retry-cta]")).not.toBeNull();
+    expect(container.querySelector("[data-od-id=empty-state]")).toBeNull();
+    // error 区段渲染的是分类文案而非泛化文案：与状态行同源，二者取同一值。
+    expect(container.querySelector("[data-od-id=error-state]")!.textContent).toContain("请求过于频繁");
+  });
+
+  // 状态行的提示色由 present 的 tone 派生，经 data-tone 交给样式表。
+  // 该属性是样式接缝的真实载体（styles.css 按 data-tone 选色），不是死标记。
+  it("状态行的提示色接的是 present 派生的 tone", async () => {
+    const api = fakeApi();
+    api.search = async () => {
+      throw new ApiError("限流", 429, "rate_limited");
+    };
+    const container = mountApp(api);
+    const input = container.querySelector("#query") as HTMLInputElement;
+    const tone = () => container.querySelector("[data-od-id=status-feedback]")!.getAttribute("data-tone");
+
+    // 首屏是 idle：提示色为 muted。
+    expect(tone()).toBe("muted");
+
+    await act(async () => {
+      setNativeValue(input, "张三");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    // 输入后是 editing：仍为 muted——这一格必须与 idle 区分开才说明
+    // 属性接的是派生值而不是写死的常量。
+    expect(tone()).toBe("muted");
+
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      await Promise.resolve();
+    });
+    // 失败后是 error：提示色随之改变。
+    expect(tone()).not.toBe("muted");
+  });
+
+  // 错误区段的标题与说明不得是同一句的前后两截。
+  //
+  // 此前 App.tsx 的 error 分支硬编码标题「查询没有完成」，而未知错误形态
+  // （非 ApiError 的异常、非法响应）下 statusText 走 errorMessage 的兜底分支，
+  // 返回 COPY.error =「查询没有完成，请稍后重试」——同一句前缀在同屏出现两次。
+  // 分类文案明确时（400/429/500/network）不重复，恰好掩盖了它。
+  //
+  // 双向：正向断「标题不是说明的前缀」；反向断「说明仍承载可行动的文案」，
+  // 只断前者的话，把两段都改成同一句固定文案同样通过。
+  it("未知错误形态下错误区段不重复同一句文案", async () => {
+    const api = fakeApi();
+    // 非 ApiError 的异常：走 errorMessage 的兜底分支。
+    api.search = async () => {
+      throw new Error("unexpected");
+    };
+    const container = mountApp(api);
+    const input = container.querySelector("#query") as HTMLInputElement;
+
+    await act(async () => {
+      setNativeValue(input, "张三");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const section = container.querySelector("[data-od-id=error-state]")!;
+    const title = section.querySelector("strong")!.textContent!;
+    const body = section.querySelector("p")!.textContent!;
+    expect(body.startsWith(title)).toBe(false);
+    // 反向：说明仍须承载可行动的文案，不能因消除重复而变成空串。
+    expect(body.length).toBeGreaterThan(0);
   });
 });
 

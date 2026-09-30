@@ -86,7 +86,7 @@ export function App({ api }: AppProps = {}) {
       case "empty":
         return <div className="result-message" data-od-id="empty-state"><strong>查无此人</strong><p>换个写法试试。可以只输入姓氏，或补充年段 / 班级缩小范围。</p><button className="text-action" onClick={() => document.getElementById("query")?.focus()}>继续输入 <span aria-hidden="true">↗</span></button></div>;
       case "error":
-        return <div className="result-message" data-od-id="error-state"><strong>查询没有完成</strong><p>{statusText}</p><button className="text-action" data-od-id="retry-cta" onClick={() => void submit()}>重新查询 <span aria-hidden="true">↗</span></button></div>;
+        return <div className="result-message" data-od-id="error-state"><strong>{view.errorCopy.title}</strong><p>{view.errorCopy.detail}</p><button className="text-action" data-od-id="retry-cta" onClick={() => void submit()}>重新查询 <span aria-hidden="true">↗</span></button></div>;
       default:
         return null;
     }
