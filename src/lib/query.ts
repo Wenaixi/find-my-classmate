@@ -188,8 +188,10 @@ function chineseNumberToInt(value: string): number {
 // 规则的两个镜像实现分叉过一次（Go 判「高二」而 TS 为 undefined，靠补语料
 // 才发现）。形状不变，裂缝会再开。
 //
-// 返回值约定（与 Go 端一致）：classNo > 0 表示解析为班级条件；
-// 否则 asName 非空，调用方把它追加到姓名条件。
+// 返回值约定（两条，与 Go 端 classCondition 一致）：classNo > 0 表示解析为
+// 班级条件；否则 asName 非空，调用方把它追加到姓名条件。两端都没有第三种
+// 返回态——判定「是否为班级 token」由调用点的守门承担（classToken 整段匹配
+// 与 classNumberHead 首字符匹配），不落在本函数内。
 function classCondition(matchPart: string, rawToken: string): { classNo: number; asName: string } {
   const parsed = classNumber(matchPart);
   if (parsed.ok && parsed.classNo > 0) {

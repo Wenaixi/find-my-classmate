@@ -176,10 +176,16 @@ func parseClassName(value string) ClassParseResult {
 // 绝不丢弃 token。丢弃会让全部条件落空，Search 退化成与用户输入无关的
 // 全校检索——这不是理论风险，v0.9.1 修复前输入「一一班」曾返回全校 1047 条。
 //
-// 返回值约定：
+// 返回值约定（两条，无第三态）：
 //   - asName 非空：token 降级为姓名条件，调用方应把 asName 追加到姓名条件；
-//   - classNo > 0：token 解析为班级条件，调用方应设为班级条件；
-//   - 两者都空：token 不是班级 token，调用方应走非班级分支。
+//   - classNo > 0：token 解析为班级条件，调用方应设为班级条件。
+//
+// 「两者都空」在本函数的返回值域内是空集，因此调用方无需第三种出口：
+// Valid 为真时 ClassNo 恒大于零（parseClassName 强制该不变量，Atoi 成功的
+// 零值已在那里被判为非法），!Valid 时 asName 恒非空（rawToken 来自 tokenize，
+// 恒含至少一个非空白字符）。两处调用点也都先守门再调用本函数。
+// 第十八轮核实：原注释的第三条「两者都空 → 走非班级分支」是一个永不触发的
+// 返回态，按它实现新调用点的人会多写一个死分支。
 //
 // 溢出与无法解析同策略：两者都不是「合法班号」，都会让班级条件落空。
 func classCondition(matchPart, rawToken string) (classNo int, asName string) {
