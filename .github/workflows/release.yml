@@ -88,11 +88,24 @@ jobs:
       - name: 提取更新记录（按当前 tag 精确匹配，找不到则显式失败）
         run: |
           TAG="${{ github.ref_name }}"
-          awk -v tag="$TAG" 'BEGIN{found=0} /^## /{if(found){exit} if(index($0, tag)>0){found=1}} found{print}' CHANGELOG.md > release-body.md
-          if ! grep -q "$TAG" release-body.md; then
-            echo "未找到 CHANGELOG 中对应 ${TAG} 的更新记录，请先在 CHANGELOG.md 顶部追加。" >&2
+          # 判据必须是行首锚定的严格相等而非子串包含：index($0, tag)>0 会让
+          # v0.1 命中 "## [v0.10.4]"——实测两者抽出的正文逐字节相同（md5 一致），
+          # 而下面那道 grep 兜底被子串前缀同样满足，两道检查在同一个错误前提
+          # （子串等于相等）上同时失效，这条本该防 tag 脱钩的门禁成了橡皮图章。
+          # index 返回 1-based 位置，行首命中即 1；日期后缀不影响判定。
+          # 找不到交由 awk 自身 END 退出码判定，取代原先的 grep 兜底。
+          awk -v tag="$TAG" '
+            BEGIN { found = 0; target = "## [" tag "]" }
+            /^## / {
+              if (found) exit
+              if (index($0, target) == 1) found = 1
+            }
+            found { print }
+            END { if (!found) exit 1 }
+          ' CHANGELOG.md > release-body.md || {
+            echo "未找到 CHANGELOG 中与 ${TAG} 完全一致的更新记录标题（需形如 '## [${TAG}]'），请先在 CHANGELOG.md 顶部追加。" >&2
             exit 1
-          fi
+          }
 
       - name: 创建 GitHub Release
         uses: softprops/action-gh-release@v2
