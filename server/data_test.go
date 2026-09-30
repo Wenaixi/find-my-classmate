@@ -399,6 +399,7 @@ func TestFailureCauseIsLoggedAgainWhenRootCauseChanges(t *testing.T) {
 		t.Errorf("根因第三次变化应再补记 1 条，实际 %d 条：%q", count, buf.String())
 	}
 
+
 	// 根因未变时不得继续补记：再探两次，指纹与根因都与上一轮相同。
 	buf.Reset()
 	for i := range 3 {
@@ -409,6 +410,73 @@ func TestFailureCauseIsLoggedAgainWhenRootCauseChanges(t *testing.T) {
 	}
 	if count := strings.Count(buf.String(), "\n"); count != 0 {
 		t.Errorf("根因未变的持续故障不应再记录，实际 %d 条：%q", count, buf.String())
+	}
+}
+
+// 根因必须指明是哪一份年段名单出的问题。
+//
+// 此前 loadStudents 的六个失败出口里有四个是裸 errors.New（标题不一致、
+// 名单结构异常、班级格式异常、学生记录格式异常），文本里没有年段，而
+// recordFailure 的注释声称比较单位是「同一年段的同一种解析失败」。数据目录
+// 通常同时放多份年段文件，运维从「data unavailable: 班级格式异常」无从判断
+// 该去看哪一份——三选一的猜测，且随 knownGrades 增长线性变差。
+//
+// 双向：正向断言日志含年段名；反向断言不得退化为裸文案（否则任何「带年段」的
+// 实现都能通过）。只断正向的话，把年段拼在文案末尾的实现同样通过。
+func TestFailureCauseNamesTheGrade(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFiles(t, dir)
+	clock := &fakeClock{current: time.Now()}
+	store, err := newStudentStore(dir, clock.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	capture := func() *bytes.Buffer {
+		var buf bytes.Buffer
+		oldOut := log.Writer()
+		log.SetOutput(&buf)
+		t.Cleanup(func() { log.SetOutput(oldOut) })
+		return &buf
+	}
+
+	// 高一的班级名非法：日志必须点名「高一」，否则运维无从定位。
+	buf := capture()
+	broken := `{"标题":"福清一中2025级高一编班名单","名单":{"零班":[{"姓名":"王皓轩"}]}}`
+	if err := os.WriteFile(filepath.Join(dir, "高一.json"), []byte(broken), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	clock.advance(30 * time.Second)
+	if _, err := store.view(); err == nil {
+		t.Fatal("班级格式异常时 view 应报错")
+	}
+	entry := buf.String()
+	if !strings.Contains(entry, "高一") {
+		t.Errorf("根因应指明出错的年段（期望含「高一」），实际日志 %q", entry)
+	}
+	if !strings.Contains(entry, "班级") {
+		t.Errorf("根因应保留成因描述（期望含「班级」），实际日志 %q", entry)
+	}
+
+	// 反向：换成高二出错，年段必须随之改变——只断「含年段」的话，
+	 // 把年段硬编码成高一的实现同样通过。
+	buf2 := capture()
+	broken2 := `{"标题":"福清一中2025级高二编班名单","名单":{"零班":[{"姓名":"李四"}]}}`
+	if err := os.WriteFile(filepath.Join(dir, "高二.json"), []byte(broken2), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// 高一恢复为合法内容：否则 loadStudents 在高一处即返回，走不到高二。
+	valid := `{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"王皓轩"}]}}`
+	if err := os.WriteFile(filepath.Join(dir, "高一.json"), []byte(valid), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	clock.advance(30 * time.Second)
+	if _, err := store.view(); err == nil {
+		t.Fatal("高二班级格式异常时 view 应继续报错")
+	}
+	second := buf2.String()
+	if !strings.Contains(second, "高二") {
+		t.Errorf("根因应随出错文件改变（期望含「高二」），实际日志 %q", second)
 	}
 }
 

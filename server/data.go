@@ -76,10 +76,10 @@ func loadStudents(dir string) ([]Student, error) {
 			return nil, fmt.Errorf("解析%s数据失败: %w", grade, err)
 		}
 		if document.Title == "" || parseGradeInTitle(document.Title) != grade {
-			return nil, errors.New("文件名与年级标题不一致")
+			return nil, fmt.Errorf("%s.json 文件名与年级标题不一致", grade)
 		}
 		if document.Roster == nil {
-			return nil, errors.New("名单结构异常")
+			return nil, fmt.Errorf("%s.json 名单结构异常", grade)
 		}
 		classes := make([]string, 0, len(document.Roster))
 		classNos := make(map[string]ClassParseResult, len(document.Roster))
@@ -88,7 +88,7 @@ func loadStudents(dir string) ([]Student, error) {
 			// C3：三态校验——旧实现只检 classNumber==0，溢出（-1）静默放行并流入排序
 			parsed := parseClassName(className)
 			if !parsed.Valid {
-				return nil, errors.New("班级格式异常")
+				return nil, fmt.Errorf("%s.json 班级格式异常（%s）", grade, className)
 			}
 			classNos[className] = parsed
 			classes = append(classes, className)
@@ -98,7 +98,7 @@ func loadStudents(dir string) ([]Student, error) {
 			for _, item := range document.Roster[className] {
 				name := item.Name
 				if name == "" {
-					return nil, errors.New("学生记录格式异常")
+					return nil, fmt.Errorf("%s.json 学生记录格式异常", grade)
 				}
 				student := newStudent(name, grade, className, classNos[className])
 				// 去重键用班号而非班名：班名是书写形态（「1班」与「一班」都指 1 班），
@@ -250,8 +250,11 @@ func (s *studentStore) reload(force bool) error {
 
 	// 失败冷却：数据损坏期间每次请求都重试解析坏文件会放大 IO 与日志。
 	// 仅当文件指纹与失败时相同（坏文件未变）才冷却；文件被修复（指纹变化）则立即重试。
-	// 冷却期返回原始失败原因而非裸哨兵：运维在 /api/search 日志中仍能区分
-	// 解析失败、标题不一致、班级格式异常等具体成因。
+	// 冷却期返回原始失败原因而非裸哨兵，使调用方能区分解析失败、标题不一致、
+	// 班级格式异常等具体成因。注意成因的**日志**出口不在调用方：api.go 的
+	// searchHandler 丢弃 view 的错误、只写 {"error":"data_unavailable"}，
+	// 带成因的日志由 recordFailure 单点打出（可能由健康探针触发而非 search）。
+	// 此处保证的是错误值本身携带成因，wire 上仍只有错误码。
 	if s.cooling(stamps) {
 		return s.coolingError()
 	}
@@ -306,6 +309,14 @@ func (s *studentStore) cooling(stamps map[string]fileStamp) bool {
 // 按错误文本比较而非 errors.Is：loadStudents 每次都用 errors.New 或 fmt.Errorf
 // 新建错误值，errors.Is 永远不匹配。这里要的正是「同一年段的同一种解析失败」
 // 视为同一次故障。
+//
+// 「同一年段」这一限定现在由错误文本自身承载：loadStudents 的每个失败出口都
+// 带 %s.json 年段标识。修复前四个出口是裸 errors.New，文本里没有年段，而本注释
+// 却按「同一年段的同一种解析失败」描述比较单位——注释声称的语义与实现的比较
+// 单位不一致，两处都不是对方需要的形状。标识带上之后，一次持续不可用期间
+// 修好一份年段、同时弄坏另一份且成因相同，指纹变化越过冷却、重试、在新文件处
+// 失败、文本与上次不同，changed 为真因而补记一条；此前两种情形文本相同，
+// 零条新日志，而运维看到的是一条没有指向的成因。
 func (s *studentStore) recordFailure(stamps map[string]fileStamp, cause error) {
 	s.mu.Lock()
 	changed := s.lastFailErr == nil || s.lastFailErr.Error() != cause.Error()
