@@ -4,7 +4,16 @@
 
 ## [Unreleased]
 
-### 修复
+## [v0.11.0] - 2026-10-01
+
+### 本版摘要
+
+三批架构评审（第十七至第十九轮）的成果，每条都经变异实验双向确认。**两个用户可见缺陷**：
+输入法的组合期输入变化曾让界面永久卡在 loading（按 Enter 无反应），以及状态行的动态
+区块加载失败曾让整页白屏。**一处保护机制形同虚设**：跨语言年段对拍能被一行注释关掉，
+而年段值域是全仓最贵的不变量。分配预算与名单视图的零分配在全部改动后未变。
+
+### 修复（第十七轮）
 
 - **作废的在途查询让界面永久卡在 loading，提交被守卫锁死**：组合期的输入变化经 `onInput` 无条件 `session.invalidate()` 作废在途请求 → fetch 被 abort → 查询会话归为 `stale` → `submit` 只对真实错误分支写回状态，`stale` 直接 return，**state 永远停在 `submit-start` 写入的 loading**；而 `submit` 的守卫恰恰是「loading 中不发起新请求」。症状：状态行显示「正在检索完整名单」、提交按钮禁用，**按 Enter 没有任何反应**，需再输入一个非组合字符或按 Escape 才能脱困。目标用户正是中文输入法人群。jsdom 挂载探针实测终态 `state = "loading"`（渲染序列 `idle → editing → loading → loading → loading`）；第二轴删掉 `session.invalidate()` 后终态变为 `error`，坐实因果。
   - **这是已识别缺陷族的漏网实例**：`searchReducer` 早已为 loadMore 侧做过同族修复（`stale` 的 `loadingMore` 复位在 reducer 内显式完成，注释自陈），**submit 侧只差一个分支**。现新增 `submit-result` 单 action 收编 ok / error / stale 三分支，与 `load-more-result` 完全对称；`stale` 落定到 `editing`——组合期的输入已写入 query，而针对它的查询尚未发起。
@@ -28,7 +37,7 @@
 - **挂载测试的 act 环境声明收敛为共享模块**：四份副本改为显式导入一处共享模块。**刻意不抽 vitest `setupFiles`**：全局 setup 会让默认 node 环境的纯逻辑测试也带上该标志，使「纯逻辑测试零 DOM 依赖」这条现有纪律失效——那条纪律是有意的。导入行为本身就是一次显式声明，漏写时会在收集期直接报「无法解析该模块」，而不是给出与被测行为无关的假阴性。
 - **修正一处形同虚设的测试垫片**：canvas `getContext` 垫片改的是二维上下文的原型，而 `getContext` 是 canvas 元素的方法——整个条件分支从不进入。改挂正确的原型，并删掉紧随其后那句无条件重复覆盖 `scrollIntoView` 的赋值。
 
-### 修复（续）
+### 修复（第十六轮）
 
 - **姓名含完整年段串被读成年段条件，整年段全量返回**：输入真实人名「高一鸣」，`parseQuery` 返回 `{NameTokens:[], Grade:高一}`——姓名条件整个消失，`Search` 返回整个高一年级。探针实测（修复前）：`total=2`，返回 `[高一鸣 张伟]`，其中「张伟」与查询无关。根因是**一份实现服务两种必须不同的判定**：`parseGrade` 用子串匹配，被查询侧与名单标题校验共用（标题形如「福清一中2025级高一编班名单」，年段只是标题的一部分，确实需要子串语义；查询侧不需要）。现拆为 `parseGradeInToken`（查询侧精确匹配：整个 token 即年段或年段 +「班」）与 `parseGradeInTitle`（标题侧子串匹配），前端镜像同步改为精确匹配。
   - **这是本项目已修过三次的同一族缺陷的第四个实例**：无法解析的班级 token 不得静默丢弃、纯分隔符不得退化为全校检索、「高一0班」不得放大成整年段全量。前三次的修法都是补回归锁，本次同样。
@@ -97,6 +106,35 @@
 
 - 前端 142 → **144 用例**；后端全量（`go clean -testcache`）、`go vet`、`gofmt -l` 均无输出；`npm run typecheck`（`tsc -b`）通过；`npm run build` 产物正常嵌入。
 - 冒烟（真实 2091 人名单）：`/api/health` 200 ok；「高一3班」total=54 分页正常；纯分隔符 `total=0`、降级「一一班」`total=0` 两条已知不变量未回归；400/404/405 三条错误码正确；安全响应头齐全；静态资源 `gzip;q=0` 正确不压缩、`gzip` 返回压缩并带 `Vary` 与 immutable 缓存。
+
+### 发布前全流程验证（v0.11.0 发布前实测）
+
+三套检查全绿：`npm run typecheck`（`tsc -b`）无输出、前端 **206 用例**（11 个测试文件）
+通过、`npm run build` 产物正常嵌入；后端 `go clean -testcache` + `go test ./...` 通过、
+`go vet` 无输出、`gofmt` 归一化行尾后**无输出**（Windows 工作区的整文件行尾差异是
+已知假警报，判据是差异行数）。
+
+冒烟（合成名单，覆盖阿拉伯班名 / 汉字班名 / 无「班」字三种写法，年级+班级连写各一例）：
+
+- **已知缺陷未回归**：纯分隔符「、」、降级「一一班」、「高一0班」、空 `q` 四条均 `total=0`，
+  未退化为全校检索。
+- **解析契约**：汉字班「二班」、无「班」字「03」、「高一二班」连写、「高一11班」连写各自精确命中；
+  第十六轮修复未回归——「高一鸣」「高一同学」按姓名处理并各命中本人，对照组「高一班」「高一」
+  返回整个年段 6 条。
+- **隐私红线**：响应顶层键为 `{items,total,limit,offset,hasMore}`，条目键恰为
+  `{name,grade,class}`，无任何内部派生字段外泄。
+- **错误契约**：400 `invalid_limit`、400 `invalid_offset`、404 `not_found`
+  （体为 `{"error":"not_found"}`）、405 `method_not_allowed` 四条正确。
+- **安全响应头**：CSP、`X-Frame-Options`、`Referrer-Policy`、`Permissions-Policy`、
+  `X-Content-Type-Options` 五个齐全，首页 `Cache-Control: no-store`。
+- **静态资源协商**：raw 200 带 immutable + ETag + `Vary`；`gzip` 返回压缩；
+  `gzip;q=0` 正确不压缩；`If-None-Match` 命中回 304 且仍声明 `Vary`。
+- **`Cache-Control` 组合在真实链上复核**（第十九轮遗留待办的实测结论）：静态资源拿到
+  `public, max-age=31536000, immutable`，首页拿到 `no-store`——`serveCachedStatic` 后写
+  覆盖安全头的 `no-store`，当前行为正确。**注意**：这是用真实服务复核的，`httptest.ResponseRecorder`
+  不做 header 快照，用它做这项实验会得到假象。
+- **分配预算**（基准实跑，非引自文档）：`Search` 三条主路径 6/7/8 次分配，
+  名单视图 0 次。
 
 ### 第十九轮：全模块横评（八条候选，撤销两条）
 

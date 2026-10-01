@@ -113,8 +113,8 @@ CI（GitHub Actions）在每次 push 时自动执行以上全部检查，详见 
 打 tag 触发自动发布：
 
 ```bash
-git tag v0.10.3          # 版本号须与 CHANGELOG.md 顶部条目一致
-git push origin v0.10.3
+git tag vX.Y.Z          # 版本号须与 CHANGELOG.md 的对应条目精确匹配
+git push origin vX.Y.Z
 ```
 
 > **tag 必须与 `CHANGELOG.md` 的对应版本条目精确匹配**——`release.yml` 用 `awk`
