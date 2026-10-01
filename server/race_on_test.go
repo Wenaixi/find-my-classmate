@@ -10,4 +10,4 @@ package main
 // 的开销、不是被测代码的分配退化。
 //
 // 判据用构建标记而非运行时探测：-race 不暴露任何运行时标志。
-var isRaceEnabled = true
+var isRaceEnabled = false // 故意改坏：验证跳过是否真的在起作用
