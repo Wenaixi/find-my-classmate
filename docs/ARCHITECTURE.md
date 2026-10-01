@@ -209,7 +209,7 @@ E2E 契约（错误码、分页响应结构、脱敏格式）在文档其余章�
 | src/lib/useSearchController.ts | 查询控制器深模块（createSearchOrchestrator 纯逻辑 + hook 壳），state + controller 两面消费。**hook 壳对 Promise 型动作分两段渲染**：先渲染启动态（loading / loadingMore），落定后渲染终态——缺前一段则整段请求期间零重渲染、加载界面不可达 | types, searchReducer, searchSession（无 api/config 直依赖：api 类型经 searchSession 间接进来，分页大小由调用方经 opts 传入） |
 | src/lib/useSearchInput.ts | 交互语义（IME 组合守卫、Enter 提交、Escape 清空）；组合状态取自 nativeEvent 与控制器 state 两个来源，任一为真都不得提交 | useSearchController |
 | src/lib/resultSummary.ts | 结果摘要单点派生（进度/计数/剩余文案） | 无 |
-| src/site.config.ts | 站点展示文案（数据来源/运营团队/数据处理方） | 无 |
+| src/site.config.ts | 站点展示文案（数据来源/运营团队；`dataController` 保留但当前不渲染） | 无 |
 | src/types.ts | 领域类型与状态枚举 | 无 |
 
 **展示派生单点（`present`）**：`present(state)` 一次性折出视图需要的全部派生——
