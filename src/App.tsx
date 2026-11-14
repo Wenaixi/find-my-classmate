@@ -19,12 +19,14 @@ const StatusOrb = lazy(() => import("./components/StatusOrb"));
 // 默认值即 production 实现，main.tsx 无需改动。
 export interface AppProps {
   api?: SearchSessionApi;
+  /** 学校下拉候选加载器（/api/schools）。可注入便于测试；缺省走真实 fetchSchools。 */
+  schoolsApi?: () => Promise<string[]>;
 }
 
-export function App({ api }: AppProps = {}) {
+export function App({ api, schoolsApi }: AppProps = {}) {
   // 查询会话深模块：state（渲染派生）+ controller（意图动作）两面消费，
   // 编排（守卫/判别联合/竞态）全部收进模块，组件不再理解 reducer/session。
-  const { state, controller } = useSearchController({ pageSize: PAGE_SIZE, api: { search: api?.search ?? searchApi }, schoolsApi: fetchSchools });
+  const { state, controller } = useSearchController({ pageSize: PAGE_SIZE, api: { search: api?.search ?? searchApi }, schoolsApi: schoolsApi ?? fetchSchools });
   const { query, school, schools, items, total, hasMore, state: uiState, statusText, loadingMore, loadMoreError, isComposing } = state;
   // 输入交互语义（IME 组合守卫、Enter 提交、Escape 清空）由 useSearchInput 统一收口：
   // 组件只透传回调，不再手写组合判断——该逻辑此前内联在此处且零测试覆盖。

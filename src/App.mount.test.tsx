@@ -402,7 +402,84 @@ describe("App 装配接线", () => {
 
 // React 追踪 onChange 需要绕过它的值劫持：直接改 DOM value 后派发 input 事件，
 // React 的 onChange 才会读到新值。
+
+// mountAppSchool：渲染 App 并注入 schoolsApi，使学校选择器的候选可控。
+function mountAppSchool(api: FakeSearchApi, schoolsApi: () => Promise<string[]>) {
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  const healthResponse: Partial<Response> = {
+    ok: true,
+    json: async () => ({ status: "ok", version: "test" }),
+  };
+  const fakeFetch: typeof fetch = async () => healthResponse as Response;
+  (globalThis as unknown as Record<string, unknown>)["fetch"] = fakeFetch;
+  mountedRoot = createRoot(container);
+  act(() => mountedRoot!.render(<App api={{ search: api.search }} schoolsApi={schoolsApi} />));
+  return container;
+}
+
 function setNativeValue(element: HTMLInputElement, value: string) {
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
   setter?.call(element, value);
 }
+
+describe("App 学校选择器", () => {
+  it("渲染全校 + 各校选项（来自 schoolsApi）", async () => {
+    const schools = ["福清一中", "福清二中", "福清华侨中学"];
+    mountAppSchool(fakeApi(), () => Promise.resolve(schools));
+    // 冲刷 loadSchools 的异步 resolve，使 schools 注入 state
+    await act(async () => {});
+    const select = document.querySelector("[data-od-id=school-select]") as HTMLSelectElement;
+    expect(select).not.toBeNull();
+    // 全校 + 三校
+    expect(select.options.length).toBe(4);
+    expect(select.options[0].value).toBe("");
+    expect(select.options[0].textContent).toBe("全部学校");
+    expect(select.options[1].textContent).toBe("福清一中");
+    expect(select.options[2].textContent).toBe("福清二中");
+    expect(select.options[3].textContent).toBe("福清华侨中学");
+  });
+
+  it("默认选中全校（school 为空串）", async () => {
+    mountAppSchool(fakeApi(), () => Promise.resolve(["福清一中"]));
+    const select = document.querySelector("[data-od-id=school-select]") as HTMLSelectElement;
+    expect(select.value).toBe("");
+  });
+
+  it("切换学校作废当前结果：搜索有结果 → 切校 → 结果区消失（复位 idle）", async () => {
+    const api = fakeApi();
+    const container = mountAppSchool(api, () => Promise.resolve(["福清一中", "福清二中"]));
+    await act(async () => {}); // 冲刷 schools
+
+    // 1) 先搜出结果
+    const input = container.querySelector("#query") as HTMLInputElement;
+    await act(async () => {
+      setNativeValue(input, "甲");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    expect(container.querySelector("[data-od-id=results-section]")).not.toBeNull();
+
+    // 2) 切换学校 → 结果作废、回到 idle（结果区不再渲染）
+    const select = container.querySelector("[data-od-id=school-select]") as HTMLSelectElement;
+    await act(async () => {
+      const tracker = (select as unknown as { _valueTracker?: { setValue: (v: string) => void } })._valueTracker;
+      tracker?.setValue("福清二中");
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+      setter?.call(select, "福清二中");
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => {});
+    expect(container.querySelector("[data-od-id=results-section]")).toBeNull();
+  });
+
+  it("schoolsApi 失败时选择器仍渲染（全校），全站不崩", async () => {
+    mountAppSchool(fakeApi(), () => Promise.reject(new Error("network")));
+    const select = document.querySelector("[data-od-id=school-select]") as HTMLSelectElement;
+    expect(select).not.toBeNull();
+    expect(select.options.length).toBe(1); // 只有全校
+    expect(select.value).toBe("");
+  });
+});

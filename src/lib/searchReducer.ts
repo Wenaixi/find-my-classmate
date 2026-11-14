@@ -258,10 +258,11 @@ export function searchReducer(state: SearchControllerState, action: SearchAction
       // 学校下拉候选就绪：只替换候选列表，不动查询状态。
       return { ...state, schools: action.schools };
     case "select-school":
-      // 切换学校选择器：像输入变化一样作废当前结果，回到 idle——
-      // 学校是查询条件的一部分，切换后需用户重新提交才生效（与查询串同语义）。
+      // 切换学校选择器：作废当前结果，回到 idle，但保留已输入的查询串——
+      // 学校是查询条件的一部分，切换后需用户重新提交才生效；用户打好的字不应被清掉。
       return {
         ...initialState,
+        query: state.query,
         school: action.school,
         schools: state.schools,
         isComposing: state.isComposing,

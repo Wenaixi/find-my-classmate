@@ -218,3 +218,71 @@ describe("createSearchOrchestrator", () => {
     expect(orch.getState().state).toBe("idle");
   });
 });
+
+  // ---- 多学校：loadSchools / selectSchool / school 透传 ----
+
+  it("loadSchools 注入候选并写入 state", async () => {
+    const api = { search: vi.fn().mockResolvedValue(okResponse()) };
+    const orch = createSearchOrchestrator({
+      pageSize: 10, api,
+      schoolsApi: vi.fn().mockResolvedValue(["福清一中", "福清二中"]),
+    });
+    await orch.loadSchools();
+    const st = orch.getState();
+    expect(st.schools).toEqual(["福清一中", "福清二中"]);
+    expect(st.school).toBe("");  // 默认全校
+  });
+
+  it("loadSchools 失败时静默：不抛错、schools 保持空", async () => {
+    const api = { search: vi.fn().mockResolvedValue(okResponse()) };
+    const orch = createSearchOrchestrator({
+      pageSize: 10, api,
+      schoolsApi: vi.fn().mockRejectedValue(new Error("network")),
+    });
+    await expect(orch.loadSchools()).resolves.toBeUndefined();
+    expect(orch.getState().schools).toEqual([]);
+  });
+
+  it("selectSchool 更新选中并把查询复位回 idle", async () => {
+    const api = { search: vi.fn().mockResolvedValue(okResponse({ items: [{ school: "福清一中", name: "甲", grade: "高一", className: "1班" }], total: 1 })) };
+    const orch = createSearchOrchestrator({ pageSize: 10, api });
+    orch.onInput("甲");
+    await orch.submit();
+    expect(orch.getState().state).toBe("success");
+    // 切换学校：结果作废、状态回 idle；school 更新
+    orch.selectSchool("福清二中");
+    const st = orch.getState();
+    expect(st.school).toBe("福清二中");
+    expect(st.state).toBe("idle");
+    expect(st.items).toHaveLength(0);
+  });
+
+  it("selectSchool 切回全校（空串）同样复位", async () => {
+    const api = { search: vi.fn().mockResolvedValue(okResponse()) };
+    const orch = createSearchOrchestrator({ pageSize: 10, api });
+    orch.selectSchool("福清一中");
+    orch.selectSchool("");
+    expect(orch.getState().school).toBe("");
+  });
+
+  it("submit 把选中的 school 传给 session", async () => {
+    const search = vi.fn().mockResolvedValue(okResponse());
+    const orch = createSearchOrchestrator({ pageSize: 10, api: { search } });
+    orch.onInput("甲");
+    orch.selectSchool("福清一中");
+    await orch.submit();
+    expect(search).toHaveBeenCalledWith("甲", 10, 0, expect.anything(), "福清一中");
+  });
+
+  it("loadMore 同样携带 school（翻页不丢过滤）", async () => {
+    const search = vi.fn().mockResolvedValue(okResponse({ items: [{ school: "福清一中", name: "甲", grade: "高一", className: "1班" }], total: 20, hasMore: true }));
+    const orch = createSearchOrchestrator({ pageSize: 10, api: { search } });
+    orch.onInput("甲");
+    orch.selectSchool("福清一中");
+    await orch.submit();
+    await orch.loadMore();
+    // submit → loadMore 第二次调用：携带 school
+    const calls = search.mock.calls;
+    expect(calls[0]).toEqual(["甲", 10, 0, expect.anything(), "福清一中"]);
+    expect(calls[1]?.[4]).toBe("福清一中");
+  });
