@@ -15,10 +15,14 @@ import type { Student } from "../types";
 export interface OrchestratorOptions {
   pageSize: number;
   api: SearchSessionApi;
+  /** 学校候选加载器（/api/schools）。缺省表示不启用学校选择器（测试用）。 */
+  schoolsApi?: () => Promise<string[]>;
 }
 
 export interface SearchOrchestrator {
   getState(): SearchControllerState;
+  loadSchools(): Promise<void>;
+  selectSchool(school: string): void;
   onInput(query: string): void;
   submit(): Promise<void>;
   loadMore(): Promise<void>;
@@ -59,7 +63,7 @@ export function createSearchOrchestrator(opts: OrchestratorOptions): SearchOrche
     // 守卫：空查询、loading 中、加载更多进行中都不发起新请求
     const q = state.query.trim();
     if (!q || state.state === "loading" || state.loadingMore) return;
-    await run({ type: "submit-start" }, "submit-result", () => session.submit(q, opts.pageSize));
+    await run({ type: "submit-start" }, "submit-result", () => session.submit(q, opts.pageSize, state.school));
   };
 
   const loadMore = async () => {
@@ -68,7 +72,7 @@ export function createSearchOrchestrator(opts: OrchestratorOptions): SearchOrche
     if (!q || !state.hasMore || state.loadingMore || state.state === "loading") return;
     // offset 在守卫之后、启动态之前读：它必须反映已加载条数。
     const offset = state.items.length;
-    await run({ type: "load-more-start" }, "load-more-result", () => session.loadMore(q, opts.pageSize, offset));
+    await run({ type: "load-more-start" }, "load-more-result", () => session.loadMore(q, opts.pageSize, offset, state.school));
   };
 
   const clear = () => {
@@ -83,8 +87,28 @@ export function createSearchOrchestrator(opts: OrchestratorOptions): SearchOrche
     state = searchReducer(state, { type: "input-change", query });
   };
 
+  const loadSchools = async () => {
+    if (!opts.schoolsApi) return;
+    try {
+      const schools = await opts.schoolsApi();
+      state = searchReducer(state, { type: "schools-loaded", schools });
+    } catch {
+      // 学校候选加载失败尽力而为：选择器留空，全校搜索仍可用。
+      // 与 App 挂载 fetchVersion 同语义（失败静默隐藏，不阻塞主功能）。
+    }
+  };
+
+  const selectSchool = (school: string) => {
+    // 切换学校 = 作废在途查询（新条件下的旧结果无意义），并把状态复位到 idle
+    // 等待用户重新提交。语义与 onInput 的 invalidate 一致。
+    session.invalidate();
+    state = searchReducer(state, { type: "select-school", school });
+  };
+
   return {
     getState: () => state,
+    loadSchools,
+    selectSchool,
     onInput,
     submit,
     loadMore,
@@ -127,6 +151,8 @@ export function useSearchController(opts: OrchestratorOptions) {
       }) as SearchOrchestrator[K];
     return {
       getState: () => orch.getState(),
+      loadSchools: wrap("loadSchools"),
+      selectSchool: wrap("selectSchool"),
       onInput: wrap("onInput"),
       submit: wrap("submit"),
       loadMore: wrap("loadMore"),

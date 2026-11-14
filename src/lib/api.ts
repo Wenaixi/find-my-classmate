@@ -5,6 +5,7 @@ import { REQUEST_TIMEOUT_MS } from "../config";
 // 服务端 canonical 字段是 class（search.go json:"class"），className 永不出现在序列化中。
 interface ApiStudent {
   name?: unknown;
+  school?: unknown;
   grade?: unknown;
   class?: unknown;
 }
@@ -26,9 +27,10 @@ function decodeItem(raw: unknown): Student | null {
   if (!raw || typeof raw !== "object") return null;
   const item = raw as ApiStudent;
   if (typeof item.name !== "string" || item.name === "") return null;
+  if (typeof item.school !== "string" || item.school === "") return null;
   if (typeof item.grade !== "string" || item.grade === "") return null;
   if (typeof item.class !== "string" || item.class === "") return null;
-  return { name: item.name, grade: item.grade as Grade, className: item.class };
+  return { name: item.name, school: item.school, grade: item.grade as Grade, className: item.class };
 }
 
 // ApiError 携带 HTTP 状态与错误码，供前端按 400/429/500 分文案。
@@ -82,8 +84,9 @@ export async function fetchVersion(signal?: AbortSignal): Promise<string> {
   return body.version;
 }
 
-export async function searchApi(query: string, limit = 10, offset = 0, signal?: AbortSignal): Promise<SearchResponse> {
+export async function searchApi(query: string, limit = 10, offset = 0, signal?: AbortSignal, school = ""): Promise<SearchResponse> {
   const params = new URLSearchParams({ q: query, limit: String(limit), offset: String(offset) });
+  if (school) params.set("school", school);
   const combined = combineSignals(signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS));
   let response: Response;
   try {
@@ -121,4 +124,32 @@ export async function searchApi(query: string, limit = 10, offset = 0, signal?: 
     items.push(student);
   }
   return { items, total: payload.total, limit: payload.limit, offset: payload.offset, hasMore: payload.hasMore };
+}
+
+// fetchSchools 读取学校下拉候选列表（/api/schools）。
+// 与 searchApi 同款错误语义：网络失败归 network，非 2xx 带 error 码。
+export async function fetchSchools(signal?: AbortSignal): Promise<string[]> {
+  const combined = combineSignals(signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS));
+  let response: Response;
+  try {
+    response = await fetch("/api/schools", { signal: combined });
+  } catch (cause) {
+    if (signal?.aborted) throw cause;
+    throw new ApiError("request-timeout-or-network", undefined, "network");
+  }
+  if (!response.ok) {
+    let code: string | undefined;
+    try {
+      const body = (await response.json()) as { error?: string };
+      code = body.error;
+    } catch {
+      // 非 JSON 错误体，忽略
+    }
+    throw new ApiError("request-failed", response.status, code);
+  }
+  const payload = (await response.json()) as { schools?: unknown };
+  if (!payload || !Array.isArray(payload.schools) || payload.schools.some((s) => typeof s !== "string" || s === "")) {
+    throw new ApiError("invalid-response", response.status, "invalid-response");
+  }
+  return payload.schools as string[];
 }

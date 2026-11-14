@@ -12,14 +12,14 @@ const okSettled = (items: Student[], total: number, hasMore: boolean, query = "�
   );
 
 const makeStudents = (n: number): Student[] =>
-  Array.from({ length: n }, (_, i) => ({ name: `学生${i}`, grade: "高一" as const, className: `${(i % 5) + 1}班` }));
+  Array.from({ length: n }, (_, i) => ({ school: "福清一中", name: `学生${i}`, grade: "高一" as const, className: `${(i % 5) + 1}班` }));
 
 describe("getState", () => {
   it("derives idle/empty/success/duplicate", () => {
     expect(getState([], "", 0)).toBe("idle");
     expect(getState([], "张三", 0)).toBe("empty");
-    expect(getState([{ name: "张三", grade: "高一", className: "1班" }], "张三", 1)).toBe("success");
-    expect(getState([{ name: "张三", grade: "高一", className: "1班" }], "张三", 2)).toBe("duplicate");
+    expect(getState([{ school: "福清一中", name: "张三", grade: "高一", className: "1班" }], "张三", 1)).toBe("success");
+    expect(getState([{ school: "福清一中", name: "张三", grade: "高一", className: "1班" }], "张三", 2)).toBe("duplicate");
   });
 });
 
@@ -122,7 +122,7 @@ describe("searchReducer", () => {
   });
 
   it("refreshes status text when leaving success for editing", () => {
-    const items: Student[] = [{ name: "张三", grade: "高一", className: "1班" }];
+    const items: Student[] = [{ school: "福清一中", name: "张三", grade: "高一", className: "1班" }];
     // 经 submit-result 的 ok 分支构造成功态：生产已改派它，测试若继续打
     // submit-success 就会锁在一个生产不再走的路径上——死代码仍显得受保护。
     const afterSuccess = searchReducer(
@@ -148,7 +148,7 @@ describe("searchReducer", () => {
   });
 
   it("refreshes state and status text when composition starts from success", () => {
-    const items: Student[] = [{ name: "张三", grade: "高一", className: "1班" }];
+    const items: Student[] = [{ school: "福清一中", name: "张三", grade: "高一", className: "1班" }];
     const afterSuccess = okSettled(items, 1, false);
     const s = searchReducer(afterSuccess, { type: "composition-start" });
     expect(s.state).toBe("editing");
@@ -208,15 +208,15 @@ describe("searchReducer", () => {
   });
 
   it("settles to success/duplicate/empty", () => {
-    const items = [{ name: "张三", grade: "高一" as const, className: "1班" }];
+    const items = [{ school: "福清一中", name: "张三", grade: "高一" as const, className: "1班" }];
     expect(okSettled(items, 1, false).state).toBe("success");
     expect(okSettled(items, 2, true).state).toBe("duplicate");
     expect(okSettled([], 0, false).state).toBe("empty");
   });
 
   it("load-more-result ok appends items and resets loadingMore", () => {
-    const base = { ...initialState, items: [{ name: "A", grade: "高一" as const, className: "1班" }], state: "duplicate" as SearchState, loadingMore: true };
-    const s = searchReducer(base, { type: "load-more-result", result: { ok: true, response: { items: [{ name: "B", grade: "高一" as const, className: "1班" }], total: 2, limit: 10, offset: 1, hasMore: false } } });
+    const base = { ...initialState, items: [{ school: "福清一中", name: "A", grade: "高一" as const, className: "1班" }], state: "duplicate" as SearchState, loadingMore: true };
+    const s = searchReducer(base, { type: "load-more-result", result: { ok: true, response: { items: [{ school: "福清一中", name: "B", grade: "高一" as const, className: "1班" }], total: 2, limit: 10, offset: 1, hasMore: false } } });
     expect(s.items.map((i) => i.name)).toEqual(["A", "B"]);
     expect(s.loadingMore).toBe(false);
     expect(s.hasMore).toBe(false);
@@ -283,7 +283,7 @@ describe("statusTextFor", () => {
 // App.tsx 的每个分支手工串联，派生规则没有测试覆盖，调用点也无法证伪。
 describe("orchestration inside the reducer", () => {
   it("derives success and its status text from a raw response", () => {
-    const items: Student[] = [{ name: "张三", grade: "高一", className: "1班" }];
+    const items: Student[] = [{ school: "福清一中", name: "张三", grade: "高一", className: "1班" }];
     const next = okSettled(items, 1, false);
     expect(next.state).toBe("success");
     expect(next.statusText).toBe("已定位 1 位同学");

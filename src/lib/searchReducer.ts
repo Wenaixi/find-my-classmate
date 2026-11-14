@@ -8,6 +8,10 @@ import { MAX_QUERY_LENGTH, PAGE_SIZE } from "../config";
 // 搜索区状态机的唯一事实来源（原 App.tsx 内联的 9 个 state 集合）。
 export interface SearchControllerState {
   query: string;
+  /** 当前选中的学校（空串=全校）。学校下拉的主要状态。 */
+  school: string;
+  /** 学校下拉候选（来自 /api/schools，只含高中校）。 */
+  schools: string[];
   items: Student[];
   total: number;
   hasMore: boolean;
@@ -20,6 +24,8 @@ export interface SearchControllerState {
 
 export type SearchAction =
   | { type: "input-change"; query: string }
+  | { type: "schools-loaded"; schools: string[] }
+  | { type: "select-school"; school: string }
   | { type: "submit-start" }
   | { type: "submit-result"; result: SearchResult }
   | { type: "load-more-start" }
@@ -40,6 +46,8 @@ const COPY: Record<SearchState, string> = {
 
 export const initialState: SearchControllerState = {
   query: "",
+  school: "",
+  schools: [],
   items: [],
   total: 0,
   hasMore: false,
@@ -246,6 +254,18 @@ export function searchReducer(state: SearchControllerState, action: SearchAction
       // 切到 editing 时同步刷新 statusText：状态与提示文案必须一致，
       // 否则失败后继续输入会显示 editing 状态配上"网络异常"之类的旧文案。
       return { ...state, query: action.query, state: "editing", statusText: COPY.editing };
+    case "schools-loaded":
+      // 学校下拉候选就绪：只替换候选列表，不动查询状态。
+      return { ...state, schools: action.schools };
+    case "select-school":
+      // 切换学校选择器：像输入变化一样作废当前结果，回到 idle——
+      // 学校是查询条件的一部分，切换后需用户重新提交才生效（与查询串同语义）。
+      return {
+        ...initialState,
+        school: action.school,
+        schools: state.schools,
+        isComposing: state.isComposing,
+      };
     case "submit-start":
       return { ...state, items: [], total: 0, hasMore: false, state: "loading", statusText: COPY.loading, loadingMore: false, loadMoreError: false };
     case "submit-result": {

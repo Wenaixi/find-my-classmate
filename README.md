@@ -60,110 +60,19 @@ const siteConfig = {
 
 ## 数据格式
 
-名单数据为 JSON 文件，支持 `高一.json`、`高二.json`、`高三.json`（**真实名单不随仓库发布**，部署时自行放置，可按需要只放部分年段），结构如下：
+名单数据为 JSON 文件（**真实名单不随仓库发布**，部署时自行放置）。支持多学校：data/ 目录下每校一个 `*.json`，文件名不参与语义（可任意命名），学校身份取自文件内的 `校名` 字段。推荐使用 `build_hierarchy_json.py --no-credential` 导出的纯净名册（无账号密码、无 id 字段）结构如下：
 
 ```json
 {
-  "标题": "2025级高一编班名单",
-  "名单": {
-    "1班": [ { "姓名": "张三" } ]
-  }
+  "区县": "福清市",
+  "学校": [{
+    "校名": "福清一中",
+    "年级": [{ "年级名": "高一", "班级": [{ "班名": "一班", "学生": [{ "姓名": "张三" }] }] }]
+  }]
 }
 ```
 
-- 顶层仅 `标题` 与 `名单` 两个键；标题中的年段必须与文件名一致。
-- 班级键格式为 `N班`（阿拉伯数字）；学生条目仅 `姓名` 一个字段（白名单）。
-- 数据按年级、班级、姓名（去除空白、统一大写后）去重；API 不会读取或返回任何额外字段。
-
-## 查询契约
-
-- 中文逗号、英文逗号、顿号、连续空白均可分隔查询 token
-- 姓名匹配键删除中英文空格、全角空格与制表符，统一大小写
-- `高一` / `高二` / `高三` 为年段筛选（`高1` / `高2` / `高3` 为别名）；`18` 或 `18班` 为班级条件；`高二一班`、`高一1班` 等**年段+班级连写**同样支持，会精确筛选对应班级而非整个年段
-- 结果按完整、前缀、包含匹配排序，同分按年段序列（高一 < 高二 < 高三）再按班级号升序
-- API 响应固定为分页结构 `{ items, total, limit, offset, hasMore }`，首屏默认 10 条，单次最多 50 条
-
-## 验证
-
-前端：
-
-```bash
-npm run typecheck
-npm test
-npm run build
-```
-
-> 搜索性能基准只存在于后端（server/bench_test.go）：前端不执行搜索，
-> 浏览器侧只有查询解释，没有可基准的搜索路径。
-
-后端：
-
-```bash
-cd server
-gofmt -l .          # 应无输出
-go test ./...
-go vet ./...
-go test -bench . -benchmem .   # 搜索性能基准（可选）
-```
-
-CI（GitHub Actions）在每次 push 时自动执行以上全部检查，详见 `.github/workflows/ci.yml`。
-
-## 发布
-
-打 tag 触发自动发布：
-
-```bash
-git tag vX.Y.Z          # 版本号须与 CHANGELOG.md 的对应条目精确匹配
-git push origin vX.Y.Z
-```
-
-> **tag 必须与 `CHANGELOG.md` 的对应版本条目精确匹配**——`release.yml` 用 `awk`
-> 按 `github.ref_name` 抽取该条目作为 Release 正文，找不到会显式失败（`exit 1`）。
-> 当前版本以 `CHANGELOG.md` 顶部最新的已发布条目为准（`## [Unreleased]` 之下
-> 第一条带日期的条目）。**不要看 `package.json` 的 `version`**——该字段带
-> `private: true`，全仓无任何代码读取它，且它当前落后于已发布版本一代。
-> 二进制内显示的版本号由发布流水线用 ldflags 从 git tag 注入，与 tag 同源。
-
-`.github/workflows/release.yml` 会执行全量测试，然后：
-1. 交叉编译 Linux amd64 / macOS arm64 / Windows amd64 三平台二进制（内嵌前端页面与 API 服务），连同空 data 占位目录与文档打包成 `findmyclassmate.tar.gz` 并创建 GitHub Release。**发布包不含任何名单数据**，使用者按下方数据格式章节自行放置 `data/高一.json` 等年段名单
-2. 构建并推送 Docker 镜像到 Docker Hub（`wenxiloveyou/find-my-classmate`），标签为 `{version}`、`{major}.{minor}`，main 分支额外推送 `latest`
-
-> Docker 推送需要仓库配置 `DOCKER_PAT` Secret（Docker Hub 访问令牌）。
-
-## 目录结构
-
-```
-├── .github/workflows/   # CI 与发布流水线
-├── data/                # 名单数据（高一.json / 高二.json / 高三.json，按需放置）
-├── docs/                # 架构文档（ARCHITECTURE.md / adr/ / agents/ / query-contract.json）
-├── public/              # 静态资源（favicon / logo）
-├── server/              # Go 服务（嵌入 server/web/ 构建产物）
-├── src/                 # React 前端源码与测试
-└── LICENSE              # MIT License
-```
-
-## 隐私与安全边界
-
-- 页面不写入 localStorage，不把查询词或结果写入 URL
-- API DTO 只返回 name、grade、class
-- 服务端已内置：CSP 与安全响应头（防点击劫持 / 注入）、按 IP 令牌桶限流（每 IP 突发 60 个请求、稳态 1 请求/秒，429 返回 JSON + Retry-After 整数秒）、HTTP 读写超时（防慢速攻击）、访问日志脱敏且不记录查询参数
-- 生产部署建议在边缘或网关补充：严格 CORS、HTTPS（HSTS）、反代层限流
-- 部署形态边界：服务监听 0.0.0.0:3078（非标准端口）。若前置反代（Nginx/Caddy），必须处理：限流与脱敏日志基于 RemoteAddr，反代后所有客户端坍缩为反代 IP（限流退化为全局单桶、脱敏失效）——解决方案为反代层限流 + 可信来源白名单解析 XFF + 防火墙限制 3078 仅反代可达；若公网直连暴露，必须 TLS（当前为明文 HTTP，同网段可嗅探查询词，仅限内网部署）
-- 名单数据含真实姓名（未成年人），发布前必须获得学校书面公示许可；**真实名单不进仓库、不进发布包**，仅限校内部署时自行放入 data/ 目录（数据格式见上文）
-
-## 数据维护与备份
-- **单实例边界**：限流桶与数据视图均为进程内状态，不支持多副本横向扩展；数据更新用原子替换（写临时文件后 mv），随后请求验证。
-
-- 名单数据不进 git 仓库（.gitignore 排除），备份依赖本地文件系统 + 手动归档；恢复用重新放置文件 + 热重载秒级生效。
-- 数据更新流程：源文件归档 → 规范化（字段白名单/班级键 N班/标题-文件名一致）→ 校验（`go test` + CI 数据契约）→ 人工复核（班级人数 10-60 区间，异常小班需回源核对）→ 独立提交 + CHANGELOG 条目。
-
-## 贡献
-
-1. Fork 本仓库并创建特性分支
-2. 修改后运行全部验证命令（前端 typecheck / test / build，后端 gofmt / go test / go vet）
-3. 提交信息使用中文或英文均可，保持简洁描述
-4. 发起 Pull Request，CI 会自动运行全量检查
-
-## License
-
-[MIT](LICENSE) © FindMyClassmate Contributors
+- 顶层仅 `区县` 与 `学校` 两个键；`学校` 为数组，每项含 `校名` 与 `年级`（数组）。
+- 年级项含 `年级名` 与 `班级`（数组）；班级项含 `班名` 与 `学生`（数组）；学生仅 `姓名` 一个字段。
+- 文件内可含多个学校、多个年级；跨文件校名重复会被拒绝加载。
+- API 返回 `name/school/grade/class` 四个字段；学校下拉（`/api/schools`）只列出包含高中年级（高一~高三）的学校。

@@ -3,7 +3,7 @@ import type { SearchResponse } from "../types";
 // 请求竞态编排：requestId + abort 的唯一归属（原 App.tsx 的 requestRef/abortRef）。
 // 可注入 api 便于测试——真实 bug 藏在"过期响应被丢弃"的调用方式里，必须能单测。
 export interface SearchSessionApi {
-  search(q: string, limit: number, offset: number, signal: AbortSignal): Promise<SearchResponse>;
+  search(q: string, limit: number, offset: number, signal: AbortSignal, school?: string): Promise<SearchResponse>;
 }
 // SearchResult 判别联合：把"过期/中止被丢弃"从返回类型里显式化。
 // 旧实现 resolve undefined 让调用方无法区分 stale 与真实失败；判别联合
@@ -20,8 +20,8 @@ const staleResult: SearchResult = { ok: false, reason: "stale" };
 export interface SearchSession {
   invalidate(): void;
   abortAll(): void;
-  submit(q: string, limit: number): Promise<SearchResult>;
-  loadMore(q: string, limit: number, offset: number): Promise<SearchResult>;
+  submit(q: string, limit: number, school?: string): Promise<SearchResult>;
+  loadMore(q: string, limit: number, offset: number, school?: string): Promise<SearchResult>;
 }
 // begin/isCurrent 收归内部闭包：请求 id 与会话当前性只属于实现，
 // 调用方只需 submit/loadMore/invalidate/abortAll 四个意图动作。
@@ -52,13 +52,13 @@ export function createSearchSession(api: SearchSessionApi): SearchSession {
   // submit 与 loadMore 只差 id 来源（begin() 的新会话 vs 跟随 currentId）与 offset，
   // 骨架本身不允许各自复制一份——判别联合（ok/stale/error）在此单点构造，
   // 过期响应与中止归为 stale、仅未中止且仍当前的失败才是真实错误。
-  const perform = async (id: number, q: string, limit: number, offset: number): Promise<SearchResult> => {
+  const perform = async (id: number, q: string, limit: number, offset: number, school?: string): Promise<SearchResult> => {
     const sessionController = controller;
     const combined = new AbortController();
     const onAbort = () => combined.abort();
     listen(sessionController, onAbort);
     try {
-      const response = await api.search(q, limit, offset, combined.signal);
+      const response = await api.search(q, limit, offset, combined.signal, school);
       return isCurrent(id) ? { ok: true, response } : staleResult;
     } catch (cause) {
       if (combined.signal.aborted || !isCurrent(id)) return staleResult;
@@ -75,13 +75,13 @@ export function createSearchSession(api: SearchSessionApi): SearchSession {
       void begin();
     },
     abortAll: () => controller?.abort(),
-    async submit(q, limit) {
+    async submit(q, limit, school) {
       // submit 通过 begin 取得全新会话 id：新查询使旧查询的 id 过期。
-      return perform(begin(), q, limit, 0);
+      return perform(begin(), q, limit, 0, school);
     },
-    async loadMore(q, limit, offset) {
+    async loadMore(q, limit, offset, school) {
       // loadMore 跟随当前会话 id（不 begin）——滚动追加不该使 submit 的结果失效。
-      return perform(currentId, q, limit, offset);
+      return perform(currentId, q, limit, offset, school);
     },
   };
 }

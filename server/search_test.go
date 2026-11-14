@@ -546,7 +546,7 @@ func TestGradeValueDomainFollowsKnownGrades(t *testing.T) {
 
 	// 加载侧：标题校验经 parseGradeInTitle，必须放行合法的新年段名单
 	dir := t.TempDir()
-	body := `{"标题":"福清一中2025级高四编班名单","名单":{"1班":[{"姓名":"探测同学"}]}}`
+	body := `{"区县":"福清市","学校":[{"校名":"福清一中","年级":[{"年级名":"高四","班级":[{"班名":"1班","学生":[{"姓名":"探测同学"}]}]}]}]}`
 	if err := os.WriteFile(filepath.Join(dir, "高四.json"), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}

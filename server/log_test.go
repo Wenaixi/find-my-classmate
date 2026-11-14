@@ -27,7 +27,7 @@ func TestReloadLogRespectsLogLevel(t *testing.T) {
 	logLevel = levelError
 	defer func() { logLevel = oldLevel }()
 
-	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte("{\"标题\":\"福清一中2025级高一编班名单\",\"名单\":{\"1班\":[{\"姓名\":\"王皓轩\"},{\"姓名\":\"张三\"},{\"姓名\":\"新同学\"}]}}"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"区县":"福清市","学校":[{"校名":"福清一中","年级":[{"年级名":"高一","班级":[{"班名":"1班","学生":[{"姓名":"王皓轩"},{"姓名":"张三"},{"姓名":"新同学"}]}]}]}]}`), 0o644)
 	_, _ = store.view()
 
 	if buf.Len() > 0 {

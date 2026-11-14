@@ -26,6 +26,9 @@ function ResultCard({ student, index }: { student: Student; index: number }) {
         <p className="result-label">匹配记录</p>
       </div>
       <div className="result-location" data-od-id={"result-meta-" + index}>
+        <span className="result-location-label">学校</span>
+        <strong>{student.school}</strong>
+        <span className="result-location-divider" aria-hidden="true" />
         <span className="result-location-label">年段</span>
         <strong>{student.grade}</strong>
         <span className="result-location-divider" aria-hidden="true" />
@@ -69,7 +72,7 @@ export default function ResultList({ items, summary, loadMoreZone, onLoadMore }:
           <Liquid blur={10} contrast={24} fill="rgba(255,255,255,.1)" shadow="0 18px 50px rgba(255,255,255,.06)" className="liquid-result-group">
             {items.map((student, index) => (
               <Liquid.Item
-                key={student.name + student.grade + student.className}
+                key={student.name + student.school + student.grade + student.className}
                 className="liquid-result-item"
                 morph={{ shape: true, speed: 0.85, bounce: 0.3, contentBlur: 0 }}
               >

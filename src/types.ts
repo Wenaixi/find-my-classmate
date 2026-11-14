@@ -14,8 +14,14 @@ export type Grade = "高一" | "高二" | "高三";
 
 export interface Student {
   name: string;
+  school: string;
   grade: Grade;
   className: string;
+}
+
+// /api/schools 响应体：学校下拉候选（仅含高中年级的学校）。
+export interface SchoolsResponse {
+  schools: string[];
 }
 
 export interface SearchResponse {

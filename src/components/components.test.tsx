@@ -114,8 +114,8 @@ describe("ErrorBoundary", () => {
 
 describe("ResultList", () => {
   const students = [
-    { name: "张三", grade: "高一" as const, className: "1班" },
-    { name: "李四", grade: "高二" as const, className: "2班" },
+    { school: "福清一中", name: "张三", grade: "高一" as const, className: "1班" },
+    { school: "福清一中", name: "李四", grade: "高二" as const, className: "2班" },
   ];
 
   // 夹具经 present 取 loadMoreZone，而不是手工拼 props：

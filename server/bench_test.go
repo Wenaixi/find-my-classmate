@@ -57,9 +57,9 @@ func BenchmarkSearchCombined(b *testing.B) {
 func BenchmarkStoreView(b *testing.B) {
 	dir := b.TempDir()
 	_ = os.WriteFile(filepath.Join(dir, "高一.json"),
-		[]byte(`{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"张三"}]}}`), 0o644)
+		[]byte(`{"区县":"福清市","学校":[{"校名":"福清一中","年级":[{"年级名":"高一","班级":[{"班名":"1班","学生":[{"姓名":"张三"}]}]}]}]}`), 0o644)
 	_ = os.WriteFile(filepath.Join(dir, "高二.json"),
-		[]byte(`{"标题":"福清一中2025级高二编班名单","名单":{"2班":[{"姓名":"李四"}]}}`), 0o644)
+		[]byte(`{"区县":"福清市","学校":[{"校名":"福清二中","年级":[{"年级名":"高二","班级":[{"班名":"2班","学生":[{"姓名":"李四"}]}]}]}]}`), 0o644)
 	store, err := newStudentStore(dir, time.Now)
 	if err != nil {
 		b.Fatal(err)
@@ -139,9 +139,9 @@ func TestSearchAllocsBudget(t *testing.T) {
 func TestStoreViewAllocsBudget(t *testing.T) {
 	dir := t.TempDir()
 	_ = os.WriteFile(filepath.Join(dir, "高一.json"),
-		[]byte(`{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"张三"}]}}`), 0o644)
+		[]byte(`{"区县":"福清市","学校":[{"校名":"福清一中","年级":[{"年级名":"高一","班级":[{"班名":"1班","学生":[{"姓名":"张三"}]}]}]}]}`), 0o644)
 	_ = os.WriteFile(filepath.Join(dir, "高二.json"),
-		[]byte(`{"标题":"福清一中2025级高二编班名单","名单":{"2班":[{"姓名":"李四"}]}}`), 0o644)
+		[]byte(`{"区县":"福清市","学校":[{"校名":"福清二中","年级":[{"年级名":"高二","班级":[{"班名":"2班","学生":[{"姓名":"李四"}]}]}]}]}`), 0o644)
 	store, err := newStudentStore(dir, time.Now)
 	if err != nil {
 		t.Fatal(err)

@@ -9,7 +9,7 @@ const okResponse = (over: Partial<SearchResponse> = {}): SearchResponse => ({
 
 describe("createSearchOrchestrator", () => {
   it("submit runs query through api and maps success to state", async () => {
-    const api = { search: vi.fn().mockResolvedValue(okResponse({ items: [{ name: "甲", grade: "高一", className: "1班" }], total: 1, hasMore: false })) };
+    const api = { search: vi.fn().mockResolvedValue(okResponse({ items: [{ school: "福清一中", name: "甲", grade: "高一", className: "1班" }], total: 1, hasMore: false })) };
     const orch = createSearchOrchestrator({ pageSize: 10, api });
     orch.onInput("甲");
     await orch.submit();
@@ -42,7 +42,7 @@ describe("createSearchOrchestrator", () => {
     await orch.submit();
 
     // 第二次 submit 成功后，状态已被 success 覆盖；此时旧响应才迟到。
-    resolveFirst(okResponse({ items: [{ name: "甲", grade: "高一", className: "1班" }], total: 1 }));
+    resolveFirst(okResponse({ items: [{ school: "福清一中", name: "甲", grade: "高一", className: "1班" }], total: 1 }));
     await p1;
 
     // 双向断言之一（正向）：stale 不得把状态推进 error。
@@ -107,7 +107,7 @@ describe("createSearchOrchestrator", () => {
       search: vi
         .fn()
         .mockImplementationOnce(() => new Promise<SearchResponse>((r) => (resolveFirst = r)))
-        .mockResolvedValue(okResponse({ items: [{ name: "乙", grade: "高一", className: "2班" }], total: 1 })),
+        .mockResolvedValue(okResponse({ items: [{ school: "福清一中", name: "乙", grade: "高一", className: "2班" }], total: 1 })),
     };
     const orch = createSearchOrchestrator({ pageSize: 10, api });
     orch.onInput("甲");
@@ -116,7 +116,7 @@ describe("createSearchOrchestrator", () => {
     await orch.submit();
     expect(orch.getState().items.map((s) => s.name)).toEqual(["乙"]);
 
-    resolveFirst(okResponse({ items: [{ name: "甲", grade: "高一", className: "1班" }], total: 1 }));
+    resolveFirst(okResponse({ items: [{ school: "福清一中", name: "甲", grade: "高一", className: "1班" }], total: 1 }));
     await p1;
 
     // 过期响应不得追加进结果区：items 仍只有第二条查询的结果。
@@ -124,7 +124,7 @@ describe("createSearchOrchestrator", () => {
   });
 
   it("loadMore guards on hasMore and appends via load-more-result", async () => {
-    const api = { search: vi.fn().mockResolvedValue(okResponse({ items: [{ name: "甲", grade: "高一", className: "1班" }], total: 1, hasMore: true })) };
+    const api = { search: vi.fn().mockResolvedValue(okResponse({ items: [{ school: "福清一中", name: "甲", grade: "高一", className: "1班" }], total: 1, hasMore: true })) };
     const orch = createSearchOrchestrator({ pageSize: 10, api });
     orch.onInput("甲");
     await orch.submit();
@@ -136,8 +136,8 @@ describe("createSearchOrchestrator", () => {
     // 追加语义此前只有 searchReducer 层单独覆盖：编排层的 loadMore 用例
     // 只断言 loadingMore 为 false，把 loadMore 改成永不追加也依然全绿。
     // 本条从编排入口断言 items 真的增长，锁住「守卫放行 → 结果抵达 reducer」这段接线。
-    const first = okResponse({ items: [{ name: "甲", grade: "高一", className: "1班" }], total: 2, hasMore: true });
-    const second = okResponse({ items: [{ name: "乙", grade: "高一", className: "2班" }], total: 2, hasMore: false });
+    const first = okResponse({ items: [{ school: "福清一中", name: "甲", grade: "高一", className: "1班" }], total: 2, hasMore: true });
+    const second = okResponse({ items: [{ school: "福清一中", name: "乙", grade: "高一", className: "2班" }], total: 2, hasMore: false });
     const api = { search: vi.fn().mockResolvedValueOnce(first).mockResolvedValueOnce(second) };
     const orch = createSearchOrchestrator({ pageSize: 10, api });
     orch.onInput("甲");
@@ -155,8 +155,8 @@ describe("createSearchOrchestrator", () => {
   // 反向断「两次请求的 offset 不同」，否则把 offset 硬编码为任何
   // 与已加载条数恰好相等的常量都能通过。
   it("loadMore 请求的 offset 是已加载条数，不重复第一页", async () => {
-    const first = okResponse({ items: [{ name: "甲", grade: "高一", className: "1班" }], total: 3, hasMore: true });
-    const second = okResponse({ items: [{ name: "乙", grade: "高一", className: "2班" }], total: 3, hasMore: false });
+    const first = okResponse({ items: [{ school: "福清一中", name: "甲", grade: "高一", className: "1班" }], total: 3, hasMore: true });
+    const second = okResponse({ items: [{ school: "福清一中", name: "乙", grade: "高一", className: "2班" }], total: 3, hasMore: false });
     const api = { search: vi.fn().mockResolvedValueOnce(first).mockResolvedValueOnce(second) };
     const orch = createSearchOrchestrator({ pageSize: 10, api });
     orch.onInput("甲");
@@ -175,7 +175,7 @@ describe("createSearchOrchestrator", () => {
   // 变异实验：删掉 submit 守卫里的 loadingMore 项，前端全量仍绿。
   it("加载更多进行中不发起新查询", async () => {
     let resolveLoadMore!: (r: SearchResponse) => void;
-    const first = okResponse({ items: [{ name: "甲", grade: "高一", className: "1班" }], total: 2, hasMore: true });
+    const first = okResponse({ items: [{ school: "福清一中", name: "甲", grade: "高一", className: "1班" }], total: 2, hasMore: true });
     const api = {
       search: vi
         .fn()
@@ -192,14 +192,14 @@ describe("createSearchOrchestrator", () => {
     await orch.submit();
     expect(api.search.mock.calls.length).toBe(callsBeforeLoadMore + 1);
 
-    resolveLoadMore(okResponse({ items: [{ name: "乙", grade: "高一", className: "2班" }], total: 2, hasMore: false }));
+    resolveLoadMore(okResponse({ items: [{ school: "福清一中", name: "乙", grade: "高一", className: "2班" }], total: 2, hasMore: false }));
     await pending;
     expect(orch.getState().items.map((s) => s.name)).toEqual(["甲", "乙"]);
   });
 
   it("loadMore does not request when there is no next page", async () => {
     // 守卫的另一侧：无后续页时不发起请求。此前守卫被改成无条件 return 也无人发现。
-    const api = { search: vi.fn().mockResolvedValue(okResponse({ items: [{ name: "甲", grade: "高一", className: "1班" }], total: 1, hasMore: false })) };
+    const api = { search: vi.fn().mockResolvedValue(okResponse({ items: [{ school: "福清一中", name: "甲", grade: "高一", className: "1班" }], total: 1, hasMore: false })) };
     const orch = createSearchOrchestrator({ pageSize: 10, api });
     orch.onInput("甲");
     await orch.submit();

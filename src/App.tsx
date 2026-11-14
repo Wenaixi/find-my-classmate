@@ -1,6 +1,6 @@
 import { FormEvent, Suspense, lazy, useEffect, useRef, useState } from "react";
 import { BorderBeam } from "border-beam";
-import { fetchVersion, searchApi } from "./lib/api";
+import { fetchSchools, fetchVersion, searchApi } from "./lib/api";
 import { useSearchController } from "./lib/useSearchController";
 import { useSearchInput } from "./lib/useSearchInput";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -24,8 +24,8 @@ export interface AppProps {
 export function App({ api }: AppProps = {}) {
   // 查询会话深模块：state（渲染派生）+ controller（意图动作）两面消费，
   // 编排（守卫/判别联合/竞态）全部收进模块，组件不再理解 reducer/session。
-  const { state, controller } = useSearchController({ pageSize: PAGE_SIZE, api: { search: api?.search ?? searchApi } });
-  const { query, items, total, hasMore, state: uiState, statusText, loadingMore, loadMoreError, isComposing } = state;
+  const { state, controller } = useSearchController({ pageSize: PAGE_SIZE, api: { search: api?.search ?? searchApi }, schoolsApi: fetchSchools });
+  const { query, school, schools, items, total, hasMore, state: uiState, statusText, loadingMore, loadMoreError, isComposing } = state;
   // 输入交互语义（IME 组合守卫、Enter 提交、Escape 清空）由 useSearchInput 统一收口：
   // 组件只透传回调，不再手写组合判断——该逻辑此前内联在此处且零测试覆盖。
   const inputHandlers = useSearchInput(controller, isComposing);
@@ -47,6 +47,11 @@ export function App({ api }: AppProps = {}) {
     const controller = new AbortController();
     fetchVersion(controller.signal).then(setVersion).catch(() => {});
     return () => controller.abort();
+  }, []);
+
+  // 学校下拉候选：挂载时拉取（/api/schools），失败静默隐藏选择器相关状态不影响搜索。
+  useEffect(() => {
+    void controller.loadSchools();
   }, []);
 
   useEffect(() => {
@@ -105,7 +110,28 @@ export function App({ api }: AppProps = {}) {
           <div className="hero-kicker"><p className="eyebrow" data-od-id="hero-eyebrow">校园名单 / 快速定位</p><span className="hero-stamp">FMC—01</span></div>
           <h1 data-od-id="hero-title">找到同学，<br /><em>从名字开始。</em></h1>
           <form className="search-wrap" data-od-id="search-form" ref={searchWrapRef} onSubmit={submit}>
-            <label className="field-label" data-od-id="search-label" htmlFor="query">查询条件 <span>NAME / CLASS / GRADE</span></label>
+            <label className="field-label" data-od-id="search-label" htmlFor="query">查询条件 <span>NAME / CLASS / GRADE / SCHOOL</span></label>
+            {/* 学校筛选：胶囊下拉，与 search-track 同族（深色、999 圆角、细边框、focus 变 ink）。
+                切换后像输入变化一样作废在途查询并回 idle，由用户重新提交生效。 */}
+            <div className="school-row" data-od-id="school-row">
+              <span className="school-row-label" id="school-label">学校</span>
+              <div className="school-select-wrap" data-od-id="school-select-wrap">
+                <select
+                  className="school-select"
+                  data-od-id="school-select"
+                  id="school-select"
+                  value={school}
+                  onChange={(event) => controller.selectSchool(event.target.value)}
+                  aria-labelledby="school-label"
+                >
+                  <option value="">全部学校</option>
+                  {schools.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+                <svg className="school-select-arrow" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+              </div>
+            </div>
             <BorderBeam size="md" colorVariant="colorful" theme="dark" borderRadius={999} duration={2.2} strength={1} brightness={2} saturation={2.2} hueRange={160}>
               <div className="search-track" data-od-id="search-track">
                 <input className="search-input" id="query" type="text" autoComplete="off" spellCheck={false} maxLength={MAX_QUERY_LENGTH} value={query} onChange={(event) => inputHandlers.onChange(event.target.value)} onFocus={() => searchWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })} onCompositionStart={inputHandlers.onCompositionStart} onCompositionEnd={inputHandlers.onCompositionEnd} onKeyDown={(event) => inputHandlers.onKeyDown(event.key, event.nativeEvent.isComposing)} placeholder="输入姓名 / 班级 / 年段" aria-label="查询条件" aria-describedby="search-hint" />

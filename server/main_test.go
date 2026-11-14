@@ -12,8 +12,9 @@ import (
 	"time"
 )
 
-const validGradeOne = `{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"王皓轩"},{"姓名":"张三"}]}}`
-const validGradeTwo = `{"标题":"福清一中2025级高二编班名单","名单":{"2班":[{"姓名":"李四"}]}}`
+// 新格式 fixture：一个文件=一个学校（可含多年级）。文件名不再承载语义。
+const validGradeOne = `{"区县":"福清市","学校":[{"校名":"福清一中","年级":[{"年级名":"高一","班级":[{"班名":"1班","学生":[{"姓名":"王皓轩"},{"姓名":"张三"}]}]}]}]}`
+const validGradeTwo = `{"区县":"福清市","学校":[{"校名":"福清二中","年级":[{"年级名":"高二","班级":[{"班名":"2班","学生":[{"姓名":"李四"}]}]}]}]}`
 
 // health 应反映数据可用性——数据损坏时返回 503
 func TestHealthReflectsDataAvailability(t *testing.T) {
@@ -93,12 +94,12 @@ func TestSearchResponseKeys(t *testing.T) {
 		t.Fatalf("items 应为 1 条，实际 %#v", body["items"])
 	}
 	item := items[0].(map[string]any)
-	for _, key := range []string{"name", "grade", "class"} {
+	for _, key := range []string{"name", "school", "grade", "class"} {
 		if _, ok := item[key]; !ok {
 			t.Errorf("响应缺字段 %s", key)
 		}
 	}
-	for _, banned := range []string{"NameKey", "Name", "ClassName", "Grade", "ClassNo", "GradeIdx"} {
+	for _, banned := range []string{"NameKey", "Name", "School", "SchoolIdx", "ClassName", "Grade", "ClassNo", "GradeIdx"} {
 		if _, ok := item[banned]; ok {
 			t.Errorf("响应不应含字段 %s（隐私红线）", banned)
 		}

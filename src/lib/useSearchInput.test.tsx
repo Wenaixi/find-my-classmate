@@ -140,7 +140,7 @@ describe("useSearchInput", () => {
 describe("useSearchInput 与控制器的接线", () => {
   it("输入后按 Enter 走完整链路并拿到结果", async () => {
     const search = vi.fn().mockResolvedValue({
-      items: [{ name: "甲", grade: "高一" as const, className: "1班" }],
+      items: [{ school: "福清一中", name: "甲", grade: "高一" as const, className: "1班" }],
       total: 1,
       limit: 10,
       offset: 0,
@@ -174,7 +174,8 @@ describe("useSearchInput 与控制器的接线", () => {
       handlers.onKeyDown!("Enter", false);
     });
 
-    expect(search).toHaveBeenCalledWith("甲", 10, 0, expect.anything());
+    // 第 5 参是学校过滤（未选学校时为空串）
+    expect(search).toHaveBeenCalledWith("甲", 10, 0, expect.anything(), "");
     expect(seen[seen.length - 1].items).toBe(1);
   });
 });

@@ -71,7 +71,7 @@ if (g["IntersectionObserver"] === undefined) {
 const realConsoleError = console.error;
 console.error = () => {};
 
-const 张三: Student = { name: "张三", grade: "高一", className: "1班" };
+const 张三: Student = { school: "福清一中", name: "张三", grade: "高一", className: "1班" };
 
 let mountedRoot: Root | null = null;
 afterEach(() => {

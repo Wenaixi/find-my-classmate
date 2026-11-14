@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -20,9 +19,27 @@ type sourceStudent struct {
 	Name string `json:"姓名"`
 }
 
+// 新格式（build_hierarchy_json.py 输出的无账密 roster）：
+//   { "区县": "...", "学校": [{ "校名": "...", "年级": [{ "年级名": "...",
+//     "班级": [{ "班名": "...", "学生": [{ "姓名": "..." }] }] }] }] }
+type sourceClass struct {
+	Name     string           `json:"班名"`
+	Students []sourceStudent `json:"学生"`
+}
+
+type sourceGrade struct {
+	Name    string        `json:"年级名"`
+	Classes []sourceClass `json:"班级"`
+}
+
+type sourceSchool struct {
+	Name   string         `json:"校名"`
+	Grades []sourceGrade  `json:"年级"`
+}
+
 type sourceDocument struct {
-	Title  string                     `json:"标题"`
-	Roster map[string][]sourceStudent `json:"名单"`
+	District string         `json:"区县"`
+	Schools  []sourceSchool `json:"学校"`
 }
 
 type fileStamp struct {
@@ -56,67 +73,97 @@ type studentStore struct {
 }
 
 func loadStudents(dir string) ([]Student, error) {
-	students := make([]Student, 0)
-	seen := make(map[string]struct{})
-	found := false
-	for _, grade := range knownGrades {
-		path := filepath.Join(dir, string(grade)+".json")
-		payload, err := os.ReadFile(path)
-		if errors.Is(err, fs.ErrNotExist) {
-			// 年段文件按需加载：目录里存在哪个就加载哪个（高一/高二/高三自由组合）
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("读取数据目录失败: %w", err)
+	}
+	// 文件名排序保证加载顺序确定：学校展示序与同分排序都以首次出现序为准。
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
 			continue
 		}
-		if err != nil {
-			return nil, fmt.Errorf("读取%s数据失败: %w", grade, err)
+		if !isRosterFile(entry.Name()) {
+			continue
 		}
-		found = true
+		names = append(names, entry.Name())
+	}
+	sort.Strings(names)
+	if len(names) == 0 {
+		return nil, errNoRoster()
+	}
+
+	students := make([]Student, 0)
+	seen := make(map[string]struct{})
+	schoolOrder := make(map[string]int)
+	nextSchool := 0
+	for _, name := range names {
+		payload, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			return nil, fmt.Errorf("读取 %s 失败: %w", name, err)
+		}
 		payload = bytes.TrimPrefix(payload, []byte{0xEF, 0xBB, 0xBF})
 		var document sourceDocument
 		if err := json.Unmarshal(payload, &document); err != nil {
-			return nil, fmt.Errorf("解析%s数据失败: %w", grade, err)
+			return nil, fmt.Errorf("解析 %s 失败: %w", name, err)
 		}
-		if document.Title == "" || parseGradeInTitle(document.Title) != grade {
-			return nil, fmt.Errorf("%s.json 文件名与年级标题不一致", grade)
+		if len(document.Schools) == 0 {
+			return nil, fmt.Errorf("%s 缺少学校数据（不是 roster 格式）", name)
 		}
-		if document.Roster == nil {
-			return nil, fmt.Errorf("%s.json 名单结构异常", grade)
-		}
-		classes := make([]string, 0, len(document.Roster))
-		classNos := make(map[string]ClassParseResult, len(document.Roster))
-		for className := range document.Roster {
-			// C4：解析一次、三处消费（校验/排序/派生），不再对同一类名重复正则+Atoi。
-			// C3：三态校验——旧实现只检 classNumber==0，溢出（-1）静默放行并流入排序
-			parsed := parseClassName(className)
-			if !parsed.Valid {
-				return nil, fmt.Errorf("%s.json 班级格式异常（%s）", grade, className)
+		for _, school := range document.Schools {
+			schoolName := strings.TrimSpace(school.Name)
+			if schoolName == "" {
+				return nil, fmt.Errorf("%s 存在缺少校名的学校记录", name)
 			}
-			classNos[className] = parsed
-			classes = append(classes, className)
-		}
-		sort.Slice(classes, func(i, j int) bool { return classNos[classes[i]].ClassNo < classNos[classes[j]].ClassNo })
-		for _, className := range classes {
-			for _, item := range document.Roster[className] {
-				name := item.Name
-				if name == "" {
-					return nil, fmt.Errorf("%s.json 学生记录格式异常", grade)
+			if _, duplicated := schoolOrder[schoolName]; duplicated {
+				return nil, fmt.Errorf("校名重复: %s（%s）", schoolName, name)
+			}
+			schoolIdx := nextSchool
+			schoolOrder[schoolName] = schoolIdx
+			nextSchool++
+			for _, grade := range school.Grades {
+				gradeName := strings.TrimSpace(grade.Name)
+				if gradeName == "" {
+					return nil, fmt.Errorf("%s / %s 存在缺少年级名的年级记录", name, schoolName)
 				}
-				student := newStudent(name, grade, className, classNos[className])
-				// 去重键用班号而非班名：班名是书写形态（「1班」与「一班」都指 1 班），
-				// 班号才是领域身份。用班名会让同一个人因写法不同被加载两次，
-				// 在响应里出现两条班名不同的重复记录。
-				key := string(grade) + "\x00" + strconv.Itoa(classNos[className].ClassNo) + "\x00" + student.NameKey
-				if _, exists := seen[key]; exists {
-					continue
+				gradeValue := Grade(gradeName)
+				for _, class := range grade.Classes {
+					className := strings.TrimSpace(class.Name)
+					if className == "" {
+						return nil, fmt.Errorf("%s / %s / %s 存在缺少班名的班级记录", name, schoolName, gradeName)
+					}
+					parsed := parseClassName(className)
+					if !parsed.Valid {
+						return nil, fmt.Errorf("%s / %s / %s 班级格式异常（%s）", name, schoolName, gradeName, className)
+					}
+					for _, item := range class.Students {
+						studentName := item.Name
+						if studentName == "" {
+							return nil, fmt.Errorf("%s / %s / %s 学生记录格式异常", name, schoolName, className)
+						}
+						student := newStudentSchool(schoolName, studentName, gradeValue, className, parsed, schoolIdx)
+						// 去重键含学校：跨校同名同班不再互吞。班号而非班名仍是班级身份。
+						key := schoolName + "\x00" + gradeName + "\x00" + strconv.Itoa(parsed.ClassNo) + "\x00" + student.NameKey
+						if _, exists := seen[key]; exists {
+							continue
+						}
+						seen[key] = struct{}{}
+						students = append(students, student)
+					}
 				}
-				seen[key] = struct{}{}
-				students = append(students, student)
 			}
 		}
-	}
-	if !found {
-		return nil, errNoRoster()
 	}
 	return students, nil
+}
+
+// isRosterFile 判定目录项是否为待加载的 roster 文件：小写 .json 后缀且非隐藏文件。
+// 名单文件的文件名不参与语义（学校身份取自 JSON 内容），此函数只做后缀筛选。
+func isRosterFile(name string) bool {
+	if strings.HasPrefix(name, ".") {
+		return false
+	}
+	return strings.HasSuffix(strings.ToLower(name), ".json")
 }
 
 // newStudentStore 构造并立即完成首次加载（force 路径）。
@@ -171,23 +218,7 @@ var errDataUnavailable = errors.New("数据不可用")
 // 高一/高二/高三三个——扩展年段只需在 knownGrades 追加，运维提示自动跟随，
 // 不会在新增年段后继续提示放一个已不被支持的文件名。
 func errNoRoster() error {
-	names := make([]string, 0, len(knownGrades))
-	for _, grade := range knownGrades {
-		names = append(names, string(grade)+".json")
-	}
-	// 前 n-1 项用顿号连接，末项前用「或」——「或」不能交给 Join 处理，
-	// 否则 Join 会在「或 高三.json」前再补一个顿号，产出「高二.json、 或 高三.json」。
-	switch len(names) {
-	case 0:
-		// knownGrades 为空：无可提示的文件名。仍返回错误而非静默成功——
-		// 数据可用性判定不能在无年段配置时退化为「有数据」。
-		return errors.New("数据文件缺失：系统未配置任何年段")
-	case 1:
-		return fmt.Errorf("数据文件缺失，请将 %s 之一放入数据目录", names[0])
-	default:
-		return fmt.Errorf("数据文件缺失，请将 %s 之一放入数据目录",
-			strings.Join(names[:len(names)-1], "、")+" 或 "+names[len(names)-1])
-	}
+	return errors.New("数据文件缺失，请将 roster JSON（区县/学校/年级/班级/学生 结构）放入数据目录")
 }
 
 // view 返回当前可用的名单只读视图（零拷贝），数据不可用时返回错误。
@@ -344,19 +375,22 @@ func (s *studentStore) coolingError() error {
 }
 
 func dataStamps(dir string) (map[string]fileStamp, error) {
-	stamps := make(map[string]fileStamp, len(knownGrades))
-	for _, grade := range knownGrades {
-		path := filepath.Join(dir, string(grade)+".json")
-		info, err := os.Stat(path)
-		if errors.Is(err, fs.ErrNotExist) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	stamps := make(map[string]fileStamp, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || !isRosterFile(entry.Name()) {
 			continue
 		}
+		info, err := entry.Info()
 		if err != nil {
 			return nil, err
 		}
-		stamps[path] = fileStamp{size: info.Size(), modTime: info.ModTime()}
+		stamps[filepath.Join(dir, entry.Name())] = fileStamp{size: info.Size(), modTime: info.ModTime()}
 	}
-	// 空目录守卫：至少一个年段文件必须存在，避免静默空跑
+	// 空目录守卫：至少一个 roster 文件必须存在，避免静默空跑
 	if len(stamps) == 0 {
 		return nil, errNoRoster()
 	}

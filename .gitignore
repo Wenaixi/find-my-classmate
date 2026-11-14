@@ -70,3 +70,4 @@ data/wallpaper/
 # 单模块仓库不需要 go.work；release-body 是 CI 中间产物
 go.work
 release-body.md
+data/_legacy/

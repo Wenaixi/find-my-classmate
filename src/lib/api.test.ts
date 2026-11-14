@@ -56,9 +56,10 @@ describe("searchApi error classification", () => {
   });
 
   it("accepts payload and maps class field", async () => {
-    mockFetch(200, { items: [{ name: "张三", grade: "高一", class: "1班" }], total: 1, limit: 10, offset: 0, hasMore: false });
+    mockFetch(200, { items: [{ name: "张三", school: "福清一中", grade: "高一", class: "1班" }], total: 1, limit: 10, offset: 0, hasMore: false });
     const data = await searchApi("张三");
     expect(data.items[0].className).toBe("1班");
+    expect(data.items[0].school).toBe("福清一中");
   });
 
 
@@ -71,7 +72,7 @@ describe("searchApi error classification", () => {
   // 年段取值域由后端 knownGrades 唯一保证，前端不复制一份会漂移的清单：
   // 后端扩展年段时前端必须自动跟随，因此这里接受任意非空年段字符串。
   it("accepts a grade outside the currently known set", async () => {
-    mockFetch(200, { items: [{ name: "张三", grade: "高四", class: "1班" }], total: 1, limit: 10, offset: 0, hasMore: false });
+    mockFetch(200, { items: [{ name: "张三", school: "福清一中", grade: "高四", class: "1班" }], total: 1, limit: 10, offset: 0, hasMore: false });
     const data = await searchApi("张三");
     expect(data.items[0].grade).toBe("高四");
   });

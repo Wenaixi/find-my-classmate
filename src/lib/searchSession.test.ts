@@ -29,7 +29,7 @@ describe("createSearchSession", () => {
   });
 
   it("lets loadMore follow a submit without invalidating it", async () => {
-    const search = vi.fn().mockResolvedValue(okResponse({ items: [{ name: "甲", grade: "高一", className: "1班" }], total: 1, hasMore: false }));
+    const search = vi.fn().mockResolvedValue(okResponse({ items: [{ school: "福清一中", name: "甲", grade: "高一", className: "1班" }], total: 1, hasMore: false }));
     const session = createSearchSession({ search });
     const result = await session.loadMore("张三", 10, 0);
     expect(result).toEqual(expect.objectContaining({ ok: true }));

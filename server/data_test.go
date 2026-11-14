@@ -16,8 +16,8 @@ import (
 func writeTestFiles(t *testing.T, dir string) {
 	t.Helper()
 	files := map[string]string{
-		"高一.json": `{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"王皓轩"},{"姓名":"张三"},{"姓名":"张 三"}]}}`,
-		"高二.json": `{"标题":"福清一中2025级高二编班名单","名单":{"2班":[{"姓名":"李四"}]}}`,
+		"高一.json": `{"区县":"福清市","学校":[{"校名":"福清一中","年级":[{"年级名":"高一","班级":[{"班名":"1班","学生":[{"姓名":"王皓轩"},{"姓名":"张三"},{"姓名":"张 三"}]}]}]}]}`,
+		"高二.json": `{"区县":"福清市","学校":[{"校名":"福清二中","年级":[{"年级名":"高二","班级":[{"班名":"2班","学生":[{"姓名":"李四"}]}]}]}]}`,
 	}
 	for name, content := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
@@ -77,7 +77,7 @@ func TestLoadStudentsDedup(t *testing.T) {
 // 把它写进断言会造出偶发失败的测试。
 func TestLoadStudentsDedupAcrossClassNotations(t *testing.T) {
 	dir := t.TempDir()
-	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"张三"}],"一班":[{"姓名":"张三"}]}}`), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"区县":"福清市","学校":[{"校名":"福清一中","年级":[{"年级名":"高一","班级":[{"班名":"1班","学生":[{"姓名":"张三"}]},{"班名":"一班","学生":[{"姓名":"张三"}]}]}]}]}`), 0o644)
 	students, err := loadStudents(dir)
 	if err != nil {
 		t.Fatalf("混用班级写法应可加载: %v", err)
@@ -93,9 +93,9 @@ func TestLoadStudentsDedupAcrossClassNotations(t *testing.T) {
 func TestLoadStudentsBOMStripped(t *testing.T) {
 	dir := t.TempDir()
 	content := []byte{0xEF, 0xBB, 0xBF}
-	content = append(content, []byte(`{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"BOM同学"}]}}`)...)
+	content = append(content, []byte(`{"区县":"福清市","学校":[{"校名":"福清一中","年级":[{"年级名":"高一","班级":[{"班名":"1班","学生":[{"姓名":"BOM同学"}]}]}]}]}`)...)
 	_ = os.WriteFile(filepath.Join(dir, "高一.json"), content, 0o644)
-	_ = os.WriteFile(filepath.Join(dir, "高二.json"), []byte(`{"标题":"福清一中2025级高二编班名单","名单":{"1班":[{"姓名":"乙"}]}}`), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "高二.json"), []byte(`{"区县":"福清市","学校":[{"校名":"福清二中","年级":[{"年级名":"高二","班级":[{"班名":"1班","学生":[{"姓名":"乙"}]}]}]}]}`), 0o644)
 	students, err := loadStudents(dir)
 	if err != nil {
 		t.Fatalf("带 BOM 文件应可加载: %v", err)
@@ -106,24 +106,30 @@ func TestLoadStudentsBOMStripped(t *testing.T) {
 }
 
 func TestLoadStudentsTitleMismatch(t *testing.T) {
+	// 新格式下没有「标题」字段，本条改为锁定「结构守门」：
+	// 合法 JSON 但缺少 学校 数组时必须报错并点名文件。
 	dir := t.TempDir()
-	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"标题":"福清一中2025级高二编班名单","名单":{"1班":[{"姓名":"甲"}]}}`), 0o644)
-	_ = os.WriteFile(filepath.Join(dir, "高二.json"), []byte(`{"标题":"福清一中2025级高二编班名单","名单":{"1班":[{"姓名":"乙"}]}}`), 0o644)
-	if _, err := loadStudents(dir); err == nil || !strings.Contains(err.Error(), "不一致") {
-		t.Fatalf("标题与文件名不一致应报错，实际 %v", err)
+	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"区县":"福清市","学校":[]}`), 0o644)
+	if _, err := loadStudents(dir); err == nil || !strings.Contains(err.Error(), "缺少学校数据") {
+		t.Fatalf("缺少学校数组应报错，实际 %v", err)
 	}
-	// 年段标识与成因缺一不可：运维从日志判断该看哪份名单，靠的正是它。
-	// 变异实验：把本条之外另三个失败出口的 %s.json 去掉，Go 全量仍绿。
+	// 失败原因必须带文件名，运维才能定位该看哪份。
 	_, err := loadStudents(dir)
 	if !strings.Contains(err.Error(), "高一.json") {
-		t.Fatalf("失败原因应带年段标识（指向出问题的文件），实际 %v", err)
+		t.Fatalf("失败原因应带文件名，实际 %v", err)
+	}
+	// 反向：合法 roster 不应被这条守门误伤。
+	good := t.TempDir()
+	_ = os.WriteFile(filepath.Join(good, "ok.json"), []byte(`{"区县":"福清市","学校":[{"校名":"福清一中","年级":[{"年级名":"高一","班级":[{"班名":"1班","学生":[{"姓名":"甲"}]}]}]}]}`), 0o644)
+	if _, err := loadStudents(good); err != nil {
+		t.Fatalf("合法 roster 不应被拒绝，实际 %v", err)
 	}
 }
 
 func TestLoadStudentsBadClassKey(t *testing.T) {
 	dir := t.TempDir()
-	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"标题":"福清一中2025级高一编班名单","名单":{"X班":[{"姓名":"甲"}]}}`), 0o644)
-	_ = os.WriteFile(filepath.Join(dir, "高二.json"), []byte(`{"标题":"福清一中2025级高二编班名单","名单":{"1班":[{"姓名":"乙"}]}}`), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"区县":"福清市","学校":[{"校名":"福清一中","年级":[{"年级名":"高一","班级":[{"班名":"X班","学生":[{"姓名":"甲"}]}]}]}]}`), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "高二.json"), []byte(`{"区县":"福清市","学校":[{"校名":"福清二中","年级":[{"年级名":"高二","班级":[{"班名":"1班","学生":[{"姓名":"乙"}]}]}]}]}`), 0o644)
 	if _, err := loadStudents(dir); err == nil || !strings.Contains(err.Error(), "班级格式异常") {
 		t.Fatalf("非法班级键应报错，实际 %v", err)
 	}
@@ -137,23 +143,22 @@ func TestLoadStudentsBadClassKey(t *testing.T) {
 // 非 nil 的空 map 而通过本检查。两条断言都写上：守卫若退化为「任何名单都报错」，
 // 反例会翻红。
 func TestLoadStudentsRejectsNullRoster(t *testing.T) {
+	// 新格式下「名单」字段不存在，本条改为锁定「校名为空」守门：
+	// 学校记录缺 校名 时必须整份拒绝，否则会出现无归属的学生。
 	dir := t.TempDir()
-	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"标题":"福清一中2025级高一编班名单","名单":null}`), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"区县":"福清市","学校":[{"校名":"","年级":[{"年级名":"高一","班级":[{"班名":"1班","学生":[{"姓名":"甲"}]}]}]}]}`), 0o644)
 	_, err := loadStudents(dir)
-	if err == nil || !strings.Contains(err.Error(), "名单结构异常") {
-		t.Fatalf("名单为 null 应报错，实际 %v", err)
+	if err == nil || !strings.Contains(err.Error(), "缺少校名") {
+		t.Fatalf("校名为空应报错，实际 %v", err)
 	}
-	// 同上：年段标识与成因缺一不可，此处只放高一一份文件，出错的就是它。
 	if !strings.Contains(err.Error(), "高一.json") {
-		t.Fatalf("名单结构失败应带年段标识，实际 %v", err)
+		t.Fatalf("失败原因应带文件名，实际 %v", err)
 	}
-
-	// 反向：同目录补一份合法名单，守卫不得把正常数据一并拒掉。
-	// 与上面的失败样本同目录，避免「因为另一个文件坏了才报错」的歧义。
+	// 反向：合法 roster 不得被误伤。
 	good := t.TempDir()
-	_ = os.WriteFile(filepath.Join(good, "高一.json"), []byte(`{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"正常同学"}]}}`), 0o644)
+	_ = os.WriteFile(filepath.Join(good, "ok.json"), []byte(`{"区县":"福清市","学校":[{"校名":"福清一中","年级":[{"年级名":"高一","班级":[{"班名":"1班","学生":[{"姓名":"正常同学"}]}]}]}]}`), 0o644)
 	if _, err := loadStudents(good); err != nil {
-		t.Fatalf("合法名单不应被名单结构守门拦下，实际 %v", err)
+		t.Fatalf("合法 roster 不应被拒绝，实际 %v", err)
 	}
 }
 
@@ -163,7 +168,7 @@ func TestLoadStudentsRejectsNullRoster(t *testing.T) {
 // 反向断言同样写上，防止守卫退化为「任何名单都报错」。
 func TestLoadStudentsRejectsEmptyStudentName(t *testing.T) {
 	dir := t.TempDir()
-	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":""}]}}`), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"区县":"福清市","学校":[{"校名":"福清一中","年级":[{"年级名":"高一","班级":[{"班名":"1班","学生":[{"姓名":""}]}]}]}]}`), 0o644)
 	_, err := loadStudents(dir)
 	if err == nil || !strings.Contains(err.Error(), "学生记录格式异常") {
 		t.Fatalf("空姓名学生记录应报错，实际 %v", err)
@@ -174,7 +179,7 @@ func TestLoadStudentsRejectsEmptyStudentName(t *testing.T) {
 	}
 
 	good := t.TempDir()
-	_ = os.WriteFile(filepath.Join(good, "高一.json"), []byte(`{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"正常同学"}]}}`), 0o644)
+	_ = os.WriteFile(filepath.Join(good, "高一.json"), []byte(`{"区县":"福清市","学校":[{"校名":"福清一中","年级":[{"年级名":"高一","班级":[{"班名":"1班","学生":[{"姓名":"正常同学"}]}]}]}]}`), 0o644)
 	if _, err := loadStudents(good); err != nil {
 		t.Fatalf("合法名单不应被学生记录守门拦下，实际 %v", err)
 	}
@@ -191,7 +196,7 @@ func TestStoreHotReload(t *testing.T) {
 	if got, _ := store.view(); len(got) != 3 {
 		t.Fatalf("初始应 3 条，实际 %d", len(got))
 	}
-	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"王皓轩"},{"姓名":"张三"},{"姓名":"新人"}]}}`), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"区县":"福清市","学校":[{"校名":"福清一中","年级":[{"年级名":"高一","班级":[{"班名":"1班","学生":[{"姓名":"王皓轩"},{"姓名":"张三"},{"姓名":"新人"}]}]}]}]}`), 0o644)
 	// 超过探测窗口后应发现变更并重载
 	clock.advance(2 * time.Second)
 	got, err := store.view()
@@ -228,7 +233,7 @@ func TestStoreReloadFailureIsFailClosedThenRecovers(t *testing.T) {
 	}
 
 	// 修复文件：指纹变化后必须立即重试并恢复，无需等待冷却或探测窗口
-	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"王皓轩"},{"姓名":"张三"}]}}`), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"区县":"福清市","学校":[{"校名":"福清一中","年级":[{"年级名":"高一","班级":[{"班名":"1班","学生":[{"姓名":"王皓轩"},{"姓名":"张三"}]}]}]}]}`), 0o644)
 	got, err := store.view()
 	if err != nil || len(got) != 3 {
 		t.Fatalf("修复后应立即恢复 3 条，err=%v len=%d", err, len(got))
@@ -385,7 +390,7 @@ func TestFailureCauseIsLoggedAgainWhenRootCauseChanges(t *testing.T) {
 	// 与文件名「高一.json」不一致，触发 data.go 的标题校验失败。
 	// 字节长度与「{broken」不同 → 指纹变化 → 越过冷却后重试。
 	buf.Reset()
-	mismatched := `{"标题":"福清一中2025级高二编班名单","名单":{"1班":[{"姓名":"王皓轩"}]}}`
+	mismatched := `{"区县":"福清市","学校":[]}`
 	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(mismatched), 0o644)
 	clock.advance(30 * time.Second)
 	if _, err := store.view(); err == nil {
@@ -393,8 +398,8 @@ func TestFailureCauseIsLoggedAgainWhenRootCauseChanges(t *testing.T) {
 	}
 
 	after := buf.String()
-	if !strings.Contains(after, "标题") {
-		t.Errorf("根因变化后应记录新的根因（含「标题」），实际日志 %q", after)
+	if !strings.Contains(after, "缺少学校数据") {
+		t.Errorf("根因变化后应记录新的根因（含「缺少学校数据」），实际日志 %q", after)
 	}
 	// 恰好一条：根因变了不等于每次请求都记——同一次故障内的重复探针仍不得刷屏。
 	if count := strings.Count(after, "\n"); count != 1 {
@@ -455,7 +460,7 @@ func TestFailureCauseNamesTheGrade(t *testing.T) {
 
 	// 高一的班级名非法：日志必须点名「高一」，否则运维无从定位。
 	buf := capture()
-	broken := `{"标题":"福清一中2025级高一编班名单","名单":{"零班":[{"姓名":"王皓轩"}]}}`
+	broken := `{"区县":"福清市","学校":[{"校名":"福清一中","年级":[{"年级名":"高一","班级":[{"班名":"零班","学生":[{"姓名":"王皓轩"}]}]}]}]}`
 	if err := os.WriteFile(filepath.Join(dir, "高一.json"), []byte(broken), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -474,12 +479,12 @@ func TestFailureCauseNamesTheGrade(t *testing.T) {
 	// 反向：换成高二出错，年段必须随之改变——只断「含年段」的话，
 	// 把年段硬编码成高一的实现同样通过。
 	buf2 := capture()
-	broken2 := `{"标题":"福清一中2025级高二编班名单","名单":{"零班":[{"姓名":"李四"}]}}`
+	broken2 := `{"区县":"福清市","学校":[{"校名":"福清二中","年级":[{"年级名":"高二","班级":[{"班名":"零班","学生":[{"姓名":"李四"}]}]}]}]}`
 	if err := os.WriteFile(filepath.Join(dir, "高二.json"), []byte(broken2), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	// 高一恢复为合法内容：否则 loadStudents 在高一处即返回，走不到高二。
-	valid := `{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"王皓轩"}]}}`
+	valid := `{"区县":"福清市","学校":[{"校名":"福清一中","年级":[{"年级名":"高一","班级":[{"班名":"1班","学生":[{"姓名":"王皓轩"}]}]}]}]}`
 	if err := os.WriteFile(filepath.Join(dir, "高一.json"), []byte(valid), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -518,7 +523,7 @@ func TestStoreRecoveryBypassesProbeThrottle(t *testing.T) {
 	// 于是「立即恢复成功」与「沿用修复前的旧快照」给出同一个数字，
 	// 而这条用例正是 data.go:224 那条「失败态豁免」的唯一承重。
 	// 改为 4 人使两个状态不可混淆，并额外断言内容以防数字巧合。
-	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"王皓轩"},{"姓名":"张三"},{"姓名":"李四"},{"姓名":"赵六"}]}}`), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"区县":"福清市","学校":[{"校名":"福清一中","年级":[{"年级名":"高一","班级":[{"班名":"1班","学生":[{"姓名":"王皓轩"},{"姓名":"张三"},{"姓名":"李四"},{"姓名":"赵六"}]}]}]}]}`), 0o644)
 	got, err := store.view()
 	if err != nil {
 		t.Fatalf("探测窗口内修复应立即恢复，不应报错: %v", err)
@@ -581,7 +586,7 @@ func TestStoreConcurrentHotReloadStampede(t *testing.T) {
 	}
 
 	// 模拟写入新名单，触发指纹变更
-	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"标题":"福清一中2025级高一编班名单","名单":{"1班":[{"姓名":"王皓轩"},{"姓名":"张三"},{"姓名":"新人"}]}}`), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "高一.json"), []byte(`{"区县":"福清市","学校":[{"校名":"福清一中","年级":[{"年级名":"高一","班级":[{"班名":"1班","学生":[{"姓名":"王皓轩"},{"姓名":"张三"},{"姓名":"新人"}]}]}]}]}`), 0o644)
 
 	// 推进超过探测窗口后，单次调用应完成热重载（窗口过后首次探测生效）
 	clock.advance(2 * time.Second)
@@ -616,7 +621,7 @@ func TestStoreConcurrentHotReloadStampede(t *testing.T) {
 func TestLoadStudentsSkipMissingGrade(t *testing.T) {
 	dir := t.TempDir()
 	// 只放高三，高一高二不存在
-	_ = os.WriteFile(filepath.Join(dir, "高三.json"), []byte(`{"标题":"福清一中2025级高三编班名单","名单":{"3班":[{"姓名":"高三甲"}]}}`), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "高三.json"), []byte(`{"区县":"福清市","学校":[{"校名":"福清一中","年级":[{"年级名":"高三","班级":[{"班名":"3班","学生":[{"姓名":"高三甲"}]}]}]}]}`), 0o644)
 	students, err := loadStudents(dir)
 	if err != nil {
 		t.Fatalf("仅高三存在应成功加载: %v", err)
@@ -805,7 +810,8 @@ func TestCoolingHoldsWhenStampsUnknown(t *testing.T) {
 // 单点时首版实现把「或」交给 strings.Join 处理，产出「高二.json、 或 高三.json」，
 // 比原句多一个顿号——运维看到的是一条格式错乱的指引。本测试锁住逐字不变。
 func TestErrNoRosterMessage(t *testing.T) {
-	want := "数据文件缺失，请将 高一.json、高二.json 或 高三.json 之一放入数据目录"
+	// 新格式下数据目录不再按年段文件名探测，指引改为提示放入 roster JSON。
+	want := "数据文件缺失，请将 roster JSON（区县/学校/年级/班级/学生 结构）放入数据目录"
 	if got := errNoRoster().Error(); got != want {
 		t.Fatalf("运维指引文案漂移\n实际 = %q\n期望 = %q", got, want)
 	}
@@ -816,26 +822,19 @@ func TestErrNoRosterMessage(t *testing.T) {
 // 这是把文案从硬编码改为生成的真正理由：扩展年段只需在 knownGrades 追加，
 // 运维提示自动跟随，不会继续提示放置一个已不被支持的文件名。
 func TestErrNoRosterFollowsKnownGrades(t *testing.T) {
+	// 已废弃的旧契约：指引曾随 knownGrades 生成文件名清单。
+	// 新格式的文件名不参与语义（学校身份取自 JSON 内容），因此指引是静态文案；
+	// 本条改为锁定「指引不再随 knownGrades 变化」，防止有人把旧的生成逻辑加回来。
 	original := knownGrades
 	t.Cleanup(func() { knownGrades = original })
-
 	knownGrades = []Grade{GradeOne, GradeTwo, GradeThree, "高四"}
-	got := errNoRoster().Error()
-	if !strings.Contains(got, "高四.json") {
-		t.Fatalf("新增年段后指引应包含 高四.json，实际 = %q", got)
+	if got := errNoRoster().Error(); strings.Contains(got, "高四.json") {
+		t.Fatalf("指引不应再枚举年段文件名，实际 = %q", got)
 	}
-	if !strings.HasSuffix(got, "高三.json 或 高四.json 之一放入数据目录") {
-		t.Fatalf("末两项之间应为「或」，实际 = %q", got)
-	}
-
-	// 单个年段时不应出现悬空的「或」
-	knownGrades = []Grade{GradeOne}
-	if single := errNoRoster().Error(); !strings.Contains(single, "请将 高一.json 之一") {
-		t.Fatalf("单年段时不应有多余连接符，实际 = %q", single)
-	}
-	// 空目录也不应 panic
 	knownGrades = nil
-	_ = errNoRoster()
+	if got := errNoRoster().Error(); got == "" {
+		t.Fatal("空年段配置下指引不应为空")
+	}
 }
 
 // realRosterDir 返回待校验的真实名单目录，ok=false 表示该处没有名单文件。
@@ -847,8 +846,12 @@ func realRosterDir() (dir string, ok bool) {
 	if dir == "" {
 		dir = filepath.Join("..", "data")
 	}
-	for _, grade := range knownGrades {
-		if _, err := os.Stat(filepath.Join(dir, string(grade)+".json")); err == nil {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return dir, false
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() && isRosterFile(entry.Name()) {
 			return dir, true
 		}
 	}
@@ -880,7 +883,7 @@ func TestRealRosterIsLoadable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("真实名单被拒绝加载：%v\n"+
 			"这会让服务启动后 /api/health 返回 503 degraded、/api/search 返回 500。\n"+
-			"请核对名单形态：标题须含年段词（如「...高一编班名单」），姓名不得为空串。", err)
+			"请核对名单形态：须为 区县/学校/年级/班级/学生 结构，校名与姓名不得为空串。", err)
 	}
 	if len(students) == 0 {
 		t.Fatal("真实名单加载成功但学生数为 0")

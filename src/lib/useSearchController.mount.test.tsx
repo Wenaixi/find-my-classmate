@@ -20,7 +20,7 @@ const response = (over: Partial<SearchResponse> = {}): SearchResponse => ({
 });
 
 const foundResponse = (over: Partial<SearchResponse> = {}): SearchResponse =>
-  response({ items: [{ name: "甲", grade: "高一", className: "1班" }], total: 1, ...over });
+  response({ items: [{ school: "福清一中", name: "甲", grade: "高一", className: "1班" }], total: 1, ...over });
 
 let mountedRoot: Root | null = null;
 

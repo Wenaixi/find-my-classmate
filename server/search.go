@@ -32,33 +32,50 @@ var gradeAliases = []struct {
 	{"高3", GradeThree},
 }
 
-// Student 对外 JSON 契约：只输出 name/grade/class（隐私红线，派生字段与 NameKey 永不出现在任何序列化中）。
+// Student 对外 JSON 契约：只输出 name/school/grade/class（隐私红线，派生字段与
+// NameKey/SchoolIdx 永不出现在任何序列化中）。
 type Student struct {
 	Name      string `json:"name"`
 	NameKey   string `json:"-"`
+	School    string `json:"school"`
 	Grade     Grade  `json:"grade"`
 	ClassName string `json:"class"`
 	// 派生字段：加载期预计算，避免排序热路径反复正则解析班级号。
 	// ClassNo 为 0 表示班级格式非法；GradeIdx 未知年段为 len(knownGrades)。
-	ClassNo  int `json:"-"`
-	GradeIdx int `json:"-"`
+	// SchoolIdx 为 -1 表示未知学校（无 school 的旧构造路径），排序时排最后。
+	ClassNo   int `json:"-"`
+	GradeIdx  int `json:"-"`
+	SchoolIdx int `json:"-"`
 }
 
 // newStudent 构造 Student 并填充派生字段。
 // 所有 Student 必须经此构造：排序比较直接读派生字段，绕过构造会导致排序静默错乱。
 // parsed 由数据加载路径解析一次后传入（C4：不再对同一类名重复正则+Atoi）。
 func newStudent(name string, grade Grade, className string, parsed ClassParseResult) Student {
+	// 无 school 的构造路径（测试直连）：SchoolIdx = -1，排序排最后。
+	return newStudentSchool("", name, grade, className, parsed)
+}
+
+// newStudentSchool 是数据加载路径（含学校）的构造入口。
+// schoolIdx 由加载器按"校名首次出现"分配；-1 表示未知学校。
+func newStudentSchool(school string, name string, grade Grade, className string, parsed ClassParseResult, schoolIdx ...int) Student {
 	classNo := 0
 	if parsed.Valid {
 		classNo = parsed.ClassNo
 	}
+	idx := -1
+	if len(schoolIdx) > 0 {
+		idx = schoolIdx[0]
+	}
 	return Student{
 		Name:      name,
 		NameKey:   normalizeName(name),
+		School:    school,
 		Grade:     grade,
 		ClassName: className,
 		ClassNo:   classNo,
 		GradeIdx:  gradeOrder(grade),
+		SchoolIdx: idx,
 	}
 }
 
@@ -279,7 +296,20 @@ func parseQuery(raw string) Query {
 	}
 	return query
 }
+// Search 保持历史签名（4 参、无学校过滤）：既有测试与调用不变。
+// 学校过滤请用 SearchInSchool。
 func Search(students []Student, raw string, limit, offset int) SearchResponse {
+	return searchCore(students, raw, "", limit, offset)
+}
+
+// SearchInSchool 是带学校过滤的查询入口（api.go 使用）。
+// school 精确匹配（来自下拉选择，不进查询解析契约）。
+func SearchInSchool(students []Student, raw string, school string, limit, offset int) SearchResponse {
+	return searchCore(students, raw, school, limit, offset)
+}
+
+// searchCore 是匹配/排序/分页语义的唯一实现，school 为 "" 时表示不过滤学校。
+func searchCore(students []Student, raw string, school string, limit, offset int) SearchResponse {
 	// 分页钳制必须先于任何提前返回完成，否则「Search 自守分页前置约定」
 	// 只在非空查询路径成立：空查询会把负 limit/offset 原样回显进响应。
 	// offset 的上界钳制依赖匹配结果长度，留在匹配循环之后。
@@ -297,6 +327,10 @@ func Search(students []Student, raw string, limit, offset int) SearchResponse {
 	// 修复前实测：输入「、」「+++」返回全校 2112 条（2112 为 benchStudents 规模）。
 	// 与 v0.9.1 修过的「无法解析/溢出的班级 token 不得静默丢弃」同源：
 	// 任何让全部条件落空的输入都必须退化为空结果，而不是全校。
+	// school 过滤器不改变这条守卫：只有学校、没有任何姓名/年段/班级条件时，
+	// 仍然返回空结果而非"整个学校全量"。这与 v0.9.1/v0.10.1 的教训同源——
+	// 任何让条件落空的输入都不得放大成全量返回，学校选择器只是缩小范围，
+	// 不是"浏览全校"的入口。
 	if len(query.NameTokens) == 0 && query.Grade == "" && query.ClassNo == 0 {
 		return SearchResponse{Items: []Student{}, Limit: limit, Offset: offset}
 	}
@@ -316,6 +350,10 @@ func Search(students []Student, raw string, limit, offset int) SearchResponse {
 		if query.ClassNo > 0 && item.ClassNo != query.ClassNo {
 			ok = false
 		}
+		// 学校过滤：精确匹配校名（来自下拉选择，不做 token 解析，不进查询契约）。
+		if school != "" && item.School != school {
+			ok = false
+		}
 		if ok {
 			matches = append(matches, item)
 		}
@@ -323,6 +361,10 @@ func Search(students []Student, raw string, limit, offset int) SearchResponse {
 	// 排序热路径只做整数比较与子串计分，不再调用正则
 	slices.SortStableFunc(matches, func(a, b Student) int {
 		if c := cmp.Compare(nameScoreSum(a.NameKey, query.NameTokens), nameScoreSum(b.NameKey, query.NameTokens)); c != 0 {
+			return c
+		}
+		// 学校层：同分时按学校加载序（校名首次出现序），未知学校(-1)排最后。
+		if c := cmp.Compare(schoolSortKey(a.SchoolIdx), schoolSortKey(b.SchoolIdx)); c != 0 {
 			return c
 		}
 		if c := cmp.Compare(a.GradeIdx, b.GradeIdx); c != 0 {
@@ -364,6 +406,15 @@ func nameScoreSum(nameKey string, tokens []string) int {
 
 // gradeOrder 返回年段自然顺序，用于跨年段同分排序。
 // 顺序来源于 knownGrades 声明序，扩展年段时只需在 knownGrades 末尾追加。
+// schoolSortKey 把 SchoolIdx 归一成可比较键：-1（未知学校）排到所有真实学校之后。
+// 归一在这里而不是比较处内联，避免两个调用点各写一次同一约定。
+func schoolSortKey(idx int) int {
+	if idx < 0 {
+		return 1 << 30
+	}
+	return idx
+}
+
 func gradeOrder(grade Grade) int {
 	for i, g := range knownGrades {
 		if g == grade {

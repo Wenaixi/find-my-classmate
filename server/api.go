@@ -28,6 +28,7 @@ func buildMux(store *studentStore, buildVersion string) *http.ServeMux {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": buildVersion})
 	})
 	mux.HandleFunc("/api/search", searchHandler(store))
+	mux.HandleFunc("/api/schools", schoolsHandler(store))
 	// 未知 /api/* 统一返回 JSON 404（not_found），与全站错误格式一致
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errCodeNotFound)
@@ -68,6 +69,13 @@ func searchHandler(store *studentStore) http.HandlerFunc {
 			writeError(w, errCodeInvalidQuery)
 			return
 		}
+		// 学校过滤：来自下拉选择，精确匹配校名，不进查询解析契约。
+		// 与 q 共用 maxQueryRunes 上限（校名远短于此，只是防异常超长输入）。
+		school := strings.TrimSpace(r.URL.Query().Get("school"))
+		if len([]rune(school)) > maxQueryRunes {
+			writeError(w, errCodeInvalidQuery)
+			return
+		}
 		students, loadErr := store.view()
 		if loadErr != nil {
 			// 根因已由 data.go 的 recordFailure 在失败发生时单点记录，此处不再重复输出：
@@ -76,7 +84,7 @@ func searchHandler(store *studentStore) http.HandlerFunc {
 			writeError(w, errCodeDataUnavailable)
 			return
 		}
-		response := Search(students, queryText, limit, offset)
+		response := SearchInSchool(students, queryText, school, limit, offset)
 		writeJSON(w, http.StatusOK, response)
 	}
 }

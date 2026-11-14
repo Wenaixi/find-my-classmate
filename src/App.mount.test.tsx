@@ -105,7 +105,7 @@ afterEach(() => {
 
 const realFetch = globalThis.fetch;
 
-const 张三: Student = { name: "张三", grade: "高一", className: "1班" };
+const 张三: Student = { school: "福清一中", name: "张三", grade: "高一", className: "1班" };
 
 /** 假 api：记录调用、返回可编排的结果。不碰网络。 */
 interface FakeSearchApi {
