@@ -11,6 +11,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { createElement, type ReactNode } from "react";
 import { ApiError } from "./api";
 import { useSearchController, type SearchOrchestrator } from "./useSearchController";
+import type { SearchSessionApi } from "./searchSession";
 import type { SearchResponse } from "../types";
 
 import "./testActEnv";
@@ -30,7 +31,9 @@ afterEach(() => {
 });
 
 // 挂载一个真实消费 useSearchController 的组件，把每次渲染读到的 state 记进 renders。
-function mountController(api: { search: ReturnType<typeof vi.fn> }) {
+// vitest 5 的裸 vi.fn() 类型推断为 Mock<Constructable | Procedure>，无法赋给
+// 具体的函数签名；mock 显式携带 SearchSessionApi["search"] 泛型后与接口对齐。
+function mountController(api: { search: SearchSessionApi["search"] }) {
   const renders: { state: string; items: number; statusText: string }[] = [];
   let controller: SearchOrchestrator | null = null;
 
@@ -50,13 +53,13 @@ function mountController(api: { search: ReturnType<typeof vi.fn> }) {
 
 describe("useSearchController（hook 壳）", () => {
   it("输入后组件应看到 editing 状态", () => {
-    const h = mountController({ search: vi.fn().mockResolvedValue(foundResponse()) });
+    const h = mountController({ search: vi.fn<SearchSessionApi["search"]>().mockResolvedValue(foundResponse()) });
     act(() => h.current().onInput("甲"));
     expect(h.last().state).toBe("editing");
   });
 
   it("提交完成后组件应看到 success 与结果条目，而不是首帧快照", async () => {
-    const h = mountController({ search: vi.fn().mockResolvedValue(foundResponse()) });
+    const h = mountController({ search: vi.fn<SearchSessionApi["search"]>().mockResolvedValue(foundResponse()) });
 
     act(() => h.current().onInput("甲"));
     await act(async () => {
@@ -70,7 +73,7 @@ describe("useSearchController（hook 壳）", () => {
   });
 
   it("查询无结果时组件应看到 empty 状态", async () => {
-    const h = mountController({ search: vi.fn().mockResolvedValue(response()) });
+    const h = mountController({ search: vi.fn<SearchSessionApi["search"]>().mockResolvedValue(response()) });
     act(() => h.current().onInput("查无此人"));
     await act(async () => {
       await h.current().submit();
@@ -80,7 +83,7 @@ describe("useSearchController（hook 壳）", () => {
 
   it("查询失败时组件应看到 error 状态与分类文案", async () => {
     const { ApiError } = await import("./api");
-    const h = mountController({ search: vi.fn().mockRejectedValue(new ApiError("x", 429, "rate_limited")) });
+    const h = mountController({ search: vi.fn<SearchSessionApi["search"]>().mockRejectedValue(new ApiError("x", 429, "rate_limited")) });
     act(() => h.current().onInput("甲"));
     await act(async () => {
       await h.current().submit();
@@ -90,7 +93,7 @@ describe("useSearchController（hook 壳）", () => {
   });
 
   it("清空后组件应看到 idle 状态", async () => {
-    const h = mountController({ search: vi.fn().mockResolvedValue(foundResponse()) });
+    const h = mountController({ search: vi.fn<SearchSessionApi["search"]>().mockResolvedValue(foundResponse()) });
     act(() => h.current().onInput("甲"));
     await act(async () => {
       await h.current().submit();
@@ -109,7 +112,7 @@ describe("useSearchController（hook 壳）", () => {
   // 短到无法取样；挂起未决的 Promise 才能把中间段固定住。
   it("请求在途期间组件应看到 loading 状态，而不是等落定才首次重渲染", async () => {
     let settle: (value: SearchResponse) => void = () => {};
-    const search = vi.fn(() => new Promise<SearchResponse>((resolve) => { settle = resolve; }));
+    const search = vi.fn<SearchSessionApi["search"]>(() => new Promise<SearchResponse>((resolve) => { settle = resolve; }));
     const h = mountController({ search });
 
     act(() => h.current().onInput("甲"));
