@@ -110,7 +110,7 @@ func (l *rateLimiter) hasBucket(key string) bool {
 // 它让读者误以为生产装配走该入口，实际生产与测试都直接调用本函数。
 func rateLimitWith(limiter *rateLimiter, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		allowed, wait := limiter.allow(clientIP(r.RemoteAddr))
+		allowed, wait := limiter.allow(clientIPFromRequest(r))
 		if !allowed {
 			writeRateLimited(w, wait)
 			return

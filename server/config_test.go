@@ -41,3 +41,20 @@ func TestRateLimitFromEnv(t *testing.T) {
 		})
 	}
 }
+
+// envBool 的取值域：1/true/yes/on 为真，其余（含空、0、false、大小写变体）为假。
+func TestEnvBool(t *testing.T) {
+	cases := []struct {
+		value string
+		want  bool
+	}{
+		{"", false}, {"0", false}, {"false", false}, {"no", false}, {"off", false},
+		{"1", true}, {"true", true}, {"TRUE", true}, {"yes", true}, {"on", true}, {"On", true},
+	}
+	for _, c := range cases {
+		t.Setenv("FMC_TRUST_PROXY_HEADERS", c.value)
+		if got := envBool("FMC_TRUST_PROXY_HEADERS"); got != c.want {
+			t.Errorf("envBool(%q) = %v，期望 %v", c.value, got, c.want)
+		}
+	}
+}

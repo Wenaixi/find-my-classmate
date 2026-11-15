@@ -2,6 +2,7 @@ package main
 
 import (
 	"net"
+	"net/http"
 	"strings"
 )
 
@@ -51,4 +52,41 @@ func maskedIP(remote string) string {
 		return groups[0] + ":" + groups[1] + ":::*"
 	}
 	return "unknown"
+}
+
+// clientIPFromRequest 从请求解析客户端 IP，供限流键与访问日志共用。
+//
+// 默认只取 RemoteAddr（与 clientIP 一致，直连场景行为不变）。当
+// FMC_TRUST_PROXY_HEADERS=true 且连接来自回环地址（本地反代是唯一入口）时，
+// 按 CF-Connecting-IP → X-Real-IP → X-Forwarded-For 首值 的顺序取真实客户端 IP，
+// 每个候选都校验为合法 IP，非法或缺失即回退下一个；全部无效时回退 RemoteAddr。
+//
+// 安全边界：非回环来源一律忽略转发头回退 RemoteAddr。反代场景下攻击者若要伪造
+// 转发头必须先能建立到应用的连接（本部署仅循环接口可达），回环门把「可信反代」
+// 与「直连伪造」区分开；配合部署层的反代头改写（Nginx real_ip）构成双层防线。
+func clientIPFromRequest(r *http.Request) string {
+	if !trustProxyHeaders || !isLoopbackHost(r.RemoteAddr) {
+		return clientIP(r.RemoteAddr)
+	}
+	for _, header := range []string{"CF-Connecting-IP", "X-Real-IP"} {
+		if v := strings.TrimSpace(r.Header.Get(header)); v != "" {
+			if ip := net.ParseIP(v); ip != nil {
+				return ip.String()
+			}
+		}
+	}
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		first := strings.TrimSpace(strings.Split(xff, ",")[0])
+		if ip := net.ParseIP(first); ip != nil {
+			return ip.String()
+		}
+	}
+	return clientIP(r.RemoteAddr)
+}
+
+// isLoopbackHost 判断 RemoteAddr 解析出的 host 是否为回环地址（127.0.0.0/8 或 ::1）。
+// 回环意味着连接来自本机（Nginx 等反代转发），是信任转发头的先决条件。
+func isLoopbackHost(remote string) bool {
+	ip := net.ParseIP(clientIP(remote))
+	return ip != nil && ip.IsLoopback()
 }

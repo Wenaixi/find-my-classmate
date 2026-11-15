@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -45,4 +46,21 @@ func rateLimitFromEnv() (float64, time.Duration) {
 		}
 	}
 	return capacity, interval
+}
+
+// trustProxyHeaders 是否信任反代转发头（CF-Connecting-IP / X-Real-IP /
+// X-Forwarded-For）取真实客户端 IP。反代部署（Nginx / Cloudflare 前置）下所有
+// 到达应用的请求 RemoteAddr 都是回环地址，全校共用一个限流桶；开启后按回环来源
+// 加转发头取真实 IP，使每个用户独立限流。默认关闭：直连或未正确配置反代时信任
+// 转发头会被伪造绕过限流。仅当「连接来自回环」这一前提成立时才读取转发头，
+// 由 clientIPFromRequest 执行。
+var trustProxyHeaders = envBool("FMC_TRUST_PROXY_HEADERS")
+
+// envBool 解析布尔环境变量：1/true/yes/on 为真，其余为假（含空）。
+func envBool(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(name))) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
 }

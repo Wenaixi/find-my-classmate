@@ -27,7 +27,7 @@ func accessLog(next http.Handler) http.Handler {
 		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(recorder, r)
 		logInfof("access %s %s %d %s %s",
-			r.Method, r.URL.Path, recorder.status, time.Since(started).Round(time.Millisecond), maskedIP(r.RemoteAddr))
+			r.Method, r.URL.Path, recorder.status, time.Since(started).Round(time.Millisecond), maskedIP(clientIPFromRequest(r)))
 	})
 }
 
