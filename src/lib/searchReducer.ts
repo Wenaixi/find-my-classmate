@@ -317,8 +317,10 @@ export function searchReducer(state: SearchControllerState, action: SearchAction
       return { ...state, loadingMore: false }; // stale：静默复位，不进入业务错误路径
     }
     case "clear":
-      // 新引用而非 initialState 本身：React useReducer 对同引用跳过重渲染
-      return { ...initialState };
+      // 清空查询，但保留已加载的学校候选：学校下拉来自挂载时的一次 /api/schools，
+      // 清空搜索不应把候选列表也丢掉（否则下拉只剩「全部学校」且无法重新加载）。
+      // 新引用而非 initialState 本身：React useReducer 对同引用跳过重渲染。
+      return { ...initialState, schools: state.schools };
     case "composition-start":
       // 组合开始意味着用户正在输入新的查询词：切到 editing 并刷新文案，
       // 否则查询失败后开始打字会一直显示 error 状态配"网络异常"旧文案。

@@ -491,6 +491,36 @@ describe("App 学校选择器", () => {
     expect(trigger.className).toContain("is-filtered");
   });
 
+  it("搜索后清空，学校选项仍保留（回归：clear 不得清掉 schools 列表）", async () => {
+    const container = mountAppSchool(fakeApi(), () => Promise.resolve(["福清一中", "福清二中", "福清华侨中学"]));
+    await act(async () => {});
+
+    // 1) 搜索一次，出结果区与清空按钮
+    const input = container.querySelector("#query") as HTMLInputElement;
+    await act(async () => {
+      setNativeValue(input, "王");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    expect(container.querySelector("[data-od-id=search-clear]")).not.toBeNull();
+
+    // 2) 点清空按钮
+    await act(async () => {
+      (container.querySelector("[data-od-id=search-clear]") as HTMLButtonElement).click();
+    });
+    await act(async () => {});
+
+    // 3) 打开学校下拉：三个学校选项必须仍在（clear 不得清掉 schools）
+    const trigger = container.querySelector("[data-od-id=school-select]") as HTMLButtonElement;
+    await act(async () => { trigger.click(); });
+    const options = Array.from(container.querySelectorAll("[data-od-id=school-option]")).map((o) => o.textContent?.trim());
+    expect(options).toContain("福清一中");
+    expect(options).toContain("福清二中");
+    expect(options).toContain("福清华侨中学");
+  });
+
   it("schoolsApi 失败时选择器仍渲染（全校），全站不崩", async () => {
     const container = mountAppSchool(fakeApi(), () => Promise.reject(new Error("network")));
     const trigger = container.querySelector("[data-od-id=school-select]") as HTMLButtonElement;
