@@ -116,6 +116,9 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: FindMyClassmate ${{ github.ref_name }}
           body_path: release-body.md
+          # 预发布版本（版本号含「-」，如 v1.0.0-beta.1）标记为 pre-release，
+          # 不进入 GitHub 的 latest 发布位。
+          prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
             findmyclassmate.tar.gz
             release/findmyclassmate-linux-amd64

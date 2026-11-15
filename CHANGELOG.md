@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [v1.0.0-beta.1] - 2026-11-15
+
 ### Added
 
 - 多校数据模型：`data/*.json` 按「区县 > 学校 > 年级 > 班级 > 学生」加载，学校身份取自文件内 `校名`。
@@ -280,7 +282,8 @@
 - 单二进制内嵌前端，单端口 3078。
 - Docker 多阶段构建、CI / Release 流水线、MIT License。
 
-[Unreleased]: https://github.com/Wenaixi/find-my-classmate/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/Wenaixi/find-my-classmate/compare/v1.0.0-beta.1...HEAD
+[v1.0.0-beta.1]: https://github.com/Wenaixi/find-my-classmate/compare/v0.11.0...v1.0.0-beta.1
 [v0.11.0]: https://github.com/Wenaixi/find-my-classmate/compare/v0.10.4...v0.11.0
 [v0.10.4]: https://github.com/Wenaixi/find-my-classmate/compare/v0.10.3...v0.10.4
 [v0.10.3]: https://github.com/Wenaixi/find-my-classmate/compare/v0.6.0...v0.10.3
