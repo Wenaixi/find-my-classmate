@@ -72,6 +72,8 @@ jobs:
           # go.mod 声明 go 1.27.4；关闭工具链自动下载，确保 CI 用的是
           # setup-go 安装的版本，而非运行时再拉一份（可复现性）。
           cache: true
+          # go.mod 在 server/ 子目录：不指定则按仓库根找 go.mod，缓存永远 miss
+          cache-dependency-path: server/go.mod
 
       - name: 格式化检查
         working-directory: server
