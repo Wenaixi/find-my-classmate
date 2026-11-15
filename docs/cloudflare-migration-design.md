@@ -73,7 +73,7 @@ FindMyClassmate 当前是「Go 标准库查询服务 + React 前端」的单二�
 - 读取：`/api/search` 与 `/api/schools` 先读 index，再 `env.ROSTER.get(keys, { type: "json", cacheTtl: 60 })`
   一次批量读全部名单（KV 批量 get 上限 100 key，返回 Map；cacheTtl 最小 30 秒，
   此处取 60）。cacheTtl 兜底冷读，热路径走边缘缓存。
-- 每请求都重新读（不引入模块级缓存与版本 key）——名单约 400KB，`cacheTtl: 60`
+- 每请求都重新读（不引入模块级缓存与版本 key）。名单约 400KB，`cacheTtl: 60`
   已把冷读摊薄。升级路径已标注：若实测 CPU 接近免费层 10ms 上限，再加模块级
   缓存 + `roster:version` 版本 key。
 - CPU 核算（2026-11 官方 limits）：免费层每次调用 10ms CPU；KV 读（网络等待）
@@ -92,7 +92,7 @@ FindMyClassmate 当前是「Go 标准库查询服务 + React 前端」的单二�
   路径随之更新）。
 - 契约语料从「前后端对拍基准」升格为「唯一权威」，继续逐条断言。
 - `contract_*_test.go`（Go 读 TS 源码）随 Go 删除；其职责由 shared 层的编译期检查
-  （`as const satisfies`、`Exclude` 反向完整性）继承——这些检查现已在
+  （`as const satisfies`、`Exclude` 反向完整性）继承。这些检查现已在
   query.ts/types.ts，迁入时保持。
 
 ### 3.4 API 面（与现状逐字段一致）
@@ -129,22 +129,22 @@ FindMyClassmate 当前是「Go 标准库查询服务 + React 前端」的单二�
 
 - 现状：Go 令牌桶 per-IP（cap 60、1/s 回填），状态驻留进程内存。
 - 迁移后：Workers 无共享进程内存，per-IP 令牌桶需要为每个 IP 建一个 Durable
-  Object——只为限流引入状态组件属过度设计。
+  Object。只为限流引入状态组件属过度设计。
 - 采用：**Workers Rate Limiting binding**（`wrangler.jsonc` 的 `ratelimits`
   配置，官方 2026 文档确认可用）。配置：
   `{ "name": "API_RATE_LIMITER", "namespace_id": "<正整数>", "simple": { "limit": 60, "period": 60 } }`，
   代码侧 `await env.API_RATE_LIMITER.limit({ key })` 返回 `{ success }`，
   失败时复用现有 429 响应形状 `{"error":"rate_limited"}` + `Retry-After`。
 - key 取 `CF-Connecting-IP`：官方文档明确不建议用 IP（共享 IP / 移动 NAT
-  会误伤同一 NAT 后的多位用户），但本站无登录态，可用行为标识只有 IP，且旧
-  实现本就是 per-IP——**按 IP 是延续现状**。取舍写进 ARCHITECTURE.md。
+  会误伤同一 NAT 后的多位用户），但本站无登录态，可用行为标识只有 IP，且现状
+  实现本就是 per-IP，按 IP 是延续现状。取舍写进 ARCHITECTURE.md。
 - 行为差异（如实记录）：
   - CF 是**每个 Cloudflare 边缘位置独立计数、近似限流**（后台异步同步），
     非旧实现的全局平滑令牌桶；突发可能短暂超过阈值。
   - 防御目标（防刷名单/爬虫）不受影响；校内流量远低于阈值。
 - 这是「行为 + 纪律全保留」承诺下唯一的例外，理由与换算写进 CLAUDE.md 与
   ARCHITECTURE.md；Go 令牌桶测试与 ratelimit.go 随实现删除并记录原因。
-- 免费层对 ratelimits 绑定数量是否有别于 WAF 规则（WAF 规则免费 1 条）——
+- 免费层对 ratelimits 绑定数量是否有别于 WAF 规则（WAF 规则免费 1 条）；
   文档未明示绑定侧免费层配额，列入实施阶段验证点（本地 `wrangler deploy
   --dry-run` 可先验配置合法性）。
 
@@ -209,7 +209,7 @@ FindMyClassmate 当前是「Go 标准库查询服务 + React 前端」的单二�
 
 ## 5. 已知行为变化（诚实边界）
 
-1. **热更新延迟**：KV 最终一致，写入后各边缘节点缓存最多约 60 秒才刷新——
+1. **热更新延迟**：KV 最终一致，写入后各边缘节点缓存最多约 60 秒才刷新，
    从「1 秒内生效」变为「最多约 60 秒生效」。
 2. **限流语义**：per-IP 令牌桶（全局平滑）→ Workers Rate Limiting binding
    （每边缘位置近似计数、IP 作 key，见 3.6）。
