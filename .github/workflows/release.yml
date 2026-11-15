@@ -5,32 +5,33 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   test:
     name: 全量测试
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - name: 安装 Node.js 24
-        uses: actions/setup-node@v4
+      - name: 安装 Node.js 26
+        uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
           cache: npm
 
       - name: 前端依赖与构建
         run: |
           npm ci
+          npm audit --audit-level=high
           npm run typecheck
           npm test
           npm run build
 
-      - name: 安装 Go 1.26
-        uses: actions/setup-go@v5
+      - name: 安装 Go 1.27.4
+        uses: actions/setup-go@v7
         with:
-          go-version: "1.26"
+          go-version: "1.27.4"
 
       - name: 后端测试与静态检查
         working-directory: server
@@ -46,13 +47,15 @@ jobs:
     name: 构建发布产物
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # 创建 GitHub Release 需要写权限，仅此 job
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - name: 安装 Node.js 24
-        uses: actions/setup-node@v4
+      - name: 安装 Node.js 26
+        uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
           cache: npm
 
       - name: 安装前端依赖并构建
@@ -60,10 +63,10 @@ jobs:
           npm ci
           npm run build
 
-      - name: 安装 Go 1.26
-        uses: actions/setup-go@v5
+      - name: 安装 Go 1.27.4
+        uses: actions/setup-go@v7
         with:
-          go-version: "1.26"
+          go-version: "1.27.4"
 
       - name: 交叉编译发布二进制
         working-directory: server
@@ -108,7 +111,7 @@ jobs:
           }
 
       - name: 创建 GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           name: FindMyClassmate ${{ github.ref_name }}
@@ -118,6 +121,7 @@ jobs:
             release/findmyclassmate-linux-amd64
             release/findmyclassmate-darwin-arm64
             release/findmyclassmate-windows-amd64.exe
+
   docker:
     name: 构建并推送 Docker 镜像
     needs: test
@@ -126,20 +130,20 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: 设置 Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: 登录 Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: wenxiloveyou
           password: ${{ secrets.DOCKER_PAT }}
 
       - name: 提取镜像元数据
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: wenxiloveyou/find-my-classmate
           tags: |
@@ -148,7 +152,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: 构建并推送镜像
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true

@@ -5,21 +5,31 @@ on:
     branches: [main, master]
   pull_request:
 
+# 最小权限：CI 只读仓库（构建、测试、构建缓存都不需要写权限）。
+# 需要写权限的动作（Release / 镜像推送）在各自工作流里按 job 单独授予。
+permissions:
+  contents: read
+
 jobs:
   frontend:
-    name: 前端 · 类型检查 / 测试 / 构建
+    name: 前端 · 类型检查 / 测试 / 依赖审计 / 构建
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - name: 安装 Node.js 24
-        uses: actions/setup-node@v4
+      - name: 安装 Node.js 26
+        uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
           cache: npm
 
       - name: 安装依赖
         run: npm ci
+
+      - name: 依赖安全审计（高危即失败）
+        # 供应链门禁：devDependencies 不进生产二进制，但被投毒的测试链
+        # 会在 CI 上执行任意代码，因此按 high 门槛拦截（渗透测试 F4）。
+        run: npm audit --audit-level=high
 
       - name: 类型检查
         run: npm run typecheck
@@ -31,7 +41,7 @@ jobs:
         run: npm run build
 
       - name: 上传构建产物
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-build
           path: server/web
@@ -42,21 +52,26 @@ jobs:
     runs-on: ubuntu-latest
     needs: frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # web.go 的 //go:embed all:web 需要 server/web 产物。
       # 复用 frontend job 的构建产物而非重建：前端只构建一次，
       # 测试与编译看到的是与 CI 验证过的完全相同的字节。
       - name: 下载前端构建产物
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: frontend-build
           path: server/web
 
-      - name: 安装 Go 1.26
-        uses: actions/setup-go@v5
+      - name: 安装 Go 1.27.4
+        uses: actions/setup-go@v7
         with:
-          go-version: "1.26"
+          # 精确补丁版本：Go 1.27.4 是 2026-11-10 的安全发布（12 项安全修复）。
+          # 使用精确版本使工具链升级成为一次显式变更，而不是随 runner 漂移。
+          go-version: "1.27.4"
+          # go.mod 声明 go 1.27.4；关闭工具链自动下载，确保 CI 用的是
+          # setup-go 安装的版本，而非运行时再拉一份（可复现性）。
+          cache: true
 
       - name: 格式化检查
         working-directory: server
@@ -76,13 +91,13 @@ jobs:
     name: Docker · 镜像构建验证
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: 设置 Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: 构建镜像（多阶段，前端现场构建后嵌入）
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: false
@@ -94,7 +109,7 @@ jobs:
     name: 数据边界守卫 · 真实名单零数据检测
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: 数据边界守卫（真实名单不随仓库分发）
         run: |

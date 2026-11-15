@@ -4,7 +4,13 @@ services:
     container_name: findmyclassmate
     restart: unless-stopped
     ports:
-      - "3078:3078"        # 单一端口暴露：页面 + API
+      # 单一端口暴露：页面 + API。
+      # 安全注意（渗透测试 F3）：3078 默认绑定 0.0.0.0。本服务无认证，
+      # 名单（姓名/学校/年级/班级 PII）可被任何能访问该端口的人全量枚举。
+      # 内网部署可接受；若宿主机可达公网，必须置于反代/访问控制之后
+      # （校园 VPN、IP 白名单、Cloudflare Access 等），或改为仅本机回环：
+      #   - "127.0.0.1:3078:3078"
+      - "3078:3078"
     volumes:
       - ./data:/app/data:ro   # 名单数据只读挂载，文件变更自动热重载
     environment:
