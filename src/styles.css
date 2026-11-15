@@ -64,9 +64,11 @@ h1 em { color: #fff; font-style: normal; }
 /* 学校筛选（SchoolPicker）：胶囊触发按钮 + 浮层选项面板，全部贴合既有设计 token。
    触发态与展开态都在同一套深色体系下，跨浏览器渲染一致（替代原生 select 弹层）。
    选中具体学校时触发按钮加 ink 边框强调（is-filtered）；展开时箭头翻转 + 面板淡入位上移。 */
-.school-row { display: flex; align-items: center; gap: 14px; margin: 0 0 14px; }
+.school-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 0 0 14px; }
 .school-row-label { flex: 0 0 auto; color: var(--muted); font: 600 11px/1.2 var(--mono); letter-spacing: 1.2px; text-transform: uppercase; }
-.school-picker { position: relative; display: inline-flex; min-width: 188px; }
+.school-picker { position: relative; display: inline-flex; }
+/* 打开时面板至少 160px，避免短触发器 + 长校名选项被挤成一团 */
+.school-picker .school-panel { min-width: 176px; }
 .school-trigger {
   display: inline-flex; align-items: center; justify-content: space-between; gap: 12px;
   width: 100%; min-height: 40px; padding: 0 16px 0 18px;
@@ -208,8 +210,10 @@ h1 em { color: #fff; font-style: normal; }
   .hero { padding-top: 40px; padding-bottom: 78px; }
   h1 { font-size: clamp(52px, 16vw, 76px); }
   .field-label { align-items: flex-start; flex-direction: column; gap: 8px; }
-  .school-row { align-items: flex-start; flex-direction: column; gap: 4px; }
-  .school-picker { width: 100%; max-width: 240px; }
+  /* 移动端：与桌面一致 —— 标签左、选择器贴右、不撑满 */
+  .school-row { align-items: center; gap: 10px; }
+  .school-picker { width: auto; min-width: 0; max-width: 60%; }
+  .school-value { font-size: 12px; }
   .search-input { min-height: 56px; padding: 0 18px; font-size: 17px; }
 
   .search-hint { flex-direction: column; gap: 7px; }
