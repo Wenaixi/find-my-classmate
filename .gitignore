@@ -71,3 +71,11 @@ data/wallpaper/
 go.work
 release-body.md
 data/_legacy/
+# 本地运维脚本（清理端口等）：不入库
+*.ps1
+
+# 临时/调试遗物
+tmp_*
+*.tmp
+*.bak.*
+.el

@@ -515,7 +515,8 @@ describe("App 学校选择器", () => {
     // 3) 打开学校下拉：三个学校选项必须仍在（clear 不得清掉 schools）
     const trigger = container.querySelector("[data-od-id=school-select]") as HTMLButtonElement;
     await act(async () => { trigger.click(); });
-    const options = Array.from(container.querySelectorAll("[data-od-id=school-option]")).map((o) => o.textContent?.trim());
+    // 选项文本可能带选中勾 ✓，去勾后匹配（学校必须保留在候选里）
+    const options = Array.from(container.querySelectorAll("[data-od-id=school-option]")).map((o) => o.textContent?.replace(/✓/g, "").trim());
     expect(options).toContain("福清一中");
     expect(options).toContain("福清二中");
     expect(options).toContain("福清华侨中学");
@@ -551,6 +552,37 @@ describe("App 学校选择器", () => {
     expect((container.querySelector("#query") as HTMLInputElement).value).toBe("");
     expect(trigger.textContent).toContain("福清二中");
     expect(trigger.className).toContain("is-filtered");
+  });
+
+  it("手动删光输入框，学校选择仍保留（回归：input-change 空串分支）", async () => {
+    const container = mountAppSchool(fakeApi(), () => Promise.resolve(["福清一中", "福清二中"]));
+    await act(async () => {});
+
+    // 1) 选一所学校
+    const trigger = container.querySelector("[data-od-id=school-select]") as HTMLButtonElement;
+    await act(async () => { trigger.click(); });
+    const option = Array.from(container.querySelectorAll("[data-od-id=school-option]")).find((el) => el.textContent?.includes("福清二中")) as HTMLElement;
+    await act(async () => { option.click(); });
+    await act(async () => {});
+
+    // 2) 输入再逐个删光（模拟退格键：onChange 每次给新值，最后为空串）
+    const input = container.querySelector("#query") as HTMLInputElement;
+    for (const v of ["王", ""]) {
+      await act(async () => {
+        setNativeValue(input, v);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+    await act(async () => {});
+
+    // 3) 学校仍保留 + 候选仍在
+    expect((container.querySelector("#query") as HTMLInputElement).value).toBe("");
+    expect(trigger.textContent).toContain("福清二中");
+    await act(async () => { trigger.click(); });
+    // 选项文本可能带选中勾 ✓，去勾后匹配（学校必须保留在候选里）
+    const options = Array.from(container.querySelectorAll("[data-od-id=school-option]")).map((o) => o.textContent?.replace(/✓/g, "").trim());
+    expect(options).toContain("福清一中");
+    expect(options).toContain("福清二中");
   });
 
   it("schoolsApi 失败时选择器仍渲染（全校），全站不崩", async () => {

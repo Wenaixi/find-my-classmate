@@ -245,7 +245,9 @@ export function searchReducer(state: SearchControllerState, action: SearchAction
     case "input-change":
       // 输入变化：清空后回 idle（其余字段全复位，与旧 effect 语义一致）；非 IME 组合期间切到 editing。
       if (action.query.trim() === "") {
-        return { ...initialState, query: action.query, isComposing: state.isComposing };
+        // 删光输入（退格逐字删）与 clear 同语义：清查询但保留学校过滤
+        // （school 与 schools 列表），否则下拉会只剩「全部学校」且无法重新加载。
+        return { ...initialState, query: action.query, isComposing: state.isComposing, schools: state.schools, school: state.school };
       }
       if (state.isComposing) {
         // IME 组合期间不改状态，也不改文案：组合中的候选文字不是一次新的编辑意图
