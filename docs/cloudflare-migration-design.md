@@ -76,6 +76,9 @@ FindMyClassmate 当前是「Go 标准库查询服务 + React 前端」的单二�
 - 每请求都重新读（不引入模块级缓存与版本 key）——名单约 400KB，`cacheTtl: 60`
   已把冷读摊薄。升级路径已标注：若实测 CPU 接近免费层 10ms 上限，再加模块级
   缓存 + `roster:version` 版本 key。
+- CPU 核算（2026-11 官方 limits）：免费层每次调用 10ms CPU；KV 读（网络等待）
+  不计 CPU；400KB JSON.parse 约 1-3ms、全量搜索约 1ms，留有余量。若实测超限，
+  先上模块缓存（见上），仍超限再考虑 Workers Paid（30s CPU，$5/月）。
 - 免费层限额核对：读 100k/天、写 1k/天、值上限 25MiB、存储 1GB、同 key 写
   1 次/秒（2026-11 官方 limits）。校内流量绰绰有余。
 
@@ -122,28 +125,38 @@ FindMyClassmate 当前是「Go 标准库查询服务 + React 前端」的单二�
 - CSP 等安全头由 middleware 对 API 响应设置；静态资源缓存头由 Assets 平台
   默认处理（强于自研）。
 
-### 3.6 限流：平台化（唯一与现状不等价的纪律项）
+### 3.6 限流：Workers Rate Limiting binding（唯一与现状不等价的纪律项）
 
 - 现状：Go 令牌桶 per-IP（cap 60、1/s 回填），状态驻留进程内存。
 - 迁移后：Workers 无共享进程内存，per-IP 令牌桶需要为每个 IP 建一个 Durable
   Object——只为限流引入状态组件属过度设计。
-- 采用：Cloudflare 原生 Rate Limiting（2026 新版免费层 1 条规则）：对 `/api/*`
-  设「每 IP 每分钟 60 次」（换算关系写进 wrangler 配置注释）。
-- 行为差异：CF 是固定窗口计数，非令牌桶平滑回填；防御目标（防刷名单/爬虫）
-  不受影响。
+- 采用：**Workers Rate Limiting binding**（`wrangler.jsonc` 的 `ratelimits`
+  配置，官方 2026 文档确认可用）。配置：
+  `{ "name": "API_RATE_LIMITER", "namespace_id": "<正整数>", "simple": { "limit": 60, "period": 60 } }`，
+  代码侧 `await env.API_RATE_LIMITER.limit({ key })` 返回 `{ success }`，
+  失败时复用现有 429 响应形状 `{"error":"rate_limited"}` + `Retry-After`。
+- key 取 `CF-Connecting-IP`：官方文档明确不建议用 IP（共享 IP / 移动 NAT
+  会误伤同一 NAT 后的多位用户），但本站无登录态，可用行为标识只有 IP，且旧
+  实现本就是 per-IP——**按 IP 是延续现状**。取舍写进 ARCHITECTURE.md。
+- 行为差异（如实记录）：
+  - CF 是**每个 Cloudflare 边缘位置独立计数、近似限流**（后台异步同步），
+    非旧实现的全局平滑令牌桶；突发可能短暂超过阈值。
+  - 防御目标（防刷名单/爬虫）不受影响；校内流量远低于阈值。
 - 这是「行为 + 纪律全保留」承诺下唯一的例外，理由与换算写进 CLAUDE.md 与
-  ARCHITECTURE.md；Go 令牌桶测试随实现删除并记录原因。
-- 若主人不接受此例外，替代方案是 Durable Objects 实现每 IP 令牌桶
-  （工作量 + 1 状态组件，可另议）。
+  ARCHITECTURE.md；Go 令牌桶测试与 ratelimit.go 随实现删除并记录原因。
+- 免费层对 ratelimits 绑定数量是否有别于 WAF 规则（WAF 规则免费 1 条）——
+  文档未明示绑定侧免费层配额，列入实施阶段验证点（本地 `wrangler deploy
+  --dry-run` 可先验配置合法性）。
 
 ### 3.7 测试体系（vitest 4 双项目）
 
-- 依赖升级：vitest ^3.2.7 → ^4.1.0，新增 `@cloudflare/vitest-pool-workers`
-  （要求 vitest 4.1+）、`wrangler`、`@cloudflare/workers-types`。
+- 依赖升级：vitest ^3.2.7 → ^4.1.0，新增 `@cloudflare/vitest-plugin`
+  （官方当前推荐包，`cloudflareTest({ wrangler: { configPath: "./wrangler.jsonc" } })`
+  插件式接入）、`wrangler`、`@cloudflare/workers-types`。
 - 双项目配置（`vitest.config.ts` 用 `test.projects`）：
   - 前端项目（node + jsdom）：现有 React 组件测试、`searchReducer` 等，原样
     平移（文件头 `@vitest-environment jsdom` 声明机制保留）。
-  - Worker 项目（cloudflare 插件，workerd 运行时 + miniflare KV binding）：
+  - Worker 项目（cloudflareTest 插件，workerd 运行时 + miniflare KV binding）：
     rosterStore 加载/校验、搜索端点集成（SELF.fetch）、管理端点认证与写入、
     shared 解析的语料测试。
 - 契约语料测试归属：parseQuery 语料测试在 shared（前端与 Worker 共用同一实现，
@@ -198,7 +211,8 @@ FindMyClassmate 当前是「Go 标准库查询服务 + React 前端」的单二�
 
 1. **热更新延迟**：KV 最终一致，写入后各边缘节点缓存最多约 60 秒才刷新——
    从「1 秒内生效」变为「最多约 60 秒生效」。
-2. **限流语义**：per-IP 令牌桶 → CF 固定窗口单规则（见 3.6）。
+2. **限流语义**：per-IP 令牌桶（全局平滑）→ Workers Rate Limiting binding
+   （每边缘位置近似计数、IP 作 key，见 3.6）。
 3. **CPU 上限**：免费层每次调用 10ms CPU；400KB 名单冷读 + JSON.parse + 全量
    搜索逼近上限，用 `cacheTtl: 60` 摊薄，超限则升级模块缓存（已标定升级路径）。
    若实测频繁超限，可升 Workers Paid（30s CPU，$5/月）。
@@ -221,4 +235,5 @@ FindMyClassmate 当前是「Go 标准库查询服务 + React 前端」的单二�
 | KV 批量读 + JSON.parse 逼近 10ms CPU | cacheTtl 60 摊薄；模块缓存 + version key 升级路径已标注 |
 | 「单二进制心智」迁移走样（API 与静态分离） | run_worker_first 保证 /api/* 全部进 Worker，与现状路由一致 |
 | 管理 API 成为攻击面 | Bearer token + 常量时间比较 + 仅管理端点；无管理网页 |
+| Rate Limiting 绑定的免费层配额与近似语义 | 实施期先 `wrangler deploy --dry-run` 验配置、本地 miniflare 验行为；若免费层不允许该绑定，退回 WAF 单规则（返回体不可定制）或接受更粗粒度 |
 | 契约语料在单侧化后失去「对拍」校验 | shared 层编译期检查继承；语料测试照常全绿是迁移期双绿的硬门槛 |
