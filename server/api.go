@@ -16,6 +16,15 @@ func buildMux(store *studentStore, buildVersion string) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.Handle("/", frontendHandler())
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
+		// 方法限制与 /api/search、/api/schools 一致：health 只读，非 GET 返回
+		// 405 + Allow: GET。此前缺这道守卫时，PUT/DELETE/PATCH/TRACE/CONNECT
+		// 乃至任意方法名都会拿到 200——站内方法契约不一致，接入反代或安全扫描
+		// 器时会被标记为异常行为（渗透测试 F1）。
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			writeError(w, errCodeMethodNotAllowed)
+			return
+		}
 		// 错误不再丢弃：探测存活需要的是「快照可取」这一个事实，但丢弃 error
 		// 会连带丢掉运维诊断所需的根因。这里显式忽略返回值而非用 _ 命名，
 		// 是为了让「此处不消费根因」成为读代码即可见的事实——根因由

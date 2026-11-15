@@ -68,7 +68,10 @@ func openLog(dataDir string) (io.Writer, *os.File, error) {
 	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		return nil, nil, err
 	}
-	file, err := os.OpenFile(filepath.Join(logDir, "server.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	// 权限 0600：日志含数据不可用的根因（名单文件名、班名）与脱敏 IP，
+	// 多用户宿主机上不应对其他本地用户可读（渗透测试 F5）。
+	// 容器场景日志双写 stderr，/tmp/fmc 由 app 用户独占，此权限无副作用。
+	file, err := os.OpenFile(filepath.Join(logDir, "server.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return nil, nil, err
 	}

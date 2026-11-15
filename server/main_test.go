@@ -137,6 +137,30 @@ func TestSearchMethodNotAllowed(t *testing.T) {
 	}
 }
 
+// /api/health 非 GET 应返回 405 且带 Allow: GET（与 /api/search、/api/schools 同款守卫）。
+// 渗透测试 F1：修复前 PUT/DELETE/PATCH/TRACE/CONNECT 乃至任意方法名打 health 都返回 200，
+// 站内方法契约不一致。变异实验确认守卫承重：删掉方法检查分支后本用例翻红。
+func TestHealthMethodNotAllowed(t *testing.T) {
+	store := newTestStore(t, map[string]string{"高一.json": validGradeOne})
+	mux := buildMux(store, "dev")
+	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodConnect, http.MethodTrace} {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(method, "/api/health", nil))
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("%s /api/health 状态 = %d，期望 405", method, rec.Code)
+		}
+		if allow := rec.Header().Get("Allow"); allow != "GET" {
+			t.Errorf("%s /api/health Allow = %q，期望 GET", method, allow)
+		}
+	}
+	// GET 走正常路径（回归保护：守卫不得误伤健康检查）
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/health", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/health 状态 = %d，期望 200", rec.Code)
+	}
+}
+
 // TestSearchRejectsOutOfRangeParameters 覆盖 api.go 的参数解析 400 路径。
 //
 // 变异事实（2026-09-26 第六轮）：把这三条判定改成恒假（parseErr != nil && false）
