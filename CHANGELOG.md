@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+## [v1.0.0-beta.2] - 2026-11-15
+
+### Changed
+
+- 限流参数支持环境变量调节：`FMC_RATE_LIMIT_CAPACITY`（默认 60）与 `FMC_RATE_LIMIT_INTERVAL_MS`（默认 1000）。反代部署（Nginx 转发到 127.0.0.1:3078）下所有请求的 RemoteAddr 都是回环地址、全校共用一个令牌桶，容量 60 加每秒回补 1 在多人使用时会触发 429。环境变量化后运维无需重建镜像即可放宽，默认值不变，现有部署零影响。
+
 ## [v1.0.0-beta.1] - 2026-11-15
 
 ### Added
@@ -282,7 +288,8 @@
 - 单二进制内嵌前端，单端口 3078。
 - Docker 多阶段构建、CI / Release 流水线、MIT License。
 
-[Unreleased]: https://github.com/Wenaixi/find-my-classmate/compare/v1.0.0-beta.1...HEAD
+[Unreleased]: https://github.com/Wenaixi/find-my-classmate/compare/v1.0.0-beta.2...HEAD
+[v1.0.0-beta.2]: https://github.com/Wenaixi/find-my-classmate/compare/v1.0.0-beta.1...v1.0.0-beta.2
 [v1.0.0-beta.1]: https://github.com/Wenaixi/find-my-classmate/compare/v0.11.0...v1.0.0-beta.1
 [v0.11.0]: https://github.com/Wenaixi/find-my-classmate/compare/v0.10.4...v0.11.0
 [v0.10.4]: https://github.com/Wenaixi/find-my-classmate/compare/v0.10.3...v0.10.4
