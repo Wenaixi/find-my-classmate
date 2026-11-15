@@ -2,29 +2,39 @@
 
 > 校园学生档案检索台
 
+[![CI](https://github.com/Wenaixi/find-my-classmate/actions/workflows/ci.yml/badge.svg)](https://github.com/Wenaixi/find-my-classmate/actions/workflows/ci.yml)
+[![Release](https://github.com/Wenaixi/find-my-classmate/actions/workflows/release.yml/badge.svg)](https://github.com/Wenaixi/find-my-classmate/actions/workflows/release.yml)
+![Go](https://img.shields.io/badge/Go-1.27.4-00ADD8?logo=go&logoColor=white)
+![Node](https://img.shields.io/badge/Node-26_LTS-339933?logo=nodedotjs&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-7-3178C6?logo=typescript&logoColor=white)
+![License](https://img.shields.io/github/license/Wenaixi/find-my-classmate)
+
 FindMyClassmate 是一个面向校园场景的班级查询工具。React + TypeScript 前端构建后嵌入 Go 标准库服务，由后端统一托管页面、接口和年级名单，单二进制即可部署。
 
 ## 功能
 
 - 支持高一、高二、高三名单查询：姓名、班级、年段自由组合（年段按数据目录实际存在的文件自动识别）
+- 多学校：data/ 目录下每校一个 JSON，学校筛选胶囊下拉，API 返回学校字段
 - 输入框支持空格 / 中文逗号 / 英文逗号 / 顿号分隔多条件
 - 结果按完整、前缀、包含匹配排序，支持分页加载（全员果冻融合动效）
 - 胶囊搜索框带彩色光束动画，搜索时思维球反馈
-- 隐私设计：不写 localStorage，不把查询词写入 URL，API 只返回姓名 / 年级 / 班级
+- 隐私设计：不写 localStorage，不把查询词写入 URL，API 只返回姓名 / 学校 / 年级 / 班级
 
 ## 技术栈
 
 | 层 | 技术 |
 | --- | --- |
-| 前端 | React 18 + TypeScript + Vite |
-| 后端 | Go 标准库 HTTP 服务（单二进制） |
-| 动效 | border-beam 1.3.0 / thinking-orbs 0.3.1 / liquid-gooey 0.2.1 |
+| 前端 | React 19 + TypeScript 7 + Vite 8 |
+| 后端 | Go 1.27 标准库 HTTP 服务（单二进制） |
+| 动效 | border-beam 1.4.1 / thinking-orbs 0.3.2 / liquid-gooey 0.2.2 |
 | 字体 | Mona Sans / Instrument Sans / IBM Plex Mono |
-| 测试 | Vitest（前端）、Go test（后端） |
+| 测试 | Vitest 5（前端）、Go test（后端） |
 
 ## 快速开始
 
-前置：Node.js 24（CI 使用的版本）、Go 1.26。
+前置：Node.js 26（LTS，与 CI 一致）、Go 1.27.4（go.mod 声明；本机低版本工具链会经 GOTOOLCHAIN 自动获取）。
 
 ```bash
 # 1. 安装前端依赖
@@ -40,6 +50,15 @@ go run ./server
 ```
 
 数据目录默认 `./data`，可通过环境变量 `FMC_DATA_DIR` 指向其他目录。名单文件变更后下一次请求自动热重载；日志写入 `FMC_LOG_DIR`（默认 `<数据目录>/log`），容器场景建议显式指定可写目录。
+
+## 部署安全边界
+
+本服务是**无认证的公开查询工具**，按「校园内网/受控网络」的部署前提设计。以下边界请部署前确认：
+
+- **名单可全量枚举（隐私边界）**：`/api/search` 无鉴权，单字查询即可返回全校匹配，全部学生（姓名/学校/年级/班级，PII）约数百次请求即可完整拉取。内网部署可接受；**服务一旦暴露到公网，等于公开全部名单**。公网部署必须置于访问控制之后：校园 VPN、IP 白名单、反向代理鉴权（如 Cloudflare Access），或把端口绑定到本机回环（`docker-compose.yml` 已附 `127.0.0.1` 绑定示例）。
+- **限流按 IP 分桶（双栈注意）**：限流键取客户端 IP（容量 60、每秒回补 1）。服务同时监听 IPv4 与 IPv6 时，同一主机的 `127.0.0.1` 与 `::1` 是两个独立桶，双栈攻击者可获得双倍配额。缓解：部署层只暴露单一协议栈；这是按 IP 限流的结构性特性，应用层不做区分。Cloudflare 迁移后由平台限流天然消除。
+- **版本号公开**：`/api/health` 返回 `version`（ldflags 注入的 git tag，本地为 `dev`），用于运维溯源。如需对公网隐藏，在反代层剥离该字段即可。
+- **日志含运维细节**：错误根因日志（名单文件名、班级名）只写服务端日志（文件权限 0600），API 响应始终只返回错误码，不含内部细节。
 
 ## 站点文案配置
 

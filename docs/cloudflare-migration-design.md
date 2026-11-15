@@ -148,9 +148,9 @@ FindMyClassmate 当前是「Go 标准库查询服务 + React 前端」的单二�
   文档未明示绑定侧免费层配额，列入实施阶段验证点（本地 `wrangler deploy
   --dry-run` 可先验配置合法性）。
 
-### 3.7 测试体系（vitest 4 双项目）
+### 3.7 测试体系（vitest 5 双项目）
 
-- 依赖升级：vitest ^3.2.7 → ^4.1.0，新增 `@cloudflare/vitest-plugin`
+- 依赖升级：vitest ^3.2.7 → ^5.1.0（2026-11 已随前端安全升级完成），新增 `@cloudflare/vitest-plugin`
   （官方当前推荐包，`cloudflareTest({ wrangler: { configPath: "./wrangler.jsonc" } })`
   插件式接入）、`wrangler`、`@cloudflare/workers-types`。
 - 双项目配置（`vitest.config.ts` 用 `test.projects`）：
@@ -163,7 +163,7 @@ FindMyClassmate 当前是「Go 标准库查询服务 + React 前端」的单二�
   测一份即可）；Search 级语料测试（原 Go search_test 消费）在 Worker 项目。
 - 变异实验纪律保留：破坏实现 → 相应语料用例翻红。分配预算/race/gofmt 纪律
   随 Go 退役，退役原因写进记忆库。
-- vitest 4 行为差异（act 环境、jsdom 工厂等）列入实施验证点，现有已踩过的坑
+- vitest 5 行为差异（act 环境、jsdom 工厂等）列入实施验证点，现有已踩过的坑
   （`IS_REACT_ACT_ENVIRONMENT`）在升级时复核。
 
 ### 3.8 部署与 CI
@@ -231,9 +231,10 @@ FindMyClassmate 当前是「Go 标准库查询服务 + React 前端」的单二�
 
 | 风险 | 缓解 |
 |---|---|
-| vitest 3 → 4 升级破坏现有测试行为 | 阶段 0 记录基线；升级后先跑前端项目全量，逐项修复环境差异 |
+| vitest 3 → 5 升级破坏现有测试行为 | 阶段 0 记录基线；升级后先跑前端项目全量，逐项修复环境差异 |
 | KV 批量读 + JSON.parse 逼近 10ms CPU | cacheTtl 60 摊薄；模块缓存 + version key 升级路径已标注 |
 | 「单二进制心智」迁移走样（API 与静态分离） | run_worker_first 保证 /api/* 全部进 Worker，与现状路由一致 |
-| 管理 API 成为攻击面 | Bearer token + 常量时间比较 + 仅管理端点；无管理网页 |
+| 管理 API 成为攻击面 | Bearer token + 常量时间比较 + 仅管理端点；无管理网页。**并对管理端点单独限流**（失败请求按 IP+端点计数），防止 ADMIN_TOKEN 弱口令被低频爆破；token 校验失败不返回任何细节差异 |
 | Rate Limiting 绑定的免费层配额与近似语义 | 实施期先 `wrangler deploy --dry-run` 验配置、本地 miniflare 验行为；若免费层不允许该绑定，退回 WAF 单规则（返回体不可定制）或接受更粗粒度 |
 | 契约语料在单侧化后失去「对拍」校验 | shared 层编译期检查继承；语料测试照常全绿是迁移期双绿的硬门槛 |
+| HTTP 解析面变化：CF 边缘与 Worker 对畸形请求（CL+TE 并存、双 CL）的解析一致性 | **迁移前置检查项**：渗透测试实测现 Go 1.27 对 CL+TE 并存请求不报 400（优先 chunked 语义），单后端无走私利用面；接入 CF 后由边缘先解析一遍、Worker 再解析一遍，须在对拍矩阵中加入 CL+TE/双 CL 畸形样本，确认两端判定一致后才切流量 |
