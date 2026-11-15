@@ -462,8 +462,8 @@ describe("App 学校选择器", () => {
     await act(async () => {});
     const trigger = container.querySelector("[data-od-id=school-select]") as HTMLButtonElement;
     expect(trigger.textContent).toContain("全部学校");
-    // 选中态语义：无 is-filtered 类（未过滤）
-    expect(trigger.className).not.toContain("is-filtered");
+    // 高光跟随展开态：收起时不高光
+    expect(trigger.className).not.toContain("is-open");
   });
 
   it("切换学校作废当前结果：搜索有结果 → 切校 → 结果区消失（复位 idle）", async () => {
@@ -485,10 +485,10 @@ describe("App 学校选择器", () => {
     // 2) 切到福清二中 → 结果作废、回到 idle（结果区不再渲染）
     await pickSchool(container, "福清二中");
     expect(container.querySelector("[data-od-id=results-section]")).toBeNull();
-    // 触发按钮显示新学校
+    // 触发按钮显示新学校（收起后不高光，高光只跟展开态）
     const trigger = container.querySelector("[data-od-id=school-select]") as HTMLButtonElement;
     expect(trigger.textContent).toContain("福清二中");
-    expect(trigger.className).toContain("is-filtered");
+    expect(trigger.className).not.toContain("is-open");
   });
 
   it("搜索后清空，学校选项仍保留（回归：clear 不得清掉 schools 列表）", async () => {
@@ -551,7 +551,6 @@ describe("App 学校选择器", () => {
     await act(async () => {});
     expect((container.querySelector("#query") as HTMLInputElement).value).toBe("");
     expect(trigger.textContent).toContain("福清二中");
-    expect(trigger.className).toContain("is-filtered");
   });
 
   it("手动删光输入框，学校选择仍保留（回归：input-change 空串分支）", async () => {
@@ -583,6 +582,30 @@ describe("App 学校选择器", () => {
     const options = Array.from(container.querySelectorAll("[data-od-id=school-option]")).map((o) => o.textContent?.replace(/✓/g, "").trim());
     expect(options).toContain("福清一中");
     expect(options).toContain("福清二中");
+  });
+
+  it("高光跟随展开态：弹出面板才亮，收起即灭（与是否选中学校无关）", async () => {
+    const container = mountAppSchool(fakeApi(), () => Promise.resolve(["福清一中", "福清二中"]));
+    await act(async () => {});
+    const trigger = container.querySelector("[data-od-id=school-select]") as HTMLButtonElement;
+
+    // 1) 初始收起：不高光
+    expect(trigger.className).not.toContain("is-open");
+
+    // 2) 点开：高光
+    await act(async () => { trigger.click(); });
+    expect(trigger.className).toContain("is-open");
+
+    // 3) 选中一所学校（面板随选择关闭）：收起后不高光
+    const option = Array.from(container.querySelectorAll("[data-od-id=school-option]")).find((el) => el.textContent?.includes("福清二中")) as HTMLElement;
+    await act(async () => { option.click(); });
+    await act(async () => {});
+    expect(trigger.textContent).toContain("福清二中");
+    expect(trigger.className).not.toContain("is-open");
+
+    // 4) 再点开：又高光（说明高光只跟展开态，不跟选中）
+    await act(async () => { trigger.click(); });
+    expect(trigger.className).toContain("is-open");
   });
 
   it("schoolsApi 失败时选择器仍渲染（全校），全站不崩", async () => {

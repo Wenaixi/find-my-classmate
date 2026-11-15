@@ -80,8 +80,8 @@ h1 em { color: #fff; font-style: normal; }
 }
 .school-trigger:hover { border-color: var(--line-strong); }
 .school-trigger:focus-visible { border-color: rgba(244,244,240,.72); background: var(--surface-raised); }
-.school-trigger.is-filtered { border-color: rgba(244,244,240,.72); }
-.school-trigger.is-filtered .school-value { color: var(--ink); font-weight: 500; }
+.school-trigger.is-open { border-color: rgba(244,244,240,.72); }
+.school-trigger.is-open .school-value { color: var(--ink); }
 .school-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .school-chevron { flex: 0 0 auto; color: var(--faint); transition: transform .3s var(--ease-move), color .2s var(--ease-color); }
 .school-trigger.is-open .school-chevron { transform: rotate(180deg); color: var(--ink); }

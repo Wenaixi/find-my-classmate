@@ -102,7 +102,9 @@ export default function SchoolPicker({ schools, value, onChange }: SchoolPickerP
         <button
           type="button"
           ref={triggerRef}
-          className={"school-trigger" + (value ? " is-filtered" : "") + (open ? " is-open" : "")}
+          // 高光跟随展开态（is-open）：点击弹出面板时亮、收回即灭；
+          // 不再随选中状态（选中学校不等于高光）。
+          className={"school-trigger" + (open ? " is-open" : "")}
           data-od-id="school-select"
           aria-haspopup="listbox"
           aria-expanded={open}
