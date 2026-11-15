@@ -296,6 +296,7 @@ func parseQuery(raw string) Query {
 	}
 	return query
 }
+
 // Search 保持历史签名（4 参、无学校过滤）：既有测试与调用不变。
 // 学校过滤请用 SearchInSchool。
 func Search(students []Student, raw string, limit, offset int) SearchResponse {

@@ -20,10 +20,11 @@ type sourceStudent struct {
 }
 
 // 新格式（build_hierarchy_json.py 输出的无账密 roster）：
-//   { "区县": "...", "学校": [{ "校名": "...", "年级": [{ "年级名": "...",
-//     "班级": [{ "班名": "...", "学生": [{ "姓名": "..." }] }] }] }] }
+//
+//	{ "区县": "...", "学校": [{ "校名": "...", "年级": [{ "年级名": "...",
+//	  "班级": [{ "班名": "...", "学生": [{ "姓名": "..." }] }] }] }] }
 type sourceClass struct {
-	Name     string           `json:"班名"`
+	Name     string          `json:"班名"`
 	Students []sourceStudent `json:"学生"`
 }
 
@@ -33,8 +34,8 @@ type sourceGrade struct {
 }
 
 type sourceSchool struct {
-	Name   string         `json:"校名"`
-	Grades []sourceGrade  `json:"年级"`
+	Name   string        `json:"校名"`
+	Grades []sourceGrade `json:"年级"`
 }
 
 type sourceDocument struct {
