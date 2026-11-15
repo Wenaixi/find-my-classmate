@@ -4,6 +4,7 @@ import { fetchSchools, fetchVersion, searchApi } from "./lib/api";
 import { useSearchController } from "./lib/useSearchController";
 import { useSearchInput } from "./lib/useSearchInput";
 import ErrorBoundary from "./components/ErrorBoundary";
+import SchoolPicker from "./components/SchoolPicker";
 import siteConfig from "./site.config";
 import { MAX_QUERY_LENGTH, PAGE_SIZE } from "./config";
 import { present } from "./lib/searchReducer";
@@ -113,27 +114,9 @@ export function App({ api, schoolsApi }: AppProps = {}) {
           <h1 data-od-id="hero-title">找到同学，<br /><em>从名字开始。</em></h1>
           <form className="search-wrap" data-od-id="search-form" ref={searchWrapRef} onSubmit={submit}>
             <label className="field-label" data-od-id="search-label" htmlFor="query">查询条件 <span>NAME / CLASS / GRADE / SCHOOL</span></label>
-            {/* 学校筛选：胶囊下拉，与 search-track 同族（深色、999 圆角、细边框、focus 变 ink）。
+            {/* 学校筛选：自绘胶囊下拉（见 components/SchoolPicker）。
                 切换后像输入变化一样作废在途查询并回 idle，由用户重新提交生效。 */}
-            <div className="school-row" data-od-id="school-row">
-              <span className="school-row-label" id="school-label">学校</span>
-              <div className="school-select-wrap" data-od-id="school-select-wrap">
-                <select
-                  className="school-select"
-                  data-od-id="school-select"
-                  id="school-select"
-                  value={school}
-                  onChange={(event) => controller.selectSchool(event.target.value)}
-                  aria-labelledby="school-label"
-                >
-                  <option value="">全部学校</option>
-                  {schools.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-                <svg className="school-select-arrow" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-              </div>
-            </div>
+            <SchoolPicker schools={schools} value={school} onChange={(next) => controller.selectSchool(next)} />
             <BorderBeam size="md" colorVariant="colorful" theme="dark" borderRadius={999} duration={2.2} strength={1} brightness={2} saturation={2.2} hueRange={160}>
               <div className="search-track" data-od-id="search-track">
                 <input className="search-input" id="query" type="text" autoComplete="off" spellCheck={false} maxLength={MAX_QUERY_LENGTH} value={query} onChange={(event) => inputHandlers.onChange(event.target.value)} onFocus={() => searchWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })} onCompositionStart={inputHandlers.onCompositionStart} onCompositionEnd={inputHandlers.onCompositionEnd} onKeyDown={(event) => inputHandlers.onKeyDown(event.key, event.nativeEvent.isComposing)} placeholder="输入姓名 / 班级 / 年段" aria-label="查询条件" aria-describedby="search-hint" />

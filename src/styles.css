@@ -61,28 +61,56 @@ h1 em { color: #fff; font-style: normal; }
 .field-label { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 12px; color: var(--ink); font: 600 11px/1.2 var(--mono); letter-spacing: 1.2px; text-transform: uppercase; }
 .field-label span { color: var(--faint); font: 400 10px/1 var(--mono); letter-spacing: .8px; }
 
-/* 学校筛选：胶囊下拉，与 search-track 同族（深色、999 圆角、细边框、focus 变 ink） */
+/* 学校筛选（SchoolPicker）：胶囊触发按钮 + 浮层选项面板，全部贴合既有设计 token。
+   触发态与展开态都在同一套深色体系下，跨浏览器渲染一致（替代原生 select 弹层）。
+   选中具体学校时触发按钮加 ink 边框强调（is-filtered）；展开时箭头翻转 + 面板淡入位上移。 */
 .school-row { display: flex; align-items: center; gap: 14px; margin: 0 0 14px; }
 .school-row-label { flex: 0 0 auto; color: var(--muted); font: 600 11px/1.2 var(--mono); letter-spacing: 1.2px; text-transform: uppercase; }
-.school-select-wrap { position: relative; display: inline-flex; min-width: 188px; align-items: center; }
-.school-select {
-  appearance: none; -webkit-appearance: none; -moz-appearance: none;
-  width: 100%; min-height: 40px; padding: 0 42px 0 18px;
+.school-picker { position: relative; display: inline-flex; min-width: 188px; }
+.school-trigger {
+  display: inline-flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; min-height: 40px; padding: 0 16px 0 18px;
   border: 1px solid #565654; border-radius: 999px;
   color: var(--ink); background: rgba(17,17,17,.92);
   font: 400 13px/1.3 var(--sans);
   cursor: pointer; outline: 0;
   transition: border-color .25s var(--ease-color), background .25s ease, box-shadow .25s ease;
 }
-.school-select:hover { border-color: var(--line-strong); }
-.school-select:focus { border-color: rgba(244,244,240,.72); background: var(--surface-raised); }
-.school-select option { background: var(--surface-raised); color: var(--ink); }
-.school-select-arrow {
-  position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
-  color: var(--faint); pointer-events: none;
-  transition: color .2s var(--ease-color);
+.school-trigger:hover { border-color: var(--line-strong); }
+.school-trigger:focus-visible { border-color: rgba(244,244,240,.72); background: var(--surface-raised); }
+.school-trigger.is-filtered { border-color: rgba(244,244,240,.72); }
+.school-trigger.is-filtered .school-value { color: var(--ink); font-weight: 500; }
+.school-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.school-chevron { flex: 0 0 auto; color: var(--faint); transition: transform .3s var(--ease-move), color .2s var(--ease-color); }
+.school-trigger.is-open .school-chevron { transform: rotate(180deg); color: var(--ink); }
+.school-trigger:hover .school-chevron, .school-trigger:focus-visible .school-chevron { color: var(--ink); }
+.school-panel {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 30;
+  min-width: 100%; max-height: 280px; overflow: auto;
+  padding: 6px;
+  border: 1px solid var(--line-strong); border-radius: 14px;
+  background: var(--surface-raised);
+  box-shadow: 0 18px 50px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.3);
+  animation: school-panel-in .18s var(--ease-move) both;
 }
-.school-select:focus + .school-select-arrow, .school-select:hover + .school-select-arrow { color: var(--ink); }
+.school-option {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-height: 36px; padding: 0 12px;
+  border-radius: 8px; color: var(--muted);
+  font: 400 13px/1.3 var(--sans);
+  cursor: pointer;
+  transition: background .15s ease, color .15s var(--ease-color);
+}
+.school-option.is-active { background: var(--surface-soft); color: var(--ink); }
+.school-option.is-selected { color: var(--ink); font-weight: 500; }
+.school-option.is-selected .school-option-check { color: var(--ink); }
+.school-option-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.school-option-check { flex: 0 0 auto; font: 500 12px/1 var(--mono); }
+@keyframes school-panel-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .search-wrap [data-beam] { --beam-inner-opacity: 3.6; --beam-bloom-opacity: 2.8; --beam-bloom-blur: 56px; --beam-glow-brightness: 2.6; --beam-glow-saturate: 2.4; }
 .search-track { position: relative; z-index: 2; display: flex; min-height: calc(var(--control-size) + 2 * var(--track-pad) + 2px); align-items: stretch; padding: var(--track-pad); border: 1px solid #565654; border-radius: 999px; background: rgba(17,17,17,.92); box-shadow: 0 0 18px rgba(130,150,255,.14), 0 0 36px rgba(255,110,200,.09); transition: border-color .25s var(--ease-color), background .25s ease, box-shadow .25s ease; }
 .search-track:focus-within { border-color: rgba(244,244,240,.72); background: var(--surface-raised); box-shadow: none; }
@@ -181,7 +209,7 @@ h1 em { color: #fff; font-style: normal; }
   h1 { font-size: clamp(52px, 16vw, 76px); }
   .field-label { align-items: flex-start; flex-direction: column; gap: 8px; }
   .school-row { align-items: flex-start; flex-direction: column; gap: 4px; }
-  .school-select-wrap { width: 100%; }
+  .school-picker { width: 100%; }
   .search-input { min-height: 56px; padding: 0 18px; font-size: 17px; }
 
   .search-hint { flex-direction: column; gap: 7px; }

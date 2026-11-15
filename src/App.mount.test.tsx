@@ -424,32 +424,52 @@ function setNativeValue(element: HTMLInputElement, value: string) {
 }
 
 describe("App 学校选择器", () => {
+  // 点击触发按钮打开面板，再点选项完成选择。
+  async function pickSchool(container: HTMLElement, label: string) {
+    const trigger = container.querySelector("[data-od-id=school-select]") as HTMLButtonElement;
+    await act(async () => {
+      trigger.click();
+    });
+    const option = Array.from(container.querySelectorAll("[data-od-id=school-option]")).find(
+      (el) => el.textContent?.trim() === label || el.textContent?.includes(label),
+    ) as HTMLElement;
+    expect(option).toBeDefined();
+    await act(async () => {
+      option.click();
+    });
+    await act(async () => {});
+  }
+
   it("渲染全校 + 各校选项（来自 schoolsApi）", async () => {
     const schools = ["福清一中", "福清二中", "福清华侨中学"];
-    mountAppSchool(fakeApi(), () => Promise.resolve(schools));
-    // 冲刷 loadSchools 的异步 resolve，使 schools 注入 state
-    await act(async () => {});
-    const select = document.querySelector("[data-od-id=school-select]") as HTMLSelectElement;
-    expect(select).not.toBeNull();
-    // 全校 + 三校
-    expect(select.options.length).toBe(4);
-    expect(select.options[0].value).toBe("");
-    expect(select.options[0].textContent).toBe("全部学校");
-    expect(select.options[1].textContent).toBe("福清一中");
-    expect(select.options[2].textContent).toBe("福清二中");
-    expect(select.options[3].textContent).toBe("福清华侨中学");
+    const container = mountAppSchool(fakeApi(), () => Promise.resolve(schools));
+    await act(async () => {}); // 冲刷 loadSchools 的异步 resolve
+    const trigger = container.querySelector("[data-od-id=school-select]") as HTMLButtonElement;
+    expect(trigger).not.toBeNull();
+    expect(trigger.textContent).toContain("全部学校");
+    // 点击触发 → 面板出现四个选项（全校 + 三校）
+    await act(async () => { trigger.click(); });
+    const options = container.querySelectorAll("[data-od-id=school-option]");
+    expect(options.length).toBe(4);
+    expect(options[0].textContent).toContain("全部学校");
+    expect(options[1].textContent).toContain("福清一中");
+    expect(options[2].textContent).toContain("福清二中");
+    expect(options[3].textContent).toContain("福清华侨中学");
   });
 
-  it("默认选中全校（school 为空串）", async () => {
-    mountAppSchool(fakeApi(), () => Promise.resolve(["福清一中"]));
-    const select = document.querySelector("[data-od-id=school-select]") as HTMLSelectElement;
-    expect(select.value).toBe("");
+  it("默认选中全校（触发按钮显示全部学校）", async () => {
+    const container = mountAppSchool(fakeApi(), () => Promise.resolve(["福清一中"]));
+    await act(async () => {});
+    const trigger = container.querySelector("[data-od-id=school-select]") as HTMLButtonElement;
+    expect(trigger.textContent).toContain("全部学校");
+    // 选中态语义：无 is-filtered 类（未过滤）
+    expect(trigger.className).not.toContain("is-filtered");
   });
 
   it("切换学校作废当前结果：搜索有结果 → 切校 → 结果区消失（复位 idle）", async () => {
     const api = fakeApi();
     const container = mountAppSchool(api, () => Promise.resolve(["福清一中", "福清二中"]));
-    await act(async () => {}); // 冲刷 schools
+    await act(async () => {});
 
     // 1) 先搜出结果
     const input = container.querySelector("#query") as HTMLInputElement;
@@ -462,24 +482,23 @@ describe("App 学校选择器", () => {
     });
     expect(container.querySelector("[data-od-id=results-section]")).not.toBeNull();
 
-    // 2) 切换学校 → 结果作废、回到 idle（结果区不再渲染）
-    const select = container.querySelector("[data-od-id=school-select]") as HTMLSelectElement;
-    await act(async () => {
-      const tracker = (select as unknown as { _valueTracker?: { setValue: (v: string) => void } })._valueTracker;
-      tracker?.setValue("福清二中");
-      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
-      setter?.call(select, "福清二中");
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    await act(async () => {});
+    // 2) 切到福清二中 → 结果作废、回到 idle（结果区不再渲染）
+    await pickSchool(container, "福清二中");
     expect(container.querySelector("[data-od-id=results-section]")).toBeNull();
+    // 触发按钮显示新学校
+    const trigger = container.querySelector("[data-od-id=school-select]") as HTMLButtonElement;
+    expect(trigger.textContent).toContain("福清二中");
+    expect(trigger.className).toContain("is-filtered");
   });
 
   it("schoolsApi 失败时选择器仍渲染（全校），全站不崩", async () => {
-    mountAppSchool(fakeApi(), () => Promise.reject(new Error("network")));
-    const select = document.querySelector("[data-od-id=school-select]") as HTMLSelectElement;
-    expect(select).not.toBeNull();
-    expect(select.options.length).toBe(1); // 只有全校
-    expect(select.value).toBe("");
+    const container = mountAppSchool(fakeApi(), () => Promise.reject(new Error("network")));
+    const trigger = container.querySelector("[data-od-id=school-select]") as HTMLButtonElement;
+    expect(trigger).not.toBeNull();
+    expect(trigger.textContent).toContain("全部学校");
+    // 打开面板只有「全部学校」一项
+    await act(async () => { trigger.click(); });
+    expect(container.querySelectorAll("[data-od-id=school-option]").length).toBe(1);
   });
 });
+
