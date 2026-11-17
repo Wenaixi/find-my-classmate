@@ -8,7 +8,8 @@ import (
 
 // clientIP 从 RemoteAddr 提取客户端裸 IP（去端口与 zone）。
 // 这是客户端 IP 解析的唯一入口：日志脱敏（maskedIP）与限流（rateLimit）必须共用它，
-// 保证同一 RemoteAddr 两侧得到一致的 host。反代场景的 XFF 解析属反代层职责（README 已声明），此处不处理。
+// 保证同一 RemoteAddr 两侧得到一致的 host。反代场景的真实客户端 IP 解析见
+// clientIPFromRequest（读取 CF-Connecting-IP / X-Real-IP / X-Forwarded-For）。
 func clientIP(remote string) string {
 	host := remote
 	// 方括号 IPv6（带端口）：[addr]:port → addr

@@ -58,3 +58,12 @@ func TestEnvBool(t *testing.T) {
 		}
 	}
 }
+
+// trustProxyHeaders 装配默认值承重：包级变量在 init 时读环境变量一次性初始化，
+// 测试进程默认不设置 FMC_TRUST_PROXY_HEADERS，故初始值必须为 false（安全关键：
+// 默认关 = 不信任转发头，直连伪造无法生效）。变异把初始化替换为 true 时本测试翻红。
+func TestTrustProxyHeadersAssemblyDefaultFalse(t *testing.T) {
+	if trustProxyHeaders {
+		t.Error("trustProxyHeaders 默认应为 false（不信任转发头），实际为 true")
+	}
+}

@@ -10,7 +10,7 @@
 
 ### Changed
 
-- 新增 `FMC_TRUST_PROXY_HEADERS` 环境变量：反代部署（Nginx / Cloudflare 前置）下按转发头（`CF-Connecting-IP` → `X-Real-IP` → `X-Forwarded-For` 首值）取真实客户端 IP 作为限流键，使每个真实用户独立限流桶、互不拖累。默认关闭（直连/未配置反代时不信任转发头）；开启时仅当连接来自回环地址（本地反代唯一入口）才读取转发头，非回环来源一律忽略，防直连伪造绕过。部署层需配合 Nginx real_ip + 可信来源白名单改写转发头，构成双层防线。
+- 新增 `FMC_TRUST_PROXY_HEADERS` 环境变量：反代部署（Nginx / Cloudflare 前置）下按转发头（`CF-Connecting-IP` → `X-Real-IP` → `X-Forwarded-For` 首值）取真实客户端 IP 作为限流键，使每个真实用户独立限流桶。默认关闭（直连/未配置反代时不信任转发头）；开启时仅当连接来自回环地址（本地反代唯一入口）才读取转发头，非回环来源一律忽略，防直连伪造绕过。部署层需配合 Nginx real_ip + 可信来源白名单改写转发头，构成双层防线。
 
 ## [v1.0.0-beta.2] - 2026-11-15
 

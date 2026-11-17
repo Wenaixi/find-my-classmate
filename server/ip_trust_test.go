@@ -19,14 +19,15 @@ func TestClientIPFromRequestDefaultNoTrust(t *testing.T) {
 		name   string
 		remote string
 		cf     string
+		real   string
 		xff    string
 		want   string
 	}{
-		{"无任何头", "1.2.3.4:5678", "", "", "1.2.3.4"},
-		{"回环 + 带 CF 头但开关关闭", "127.0.0.1:3078", "9.9.9.9", "", "127.0.0.1"},
-		{"回环 + 带 XFF 但开关关闭", "127.0.0.1:3078", "", "9.9.9.9", "127.0.0.1"},
-		{"回环 + 带 X-Real-IP 但开关关闭", "127.0.0.1:3078", "", "", "127.0.0.1"},
-		{"非回环 RemoteAddr 与伪造 CF 头", "203.0.113.7:5678", "9.9.9.9", "", "203.0.113.7"},
+		{"无任何头", "1.2.3.4:5678", "", "", "", "1.2.3.4"},
+		{"回环 + 带 CF 头但开关关闭", "127.0.0.1:3078", "9.9.9.9", "", "", "127.0.0.1"},
+		{"回环 + 带 XFF 但开关关闭", "127.0.0.1:3078", "", "", "9.9.9.9", "127.0.0.1"},
+		{"回环 + 带 X-Real-IP 但开关关闭", "127.0.0.1:3078", "", "9.9.9.9", "", "127.0.0.1"},
+		{"非回环 RemoteAddr 与伪造 CF 头", "203.0.113.7:5678", "9.9.9.9", "", "", "203.0.113.7"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -37,6 +38,9 @@ func TestClientIPFromRequestDefaultNoTrust(t *testing.T) {
 			req.RemoteAddr = c.remote
 			if c.cf != "" {
 				req.Header.Set("CF-Connecting-IP", c.cf)
+			}
+			if c.real != "" {
+				req.Header.Set("X-Real-IP", c.real)
 			}
 			if c.xff != "" {
 				req.Header.Set("X-Forwarded-For", c.xff)
