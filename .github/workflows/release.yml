@@ -128,6 +128,9 @@ jobs:
   docker:
     name: 构建并推送 Docker 镜像
     needs: test
+    # 无 Docker Hub 凭证的仓库（如 Cloudflare 迁移镜像仓）直接跳过整个 job，
+    # 避免「缺 DOCKER_PAT → 登录失败 → 红色失败 run」的噪音。
+    if: ${{ secrets.DOCKER_PAT != '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

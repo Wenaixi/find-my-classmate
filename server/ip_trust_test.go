@@ -11,6 +11,8 @@ import (
 //   - 未开启或非回环来源一律忽略转发头，回退 RemoteAddr（防直连伪造绕过限流）。
 //
 // 本用例锁定这条边界：伪造头在「未开启」或「非回环」时必须无效。
+// 「默认不信任」用例用回环 RemoteAddr，才能真正锁「开关关闭」这一条独立路径——
+// 用非回环 RemoteAddr 会先被回环门拦下，测不到开关本身。
 func TestClientIPFromRequestDefaultNoTrust(t *testing.T) {
 	// 默认不信任反代头：即使带了 CF-Connecting-IP / XFF，也应回退 RemoteAddr。
 	cases := []struct {
@@ -21,16 +23,16 @@ func TestClientIPFromRequestDefaultNoTrust(t *testing.T) {
 		want   string
 	}{
 		{"无任何头", "1.2.3.4:5678", "", "", "1.2.3.4"},
-		{"带 CF 头但默认不信任", "10.0.0.1:5678", "9.9.9.9", "", "10.0.0.1"},
-		{"带 XFF 但默认不信任", "10.0.0.1:5678", "", "9.9.9.9", "10.0.0.1"},
+		{"回环 + 带 CF 头但开关关闭", "127.0.0.1:3078", "9.9.9.9", "", "127.0.0.1"},
+		{"回环 + 带 XFF 但开关关闭", "127.0.0.1:3078", "", "9.9.9.9", "127.0.0.1"},
+		{"回环 + 带 X-Real-IP 但开关关闭", "127.0.0.1:3078", "", "", "127.0.0.1"},
 		{"非回环 RemoteAddr 与伪造 CF 头", "203.0.113.7:5678", "9.9.9.9", "", "203.0.113.7"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if old := trustProxyHeaders; old != false {
-				trustProxyHeaders = false
-				defer func() { trustProxyHeaders = old }()
-			}
+			prev := trustProxyHeaders
+			trustProxyHeaders = false
+			defer func() { trustProxyHeaders = prev }()
 			req := httptest.NewRequest("GET", "/", nil)
 			req.RemoteAddr = c.remote
 			if c.cf != "" {

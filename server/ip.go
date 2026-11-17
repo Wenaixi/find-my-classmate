@@ -61,9 +61,10 @@ func maskedIP(remote string) string {
 // 按 CF-Connecting-IP → X-Real-IP → X-Forwarded-For 首值 的顺序取真实客户端 IP，
 // 每个候选都校验为合法 IP，非法或缺失即回退下一个；全部无效时回退 RemoteAddr。
 //
-// 安全边界：非回环来源一律忽略转发头回退 RemoteAddr。反代场景下攻击者若要伪造
-// 转发头必须先能建立到应用的连接（本部署仅循环接口可达），回环门把「可信反代」
-// 与「直连伪造」区分开；配合部署层的反代头改写（Nginx real_ip）构成双层防线。
+// 安全边界：非回环来源一律忽略转发头回退 RemoteAddr。直连来源无法让 RemoteAddr
+// 成为回环，回环门把「可信反代」与「直连伪造」区分开；转发头本身的可信度由部署层
+// 保证（反代用 real_ip 等机制改写并覆盖 CF-Connecting-IP / X-Real-IP），应用层
+// 回环门是第二道校验，部署层改写与应用层校验叠加才构成完整防线。
 func clientIPFromRequest(r *http.Request) string {
 	if !trustProxyHeaders || !isLoopbackHost(r.RemoteAddr) {
 		return clientIP(r.RemoteAddr)
