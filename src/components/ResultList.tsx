@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import { Liquid } from "liquid-gooey";
 import type { Student } from "../types";
 import type { ResultSummary } from "../lib/resultSummary";
@@ -17,7 +17,10 @@ interface ResultListProps {
   onLoadMore: () => void;
 }
 
-function ResultCard({ student, index }: { student: Student; index: number }) {
+// 结果行是纯展示：输入不变则输出不变。memo 让打字时的重渲染不再触达每一行；
+// 这是去掉行级 morph 之后仍必要的第二道闸——present() 每次调用都新建
+// summary/loadMoreZone 对象，ResultList 自身仍会重渲染。
+const ResultCard = memo(function ResultCard({ student, index }: { student: Student; index: number }) {
   const isLatin = /^[A-Za-z ]+$/.test(student.name);
   return (
     <div className="result-card" role="listitem" {...od("result-card-" + index)}>
@@ -40,7 +43,7 @@ function ResultCard({ student, index }: { student: Student; index: number }) {
       <span className="result-check" aria-hidden="true" />
     </div>
   );
-}
+});
 
 export default function ResultList({ items, summary, loadMoreZone, onLoadMore }: ResultListProps) {
   const liquidWrapRef = useRef<HTMLDivElement | null>(null);
@@ -75,7 +78,10 @@ export default function ResultList({ items, summary, loadMoreZone, onLoadMore }:
               <Liquid.Item
                 key={student.name + student.school + student.grade + student.className}
                 className="liquid-result-item"
-                morph={{ shape: true, speed: 0.85, bounce: 0.3, contentBlur: 0 }}
+                // 只让容器液体跟随行的实际矩形参与合并，不启动每行的形状弹簧引擎。
+                // morph.shape 的库文档写明「Off by default — plain merge needs no engine」；
+                // 开启它后每行各有一份形状物理，打字时整表重建会把这份开销乘以行数。
+                observe
               >
                 <ResultCard student={student} index={index} />
               </Liquid.Item>
