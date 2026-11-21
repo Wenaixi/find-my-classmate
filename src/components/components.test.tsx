@@ -196,6 +196,19 @@ describe("ResultList", () => {
   //
   // 此前无任何断言覆盖，删掉整个 useEffect 全部测试仍然通过。
   // 变异实验：移除 setAttribute("inert", "") 后本用例翻红。
+  // 结果列表此前用 role="list"，但 Liquid.Item 插入的中间层与表头都不是
+  // listitem，owned-children 契约不成立（实测 DOM：直接子元素是
+  // .results-list-head 与 .liquid-result-group，真正的 listitem 被库的
+  // 中间层多包两层）。读屏软件得到的语义是错的，与其说谎不如不声称。
+  // 可访问名称改由 aria-labelledby 指向页面已有的结果标题（id=results-title）。
+  it("结果列表不声称 role=list（中间层使该语义不成立）", () => {
+    const container = mountList();
+    expect(container.querySelector('[role="list"]')).toBeNull();
+    expect(container.querySelector('[role="listitem"]')).toBeNull();
+    const labelled = container.querySelector(".results-list");
+    expect(labelled?.getAttribute("aria-labelledby")).toBe("results-title");
+  });
+
   it("全部装饰 SVG 层标记为 inert，阻断键盘焦点陷落", () => {
     // liquid-gooey 渲染两个装饰 SVG：data-gooey-svg 与 data-gooey-overlay。
     // 库自己把二者当同类（其 MutationObserver 用 closest 匹配

@@ -217,6 +217,27 @@ describe("App 装配接线", () => {
     expect(container.querySelector("[data-od-id=results-section]")).not.toBeNull();
   });
 
+  // 状态行与结果区此前都是 aria-live="polite"，同一次查询结果会播报两遍：
+  // 状态行说「已定位 N 位同学」，结果区再把列表内容念一遍。
+  // 唯一的 live region 应当是状态行——结果区的内容变化已由状态行承载。
+  it("仅状态行是 live region，结果区不重复播报", async () => {
+    const api = fakeApi([张三]);
+    const container = mountApp(api);
+    const input = container.querySelector("#query") as HTMLInputElement;
+    await act(async () => {
+      setNativeValue(input, "张三");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const liveRegions = container.querySelectorAll("[aria-live]");
+    expect(liveRegions.length).toBe(1);
+    expect(liveRegions[0].getAttribute("id")).toBe("status-line");
+  });
+
   // IME 守卫穿过 App 的证据。此处刻意不派发 compositionstart：
   // 那样 state.isComposing 会是 true，拦截会由 useSearchInput 的第二条守卫兜住，
   // App 有没有把 nativeEvent.isComposing 接上就无人知道了（实测：变异该接线，

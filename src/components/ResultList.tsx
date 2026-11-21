@@ -23,7 +23,7 @@ interface ResultListProps {
 const ResultCard = memo(function ResultCard({ student, index }: { student: Student; index: number }) {
   const isLatin = /^[A-Za-z ]+$/.test(student.name);
   return (
-    <div className="result-card" role="listitem" {...od("result-card-" + index)}>
+    <div className="result-card" {...od("result-card-" + index)}>
       <span className="result-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
       <div className="result-identity">
         <h3 className={"result-name" + (isLatin ? " is-latin" : "")} {...od("result-name-" + index)}>{student.name}</h3>
@@ -71,7 +71,7 @@ export default function ResultList({ items, summary, loadMoreZone, onLoadMore }:
         <span className="results-toolbar-state">{summary.toolbarState}</span>
       </div>
       <div className="results-liquid" ref={liquidWrapRef}>
-        <div className="results-list" role="list" aria-label="查询匹配记录">
+        <div className="results-list" aria-labelledby="results-title">
           <div className="results-list-head" aria-hidden="true"><span>序号</span><span>姓名</span><span>所属位置</span><span>状态</span></div>
           <Liquid blur={10} contrast={24} fill="rgba(255,255,255,.1)" shadow="0 18px 50px rgba(255,255,255,.06)" className="liquid-result-group">
             {items.map((student, index) => (
