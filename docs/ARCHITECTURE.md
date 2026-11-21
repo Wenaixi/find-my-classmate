@@ -214,6 +214,7 @@ stale 无分支可走时 state 停在 loading，而 submit 的守卫是「loadin
 | src/lib/useSearchController.ts | 查询控制器深模块（createSearchOrchestrator 纯逻辑 + hook 壳），state + controller 两面消费。**hook 壳对 Promise 型动作分两段渲染**：先渲染启动态（loading / loadingMore），落定后渲染终态；缺前一段则整段请求期间零重渲染、加载界面不可达 | types, searchReducer, searchSession（无 api/config 直依赖：api 类型经 searchSession 间接进来，分页大小由调用方经 opts 传入） |
 | src/lib/useSearchInput.ts | 交互语义（IME 组合守卫、Enter 提交、Escape 清空）；组合状态取自 nativeEvent 与控制器 state 两个来源，任一为真都不得提交 | useSearchController |
 | src/lib/resultSummary.ts | 结果摘要单点派生（进度/计数/剩余文案） | 无 |
+| src/od.ts | 测试锚点：源码保留 `data-od-id` 以让测试定位节点；生产构建由 vite 的 `__OD_ID__` 常量折叠为 `() => ({})`，展开后该属性在产物中完全不存在（不是「值为空」，是键不存在） | 无 |
 | src/site.config.ts | 站点展示文案（数据来源/运营团队；`dataController` 保留但当前不渲染） | 无 |
 | src/types.ts | 领域类型与状态枚举 | 无 |
 
@@ -284,7 +285,7 @@ stale 无分支可走时 state 停在 loading，而 submit 的守卫是「loadin
 
 ## 11. 测试策略
 
-- 前端：Vitest。查询契约（query.test.ts）、状态机（searchReducer.test.ts）、竞态编排（searchSession.test.ts）、交互语义与接线（useSearchInput.test.tsx）、页面装配接线（App.mount.test.tsx）、控制器 hook 壳（useSearchController.mount.test.tsx）
+- 前端：Vitest。查询契约（query.test.ts）、状态机（searchReducer.test.ts）、竞态编排（searchSession.test.ts）、交互语义与接线（useSearchInput.test.tsx）、页面装配接线（App.mount.test.tsx）、控制器 hook 壳（useSearchController.mount.test.tsx）、学校选择器键盘可达性（SchoolPicker.test.tsx）、测试锚点折叠（od.test.ts）
 - 纯逻辑测试默认 node 环境，需要 DOM 的测试用文件头 `@vitest-environment jsdom` 单独声明；挂载测试须置 `IS_REACT_ACT_ENVIRONMENT=true`，否则 `act()` 的更新不会 flush，会读到假阴性的旧快照
 - 后端：go test。查询执行与数据加载（search_test.go）；限流回补的极端值由纯函数 `fillTokens` 直测（时钟回拨、容量钳制、连续量不取整）
 - **测试 fixture 的外部 seam**：需要模拟名单文件变化时，测试显式持有 fixture 目录；不得从 `studentStore` 私有字段反向读取目录。生产调用继续只经 `view()` 与 `Size()` 访问名单视图。
