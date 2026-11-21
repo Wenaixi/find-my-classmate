@@ -235,6 +235,14 @@ stale 无分支可走时 state 停在 loading，而 submit 的守卫是「loadin
 
 动效依赖（border-beam / thinking-orbs / liquid-gooey）全部是表现层，不承载逻辑；若替换，禁止改变查询与状态语义。
 
+三条与之相关的表现层约束（2026-11-21 落定，均有承重断言）：
+
+- `Liquid.Item` 只开 `observe`，不开 `morph.shape`。库文档自陈 `shape` 默认关闭（plain merge needs no engine）；开启后每行各有一份形状弹簧引擎，打字时整表重建会把开销乘以行数。`ResultCard` 另有 `memo`。
+- 结果列表不声称 `role="list"`。`Liquid.Item` 插入的中间层使 owned-children 契约不成立，可访问名称由 `aria-labelledby="results-title"` 提供。
+- live region 只有状态行（`id="status-line"`）一处。结果区挂 `aria-live` 会让同一次结果播报两遍。
+
+无障碍与原生 UI 的另两条：`SchoolPicker` 面板打开时必须接收焦点（缺它则面板的 `onKeyDown` 整段不可达，键盘用户选不中任何学校，WCAG 2.1.1 A 级）；`color-scheme: dark` 在 `styles.css` 的 `:root` 与 `index.html` 的 meta 各一份。
+
 ## 8. 后端模块边界
 
 | 模块 | 职责 |

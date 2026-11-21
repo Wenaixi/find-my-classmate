@@ -1,0 +1,38 @@
+# 行尾统一：跨平台检出时按文件类型固定行尾，避免 Windows 的 core.autocrlf
+# 把 CRLF 写进检出树，从而让依赖 LF 的工具链（gofmt）与跨平台 diff 失败。
+#
+# 根因：本仓在 Windows 上检出（core.autocrlf=true）且此前没有本文件，
+# server/contract_grade_test.go、server/race_on_test.go、server/web.go 三个
+# 文件以 CRLF 落盘，`gofmt -l .` 报出它们，release.yml 的
+# `test -z "$(gofmt -l .)"` 门禁因此必然失败——tag 打上去 Release 建不起来。
+# 修法是用本文件把行尾固定为 LF，而不是逐个转换文件：后者在别人机器上会复发。
+
+# Go 源码与工具链要求 LF
+*.go text eol=lf
+
+# 前端与配置源码同样固定 LF，避免格式化器与编辑器冲突
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+*.json text eol=lf
+*.jsonc text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.sh text eol=lf
+*.ps1 text eol=lf
+Dockerfile text eol=lf
+*.mod text eol=lf
+*.sum text eol=lf
+
+# 二进制与字体不做行尾转换
+*.woff2 binary
+*.png binary
+*.webp binary
+*.ico binary
+*.exe binary
+*.gz binary

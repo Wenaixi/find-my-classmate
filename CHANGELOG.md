@@ -6,6 +6,31 @@
 
 ## [Unreleased]
 
+## [v1.0.0-beta.4] - 2026-11-21
+
+### Fixed
+
+- 学校下拉的键盘导航此前无法选中任何学校：面板的 `onKeyDown` 挂在 `tabIndex={-1}` 的面板上，而焦点从不进入面板，所有按键落在触发按钮的处理上（它只开关面板）。键盘用户因此只能开关、不能选择（WCAG 2.1.1 键盘可达性，A 级）。现改为面板打开即接收焦点，关闭时归还触发按钮，↑↓ 移动高亮、Enter 选中、Esc 关闭全部可用。
+- 结果列表不再声称 `role="list"`：`liquid-gooey` 的 `Liquid.Item` 插入的中间层与表头都不是 `listitem`，`aria-owns`/owned-children 契约不成立，读屏软件得到的语义是错的。可访问名称改由 `aria-labelledby="results-title"` 指向页面已有的结果标题。
+- 状态行与结果区此前同时是 `aria-live="polite"`，同一次查询结果会播报两遍（状态行「已定位 N 位同学」，结果区再念一遍列表）。现收敛为仅状态行。
+
+### Changed
+
+- 结果行去掉逐行形状物理：`Liquid.Item` 的 `morph={{ shape: true, … }}` 改为 `observe`，保留容器级液体合并视觉，不再为每一行各启动一份形状弹簧引擎。库文档自陈 `morph.shape` 默认关闭（plain merge needs no engine），此前显式开启使打字时整表重建的开销乘以行数。
+- `ResultCard` 用 `memo` 包裹：结果行是纯展示，输入不变则输出不变，打字时不再逐行重渲染。
+- 深色站的原生浏览器 UI 跟随主题：`styles.css` 的 `:root` 增加 `color-scheme: dark`，`index.html` 增加同值 meta（早于样式表生效，避免首帧浅色闪现）。滚动条显式配色 `#5f5f60`（滑块）/`#0b0b0b`（轨道），实测对比 3.09:1，满足非文本对比 ≥3:1；不用 `--line-strong`，它对 surface 只有 1.72:1。
+- 首屏预载 `Mona Sans`（`h1` 使用，字号 clamp 到 108px）：提前与样式表并行下载，缩短字体交换的跳变窗口。只预载这一个字重，`Instrument Sans` 是正文体，预载会与首屏争带宽。
+
+### Removed
+
+- 生产产物中的测试锚点：44 处 `data-od-id` 改为 `{...od(id)}`（新增 `src/od.ts`），构建时由 `__OD_ID__` 常量折叠为 `() => ({})`，展开后属性键整体消失。实测产物中 `data-od-id` 零命中。仅折叠函数值不够——JSX 的 props 键名是源码字面量，压缩器无法消除（实测残留 35 处）。
+- `App.tsx` 中未使用的解构字段（`total`/`hasMore`/`loadingMore`/`loadMoreError`），以及 `styles.css` 中重复声明并覆盖自身的第一条 `.load-more-button` 规则。
+
+### Added
+
+- `.gitattributes`：把源码行尾固定为 LF。此前 Windows 检出（`core.autocrlf=true`）会把 `server/` 下三个文件写成 CRLF，使本地 `gofmt -l` 报错；仓库内存储的一直是 LF，Linux CI 不受影响，但本地开发者的格式检查会被误伤。
+- 测试：`src/components/SchoolPicker.test.tsx`（5 条键盘契约，其中 3 条在移除面板聚焦后翻红）与 `src/od.test.ts`（2 条锚点契约）。前端总数 11 文件 / 220 条 → 13 文件 / 229 条。
+
 ## [v1.0.0-beta.3] - 2026-11-17
 
 ### Changed
