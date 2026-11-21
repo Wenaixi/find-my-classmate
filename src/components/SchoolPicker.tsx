@@ -32,6 +32,7 @@ export default function SchoolPicker({ schools, value, onChange }: SchoolPickerP
   const [active, setActive] = useState(0);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
   // 选项 = 全部学校 + 各校；空串项排第一。
   const options = ["", ...schools];
@@ -42,6 +43,13 @@ export default function SchoolPicker({ schools, value, onChange }: SchoolPickerP
   useEffect(() => {
     if (open) setActive(selectedIndex);
   }, [open, selectedIndex]);
+
+  // 面板打开即接收焦点：面板的 onKeyDown 只有焦点在面板上才生效。
+  // 缺这一步时焦点始终留在触发按钮，↑↓/Enter 全落在 onTriggerKeyDown，
+  // 键盘用户只能开关面板、无法选中任何学校（WCAG 2.1.1 失败）。
+  useEffect(() => {
+    if (open) panelRef.current?.focus();
+  }, [open]);
 
   // 点击外部关闭。用 mousedown 而非 click：避免与选项自身的 click 抢顺序。
   useEffect(() => {
@@ -120,6 +128,7 @@ export default function SchoolPicker({ schools, value, onChange }: SchoolPickerP
         {open && (
           <div
             className="school-panel"
+            ref={panelRef}
             role="listbox"
             aria-labelledby="school-label"
             {...od("school-panel")}
