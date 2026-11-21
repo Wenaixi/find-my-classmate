@@ -129,7 +129,9 @@ h1 em { color: #fff; font-style: normal; }
 .search-input { min-width: 0; flex: 1; padding: 0 18px 0 24px; color: var(--ink); border: 0; outline: 0; background: transparent; font: 400 18px/1.3 "Instrument Sans", "Noto Sans SC", sans-serif; }
 .search-input::placeholder { color: var(--faint); }
 .search-input:focus-visible { outline: none; }
-.load-more-button { display: inline-flex; align-items: center; justify-content: center; gap: 14px; min-height: 48px; border: 1px solid transparent; color: #050505; background: var(--ink); font: 600 11px/1 var(--mono); letter-spacing: 1px; text-transform: uppercase; transition: background .25s var(--ease-color), color .25s ease, transform .25s var(--ease-move), opacity .2s ease; }
+/* 宽度撑满、高度 56px、方角：这三条原在下方重复声明同一选择器并覆盖此处，
+   合并后一处定义，避免同名的第二条规则悄悄改写第一条。 */
+.load-more-button { display: inline-flex; align-items: center; justify-content: center; gap: 14px; width: 100%; min-height: 56px; border: 1px solid transparent; border-radius: 2px; color: #050505; background: var(--ink); font: 600 11px/1 var(--mono); letter-spacing: 1px; text-transform: uppercase; transition: background .25s var(--ease-color), color .25s ease, transform .25s var(--ease-move), opacity .2s ease; }
 .load-more-button:hover:not(:disabled) { color: #fff; background: #6c6c68; transform: translateY(-2px); }
 .load-more-button:active:not(:disabled) { transform: translateY(1px) scale(.99); }
 .load-more-button:disabled { cursor: wait; opacity: .42; }
@@ -194,7 +196,6 @@ h1 em { color: #fff; font-style: normal; }
 .load-progress span { display: block; height: 100%; background: var(--ink); transition: width .55s var(--ease-move); }
 .load-more-copy { display: flex; justify-content: space-between; gap: 16px; margin: 12px 0 18px; color: var(--muted); font: 400 11px/1.5 var(--mono); }
 .load-more-copy span:last-child { color: var(--ink); }
-.load-more-button { width: 100%; min-height: 56px; border-radius: 2px; }
 .load-more-error { margin-top: 12px; color: #d1d1cc; font: 400 11px/1.5 var(--mono); }
 .privacy-band { width: min(var(--max), calc(100% - var(--gutter))); margin: auto; display: grid; grid-template-columns: minmax(180px, .55fr) 1fr; gap: 32px; padding: 28px 0 32px; border-top: 1px solid var(--line-strong); }
 .privacy-band p { max-width: 520px; margin: 0; color: var(--muted); font: 400 13px/1.7 "Instrument Sans", "Noto Sans SC", sans-serif; }
