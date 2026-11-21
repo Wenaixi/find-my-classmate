@@ -10,6 +10,16 @@
   font-family: "Instrument Sans", "Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif;
   color: #f4f4f0;
   background: #050505;
+  /* 让浏览器生成的原生 UI（滚动条、输入法候选层、表单控件、日期选择器）
+     跟随本页深色主题渲染。缺此声明时深色站的原生 UI 一律按浅色绘制，
+     与页面视觉割裂——这也是 SchoolPicker 当初不敢用原生 select 的原因之一。 */
+  color-scheme: dark;
+  /* 滚动条配色：轨道 surface（#0b0b0b）、滑块 #5f5f60。
+     实测对比 3.09:1（对 surface）、3.20:1（对 canvas），满足非文本对比 ≥3:1。
+     不用 --line-strong（#3a3a37）：它对 surface 只有 1.72:1，滑块会几乎看不见。
+     轨道用字面量而非 var(--surface)：该变量在同一条规则的后文声明，
+     虽按 CSS 规范能解析，但显式字面量让「轨道色 = surface」这件事一眼可查。 */
+  scrollbar-color: #5f5f60 #0b0b0b;
   font-synthesis: none;
   --canvas: #050505;
   --surface: #0b0b0b;
