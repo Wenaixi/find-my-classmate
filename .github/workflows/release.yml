@@ -128,9 +128,11 @@ jobs:
   docker:
     name: 构建并推送 Docker 镜像
     needs: test
-    # 无 Docker Hub 凭证的仓库（如 Cloudflare 迁移镜像仓）直接跳过整个 job，
-    # 避免「缺 DOCKER_PAT → 登录失败 → 红色失败 run」的噪音。
-    if: ${{ secrets.DOCKER_PAT != '' }}
+    # job 级 if 不允许引用 secrets（GitHub 在解析阶段就拒绝，整份工作流因此
+    # 无法注册——表现为每次 push 都出现一条 0 秒失败、total_count=0 的 run，
+    # tag 也永远走不到 release）。改用 env 转中文档的 vars 开关：
+    # 需要发布镜像的仓库在仓库设置里把 DOCKER_PUBLISH 设为 true。
+    if: ${{ vars.DOCKER_PUBLISH == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
