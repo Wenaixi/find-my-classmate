@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { Liquid } from "liquid-gooey";
 import type { Student } from "../types";
 import type { ResultSummary } from "../lib/resultSummary";
+import { od } from "../od";
 
 interface ResultListProps {
   items: Student[];
@@ -19,13 +20,13 @@ interface ResultListProps {
 function ResultCard({ student, index }: { student: Student; index: number }) {
   const isLatin = /^[A-Za-z ]+$/.test(student.name);
   return (
-    <div className="result-card" role="listitem" data-od-id={"result-card-" + index}>
+    <div className="result-card" role="listitem" {...od("result-card-" + index)}>
       <span className="result-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
       <div className="result-identity">
-        <h3 className={"result-name" + (isLatin ? " is-latin" : "")} data-od-id={"result-name-" + index}>{student.name}</h3>
+        <h3 className={"result-name" + (isLatin ? " is-latin" : "")} {...od("result-name-" + index)}>{student.name}</h3>
         <p className="result-label">匹配记录</p>
       </div>
-      <div className="result-location" data-od-id={"result-meta-" + index}>
+      <div className="result-location" {...od("result-meta-" + index)}>
         <span className="result-location-label">学校</span>
         <strong>{student.school}</strong>
         <span className="result-location-divider" aria-hidden="true" />
@@ -82,10 +83,10 @@ export default function ResultList({ items, summary, loadMoreZone, onLoadMore }:
           </Liquid>
         </div>
       </div>
-      <div className="load-more-zone" data-od-id="load-more-zone">
+      <div className="load-more-zone" {...od("load-more-zone")}>
         <div className="load-progress" aria-hidden="true"><span style={{ width: summary.progress + "%" }} /></div>
         <div className="load-more-copy"><span>{summary.countLabel}</span><span>{summary.loadMoreLabel}</span></div>
-        {loadMoreZone.show && <button className="load-more-button" data-od-id="load-more-cta" type="button" onClick={onLoadMore} disabled={loadMoreZone.busy} aria-label={"继续加载，剩余 " + summary.remaining + " 条结果"}><span>{loadMoreZone.busy ? "正在加载" : "继续加载"}</span><span className="button-arrow" aria-hidden="true">↗</span></button>}
+        {loadMoreZone.show && <button className="load-more-button" {...od("load-more-cta")} type="button" onClick={onLoadMore} disabled={loadMoreZone.busy} aria-label={"继续加载，剩余 " + summary.remaining + " 条结果"}><span>{loadMoreZone.busy ? "正在加载" : "继续加载"}</span><span className="button-arrow" aria-hidden="true">↗</span></button>}
         {loadMoreZone.error && <div className="load-more-error" role="alert">加载失败，请再次点击继续加载。</div>}
       </div>
     </>

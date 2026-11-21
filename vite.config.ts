@@ -1,7 +1,11 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  // __OD_ID__ 只服务测试锚点：生产构建（mode === "production"）折叠为 false，
+  // 其余（vitest 的 test、vite dev 的 development）为 true，测试因此仍能按
+  // data-od-id 定位节点。不用 import.meta.env.DEV 是因为 Vite 自身依赖它。
+  define: { __OD_ID__: JSON.stringify(mode !== "production") },
   plugins: [react()],
   build: {
     outDir: "server/web",
@@ -36,4 +40,4 @@ export default defineConfig({
     proxy: { "/api": "http://localhost:3078" }
   },
   preview: { port: 4173 }
-});
+}));

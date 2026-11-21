@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { od } from "../od";
 
 // 学校选择器：胶囊触发按钮 + 浮层选项面板。
 //
@@ -96,16 +97,16 @@ export default function SchoolPicker({ schools, value, onChange }: SchoolPickerP
   };
 
   return (
-    <div className="school-row" data-od-id="school-row">
+    <div className="school-row" {...od("school-row")}>
       <span className="school-row-label" id="school-label">学校</span>
-      <div className="school-picker" ref={rootRef} data-od-id="school-picker">
+      <div className="school-picker" ref={rootRef} {...od("school-picker")}>
         <button
           type="button"
           ref={triggerRef}
           // 高光跟随展开态（is-open）：点击弹出面板时亮、收回即灭；
           // 不再随选中状态（选中学校不等于高光）。
           className={"school-trigger" + (open ? " is-open" : "")}
-          data-od-id="school-select"
+          {...od("school-select")}
           aria-haspopup="listbox"
           aria-expanded={open}
           aria-labelledby="school-label school-value"
@@ -121,7 +122,7 @@ export default function SchoolPicker({ schools, value, onChange }: SchoolPickerP
             className="school-panel"
             role="listbox"
             aria-labelledby="school-label"
-            data-od-id="school-panel"
+            {...od("school-panel")}
             tabIndex={-1}
             onKeyDown={onPanelKeyDown}
           >
@@ -134,7 +135,7 @@ export default function SchoolPicker({ schools, value, onChange }: SchoolPickerP
                   key={option === "" ? "__all__" : option}
                   role="option"
                   aria-selected={isSelected}
-                  data-od-id="school-option"
+                  {...od("school-option")}
                   className={"school-option" + (isSelected ? " is-selected" : "") + (isActive ? " is-active" : "")}
                   onMouseEnter={() => setActive(index)}
                   onClick={() => commit(index)}
