@@ -4,7 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#000000" />
+    <!-- 早于样式表声明深色主题，使首帧的原生滚动条与控件就按深色绘制，
+         避免浅色 UI 一闪而过（样式表里的 color-scheme 生效前也有此问题）。 -->
+    <meta name="color-scheme" content="dark" />
     <meta name="description" content="FindMyClassmate 校园班级查询工具" />
+    <!-- 首屏最重的文本元素（h1，字号 clamp 到 108px）用 Mona Sans。
+         提前预载让字体与样式并行下载，缩短首屏文本的字体交换跳变窗口。
+         只预载这一个字重：Instrument Sans 是正文体，预载会与 h1 争抢首屏带宽。
+         crossorigin 是必需属性（即使同源）：字体请求以 CORS 模式发起，
+         缺它会导致浏览器下载两次。 -->
+    <link rel="preload" href="/fonts/mona-sans.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/favicon.png" />
     <title>FindMyClassmate</title>
